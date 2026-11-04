@@ -3,16 +3,29 @@
 Sound Blaster Command for Linux: the UI for the Creative Sound Blaster AE-9
 driver ([SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv)).
 
-## Unreleased
+## 0.2.0 (2026-11-04)
 
-- **Second colour palette, "Helix"**: blue-black and violet with coral-orange
-  and amber accents and a mint EQ curve. Switch between it and the original
-  "Command" palette under Settings → Appearance; the choice is remembered.
-- **Third palette, "Albino"**: a light theme in off-white, cream, blush and
-  peach with a coral accent.
-- **Fourth palette, "Wololo"**: a monk's royal-blue robe and white cloth with
-  sun-gold controls, a grass-green EQ curve and a staff-brown touch.
-- `--palette NAME` starts the app in a palette for one launch; `--version`.
+Colour round: three new palettes to go with the original, and a flag to
+pick one from the command line. Same driver as before (0.6.x).
+
+### Added
+
+- **Palettes**, switched under Settings → Appearance (remembered between
+  launches):
+  - **Helix**: blue-black and violet with coral-orange and amber accents and
+    a mint EQ curve.
+  - **Albino**: a light theme in off-white, cream, blush and peach with a
+    coral accent.
+  - **Wololo**: a monk's royal-blue robe and white cloth, sun-gold controls,
+    a grass-green EQ curve and a staff-brown touch.
+- `--palette NAME` starts the app in a palette for one launch without
+  changing the saved one; `--version` and `--help`.
+
+### Changed
+
+- The built-in SBX profiles are labelled "Built-in" instead of
+  "The Sound Blaster Team"; they're this app's presets, not Creative's.
+- README: screenshots of the main pages.
 
 ## 0.1.0 (2026-11-04)
 
