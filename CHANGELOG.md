@@ -8,6 +8,9 @@ driver ([SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv)).
 - **Second colour palette, "Helix"**: blue-black and violet with coral-orange
   and amber accents and a mint EQ curve. Switch between it and the original
   "Command" palette under Settings → Appearance; the choice is remembered.
+- **Third palette, "Albino"**: a light theme in off-white, cream, blush and
+  peach with a coral accent.
+- `--palette NAME` starts the app in a palette for one launch; `--version`.
 
 ## 0.1.0 (2026-11-04)
 

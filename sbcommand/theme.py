@@ -23,6 +23,8 @@ PALETTES = {
         "SEG": "#3d3e4c", "SEG_HOVER": "#4c4e5e", "CARD_CAP": "#3f3f4a", "SPEAKER_BOX": "#33355a",
         "DANGER": "#e2505c", "OK": "#33d14f", "WARN": "#e9c64a",
         "METER": ["#1fa6b8", "#7fd16a", "#e9c64a", "#e2505c"],
+        "OVERLAY": "#ffffff", "SHADE": "#000000", "DOT_IDLE": "#f2f2f2",
+        "HANDLE": "#f2f2f6", "HANDLE_BORDER": "#f2f2f6", "HANDLE_HOVER": "#ffffff",
     },
     # From the 3xHelix avatar: blue-black, violet, coral-orange to amber, mint.
     "helix": {
@@ -40,6 +42,27 @@ PALETTES = {
         "SEG": "#2e2449", "SEG_HOVER": "#3b2e5e", "CARD_CAP": "#2a2145", "SPEAKER_BOX": "#3b2e5e",
         "DANGER": "#e31b49", "OK": "#5dcaa8", "WARN": "#ffb63a",
         "METER": ["#5dcaa8", "#5dcaa8", "#ffb63a", "#e31b49"],
+        "OVERLAY": "#ffffff", "SHADE": "#000000", "DOT_IDLE": "#f2f2f2",
+        "HANDLE": "#f2f2f6", "HANDLE_BORDER": "#f2f2f6", "HANDLE_HOVER": "#ffffff",
+    },
+    # Light: off-white and cream with blush and peach, coral accent.
+    "albino": {
+        "label": "Albino",
+        "ACCENT": "#cf7166", "ACCENT_HI": "#b4554b", "ACCENT_TEXT": "#ffffff",
+        "TEXT": "#4a3a38", "MUTED": "#8c7a76", "DIM": "#b9aaa5",
+        "TRACK": "#e6d9d2", "PANEL": "#efe6df", "PANEL_HI": "#e8d9d1", "PANEL_LO": "#e2d4cc",
+        "TITLE_BG": "#f7faf3", "BOTTOM_BG": "#f3efe6",
+        "SIDEBAR_TOP": "#f4e7e3", "SIDEBAR_BOTTOM": "#eed3d2",
+        "MAIN_TOP": "#f8f7f1", "MAIN_BOTTOM": "#eeecdf",
+        "POPUP": "#fbfaf6", "POPUP_BORDER": "#e2d4cc", "LIST_BG": "#fbfaf6",
+        "DIALOG": "#f8f7f1", "TOOLTIP": "#fbfaf6",
+        "SWITCH_OFF": "#dccdc6", "DIAL_TRACK": "#ebe0d9", "IDLE": "#c9b8b2",
+        "GRAPH_BG": "#fbfaf6", "GRAPH_TEXT": "#7a6864", "EQ_LINE": "#d0838c",
+        "SEG": "#ebe1da", "SEG_HOVER": "#e3d4cc", "CARD_CAP": "#f5eee8", "SPEAKER_BOX": "#efe3dd",
+        "DANGER": "#c8463f", "OK": "#7fae8c", "WARN": "#d9a441",
+        "METER": ["#dda394", "#db8176", "#cf6a5e", "#b8433a"],
+        "OVERLAY": "#5a3a36", "SHADE": "#8a5a50", "DOT_IDLE": "#b9aaa5",
+        "HANDLE": "#ffffff", "HANDLE_BORDER": "#cf7166", "HANDLE_HOVER": "#fff4f1",
     },
 }
 
@@ -78,7 +101,7 @@ QMainWindow, #root {{ background: {MAIN_TOP}; }}
     background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 {SIDEBAR_TOP}, stop:1 {SIDEBAR_BOTTOM});
 }}
 #sideCaption {{ color: {MUTED}; font-size: 13px; padding-left: 18px; }}
-#sideSep {{ background: rgba(255,255,255,0.13); max-height: 1px; min-height: 1px; margin: 4px 10px; }}
+#sideSep {{ background: {rgba(OVERLAY, 0.13)}; max-height: 1px; min-height: 1px; margin: 4px 10px; }}
 #content {{
     background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 {MAIN_TOP}, stop:1 {MAIN_BOTTOM});
 }}
@@ -100,7 +123,7 @@ QMainWindow, #root {{ background: {MAIN_TOP}; }}
 #warnBanner {{
     background: {rgba(DANGER, 0.15)}; border: 1px solid {rgba(DANGER, 0.6)}; border-radius: 4px;
 }}
-#card {{ background: rgba(0,0,0,0.16); border-radius: 6px; }}
+#card {{ background: {rgba(SHADE, 0.10)}; border-radius: 6px; }}
 
 QToolTip {{ background: {TOOLTIP}; color: {TEXT}; border: 1px solid {POPUP_BORDER}; padding: 4px; }}
 
@@ -113,7 +136,7 @@ QPushButton:disabled {{ color: {DIM}; background: {PANEL_LO}; }}
 QPushButton#accentButton {{ background: {ACCENT}; color: {ACCENT_TEXT}; }}
 QPushButton#accentButton:hover {{ background: {ACCENT_HI}; }}
 QToolButton {{ background: transparent; border: none; padding: 4px; border-radius: 3px; }}
-QToolButton:hover {{ background: rgba(255,255,255,0.08); }}
+QToolButton:hover {{ background: {rgba(OVERLAY, 0.08)}; }}
 QToolButton::menu-indicator {{ image: none; }}
 
 QComboBox {{
@@ -153,18 +176,19 @@ QSlider::groove:horizontal {{ height: 5px; background: {TRACK}; border-radius: 2
 QSlider::sub-page:horizontal {{ background: {ACCENT}; border-radius: 2px; }}
 QSlider::sub-page:horizontal:disabled {{ background: {DIM}; }}
 QSlider::handle:horizontal {{
-    background: #f2f2f6; width: 16px; height: 16px; margin: -6px 0; border-radius: 8px;
+    background: {HANDLE}; border: 1px solid {HANDLE_BORDER};
+    width: 14px; height: 14px; margin: -6px 0; border-radius: 8px;
 }}
-QSlider::handle:horizontal:hover {{ background: white; }}
+QSlider::handle:horizontal:hover {{ background: {HANDLE_HOVER}; }}
 
 QScrollArea, QScrollArea > QWidget > QWidget {{ background: transparent; border: none; }}
 QScrollBar:vertical {{ background: transparent; width: 10px; }}
-QScrollBar::handle:vertical {{ background: rgba(255,255,255,0.18); border-radius: 4px; min-height: 30px; }}
+QScrollBar::handle:vertical {{ background: {rgba(OVERLAY, 0.18)}; border-radius: 4px; min-height: 30px; }}
 QScrollBar::add-line, QScrollBar::sub-line {{ height: 0; }}
 QScrollBar::add-page, QScrollBar::sub-page {{ background: transparent; }}
 
 QTableWidget {{
-    background: rgba(0,0,0,0.18); border: none; gridline-color: rgba(255,255,255,0.06);
+    background: {rgba(SHADE, 0.10)}; border: none; gridline-color: {rgba(OVERLAY, 0.08)};
     font-size: 13px;
 }}
 QHeaderView {{ background: transparent; }}
@@ -173,7 +197,7 @@ QSpinBox {{
     background: {PANEL}; border: none; padding: 4px 6px; color: {TEXT}; selection-background-color: {ACCENT};
 }}
 QHeaderView::section {{
-    background: rgba(0,0,0,0.3); color: {MUTED}; border: none; padding: 5px; font-size: 12px;
+    background: {rgba(SHADE, 0.18)}; color: {MUTED}; border: none; padding: 5px; font-size: 12px;
 }}
 QLineEdit {{ background: {PANEL}; border: none; padding: 6px 8px; selection-background-color: {ACCENT}; }}
 QInputDialog, QMessageBox, QDialog {{ background: {DIALOG}; }}

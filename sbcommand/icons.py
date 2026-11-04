@@ -7,6 +7,8 @@ from PySide6.QtCore import QByteArray, QRectF, Qt
 from PySide6.QtGui import QIcon, QPainter, QPixmap
 from PySide6.QtSvg import QSvgRenderer
 
+from . import theme as T
+
 _S = 'fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"'
 
 PATHS = {
@@ -50,8 +52,12 @@ def svg(name, color):
     return f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">{body}</svg>'
 
 
+def pixmap(name, color=None, size=22, ratio=2.0):
+    return _pixmap(name, color or T.TEXT, size, ratio)
+
+
 @lru_cache(maxsize=512)
-def pixmap(name, color="#e6e8f2", size=22, ratio=2.0):
+def _pixmap(name, color, size, ratio):
     r = QSvgRenderer(QByteArray(svg(name, color).encode()))
     px = QPixmap(int(size * ratio), int(size * ratio))
     px.fill(Qt.transparent)
@@ -63,7 +69,9 @@ def pixmap(name, color="#e6e8f2", size=22, ratio=2.0):
     return px
 
 
-def icon(name, color="#e6e8f2", active=None, disabled="#6b6f86", size=22):
+def icon(name, color=None, active=None, disabled=None, size=22):
+    color = color or T.TEXT
+    disabled = disabled or T.DIM
     ic = QIcon()
     ic.addPixmap(pixmap(name, color, size), QIcon.Normal, QIcon.Off)
     ic.addPixmap(pixmap(name, active or color, size), QIcon.Normal, QIcon.On)

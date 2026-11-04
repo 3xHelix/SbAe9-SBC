@@ -44,8 +44,8 @@ QPushButton {{
     background: transparent; border: none; border-left: 3px solid transparent; border-radius: 0;
     text-align: left; padding: 11px 16px; font-size: 16px;
 }}
-QPushButton:hover {{ background: rgba(255,255,255,0.05); }}
-QPushButton:checked {{ color: {T.ACCENT_HI}; border-left: 3px solid {T.ACCENT}; background: rgba(255,255,255,0.04); }}
+QPushButton:hover {{ background: {T.rgba(T.OVERLAY, 0.06)}; }}
+QPushButton:checked {{ color: {T.ACCENT_HI}; border-left: 3px solid {T.ACCENT}; background: {T.rgba(T.OVERLAY, 0.06)}; }}
 """
 
 
@@ -251,7 +251,7 @@ class MainWindow(QMainWindow):
         direct = self.card.get(C.DIRECT, True)
         sbx = self.card.get(C.SBX, False)
         if direct:
-            self.dot.set_color("#f2f2f2")
+            self.dot.set_color(T.DOT_IDLE)
             self.dot.setToolTip("Direct Mode: audio bypasses the DSP")
             self.profile_lbl.setText("Direct Mode")
         elif sbx:

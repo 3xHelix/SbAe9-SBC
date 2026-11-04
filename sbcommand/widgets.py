@@ -14,6 +14,13 @@ from . import icons
 from . import theme as T
 
 
+def tint(hex_color, alpha):
+    """Palette colour with alpha 0..255."""
+    c = QColor(hex_color)
+    c.setAlpha(alpha)
+    return c
+
+
 def label(text="", name=None, wrap=False):
     lb = QLabel(text)
     if name:
@@ -189,7 +196,7 @@ class Dial(QWidget):
             p.setPen(pen)
             p.drawArc(r, 225 * 16, int(-270 * 16 * self._value / 100))
         if self.hasFocus():
-            p.setPen(QPen(QColor(255, 255, 255, 40), 1))
+            p.setPen(QPen(tint(T.OVERLAY, 40), 1))
             p.setBrush(Qt.NoBrush)
             p.drawEllipse(r.adjusted(w, w, -w, -w))
         f = QFont("DejaVu Sans Mono")
@@ -396,16 +403,16 @@ class EqGraph(QWidget):
                 n = len(self.labels)
                 for i, lb in enumerate(self.labels):
                     x = plot.left() + plot.width() * i / (n - 1)
-                    p.setPen(QPen(QColor(255, 255, 255, 26), 1))
+                    p.setPen(QPen(tint(T.OVERLAY, 30), 1))
                     p.drawLine(QPointF(x, plot.top() - 10), QPointF(x, plot.bottom() + 6))
                     p.setPen(QColor(T.GRAPH_TEXT))
                     p.drawText(QRectF(x - 24, plot.bottom() + 14, 48, 20), Qt.AlignCenter, lb)
             else:
-                p.setPen(QPen(QColor(255, 255, 255, 26), 1))
+                p.setPen(QPen(tint(T.OVERLAY, 30), 1))
                 p.drawLine(QPointF(plot.center().x(), plot.top() - 10), QPointF(plot.center().x(), plot.bottom() + 6))
                 p.setPen(QColor(T.GRAPH_TEXT))
                 p.drawText(QRectF(rect.left(), plot.bottom() + 14, rect.width(), 20), Qt.AlignCenter, "Pre")
-            p.setPen(QPen(QColor(255, 255, 255, 40), 1, Qt.DashLine))
+            p.setPen(QPen(tint(T.OVERLAY, 50), 1, Qt.DashLine))
             p.drawLine(QPointF(plot.left() - 4, self._y(plot, 0)), QPointF(plot.right() + 4, self._y(plot, 0)))
 
         # smooth curve through the band points (Catmull-Rom)
@@ -586,8 +593,8 @@ class ProfileCarousel(QWidget):
     def paintEvent(self, _):
         p = QPainter(self)
         g = QLinearGradient(0, 0, self.width(), self.height())
-        g.setColorAt(0, QColor(0, 0, 0, 70))
-        g.setColorAt(1, QColor(255, 255, 255, 10))
+        g.setColorAt(0, tint(T.SHADE, 60))
+        g.setColorAt(1, tint(T.OVERLAY, 10))
         p.fillRect(self.rect(), g)
 
 
@@ -697,7 +704,7 @@ class SpeakerDiagram(QWidget):
         p.setRenderHint(QPainter.Antialiasing)
         c = QPointF(self.width() / 2, self.height() / 2)
         rad = 72
-        p.setPen(QPen(QColor(255, 255, 255, 70), 1.2))
+        p.setPen(QPen(tint(T.OVERLAY, 80), 1.2))
         p.setBrush(Qt.NoBrush)
         p.drawEllipse(c, rad, rad)
 
