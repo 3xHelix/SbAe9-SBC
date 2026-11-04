@@ -1,5 +1,7 @@
 # Sound Blaster Command for Linux (AE-9)
 
+![Sound Blaster Command for Linux: the SBX Profile page](docs/screenshot.png)
+
 A desktop control panel for the Creative Sound Blaster AE-9, styled after
 Creative's *Sound Blaster Command*. This is the UI half of
 [SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv): it drives the card through that
