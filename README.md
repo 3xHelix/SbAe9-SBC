@@ -19,7 +19,7 @@ switches and adjusts them.
 | **Playback** | Speakers / headphones, speaker config (2.0/2.1), Direct Mode, DAC filter, sample rate, default device, left/right test tone | ALSA + PipeWire |
 | **Recording** | XLR mic level, XLR gain (0/+10/+20 dB), live input meter, mute, "listen to mic", default device | ALSA + PipeWire |
 | **Scout Mode** | Creative's Scout Mode (footstep EQ + Smart Volume) | card DSP |
-| **Mixer** | Output volume (same as the head-unit knob), mute, balance, mic level | ALSA + PipeWire |
+| **Mixer** | Output volume (same as the head-unit knob), mute, per-channel levels (Front Left / Right, …), mic level | ALSA + PipeWire |
 | **Settings** | Colour palette (Command, Helix, Albino or Wololo), driver/device info, every ALSA control (including inactive ones), reset | ALSA |
 
 ## Screenshots

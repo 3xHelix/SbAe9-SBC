@@ -105,6 +105,16 @@ class Nodes:
                 return p["channelVolumes"]
         return None
 
+    def sink_channel_map(self):
+        """Channel positions of the sink, e.g. ["FL", "FR"]."""
+        if not self.sink:
+            return []
+        for p in self.sink["params"].get("Props") or []:
+            if p.get("channelMap"):
+                return list(p["channelMap"])
+        cv = self.sink_channel_volumes() or []
+        return ["FL", "FR"][:len(cv)] if len(cv) <= 2 else [f"CH{i + 1}" for i in range(len(cv))]
+
 
 def set_default(node_id):
     return _run("wpctl", "set-default", str(node_id)) is not None
@@ -127,25 +137,49 @@ def set_mute(node_id, muted):
     _run("wpctl", "set-mute", str(node_id), "1" if muted else "0")
 
 
-def set_balance(node_id, balance, channel_volumes):
-    """balance -1 (left) .. +1 (right); keeps the louder channel's level."""
-    if not channel_volumes or len(channel_volumes) < 2:
+CHANNEL_NAMES = {
+    "MONO": "Mono", "FL": "Front Left", "FR": "Front Right", "FC": "Front Center",
+    "LFE": "Subwoofer", "RL": "Rear Left", "RR": "Rear Right", "RC": "Rear Center",
+    "SL": "Side Left", "SR": "Side Right", "FLC": "Front Left Center",
+    "FRC": "Front Right Center",
+}
+
+
+def channel_name(pos):
+    return CHANNEL_NAMES.get(pos, pos)
+
+
+def _output_route(nodes):
+    """(route index, profile device) of the card route feeding the sink."""
+    if not (nodes.sink and nodes.device):
+        return None
+    dev = nodes.sink["props"].get("card.profile.device")
+    for r in nodes.device["params"].get("Route") or []:
+        if r.get("direction") == "Output" and (dev is None or r.get("device") == dev):
+            return r.get("index"), r.get("device")
+    return None
+
+
+def set_channel_volumes(nodes, volumes):
+    """Set the AE-9 output's per-channel volumes (linear; desktop % = v ** (1/3)).
+
+    The volume goes on the card's output route, the way the desktop mixer does
+    it: PipeWire then drives the card's hardware Master with the loudest
+    channel and only trims the quieter ones in software. Writing the node's
+    Props instead would stack a software volume on top of the hardware one.
+    """
+    if not volumes or not nodes.sink:
         return
-    level = max(channel_volumes[:2]) or 1.0
-    left = level * (1.0 - max(0.0, balance))
-    right = level * (1.0 + min(0.0, balance))
-    _run("pw-cli", "set-param", str(node_id), "Props",
-         f"{{ channelVolumes = [ {left:.6f} {right:.6f} ] }}")
-
-
-def balance_of(channel_volumes):
-    if not channel_volumes or len(channel_volumes) < 2:
-        return 0.0
-    left, right = channel_volumes[:2]
-    top = max(left, right)
-    if top <= 0:
-        return 0.0
-    return (1.0 - left / top) if left < right else -(1.0 - right / top)
+    vals = " ".join(f"{max(0.0, v):.6f}" for v in volumes)
+    route = _output_route(nodes)
+    if route and route[0] is not None:
+        idx, dev = route
+        if _run("pw-cli", "set-param", str(nodes.device["id"]), "Route",
+                f"{{ index: {idx}, device: {dev}, props: {{ channelVolumes: [ {vals} ] }}, save: true }}") is not None:
+            return
+    # no route info: go through the PulseAudio layer like the desktop mixer
+    raw = [str(int(round(max(0.0, v) ** (1 / 3) * 65536))) for v in volumes]
+    _run("pactl", "set-sink-volume", nodes.sink["name"], *raw)
 
 
 # --- sample rate ----------------------------------------------------------------

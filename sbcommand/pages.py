@@ -2,6 +2,7 @@
 """The app's pages, one per sidebar entry."""
 
 import subprocess
+import time
 
 from PySide6.QtCore import QSize, Qt, QTimer
 from PySide6.QtGui import QAction, QColor
@@ -866,24 +867,36 @@ class MixerPage(Page):
         self.master.muteToggled.connect(lambda m: self.card.set(C.MASTER_SW, not m))
         g.addWidget(self.master, r, 1)
         r += 1
-        g.addWidget(label("Balance"), r, 0)
-        bal = QHBoxLayout()
-        bal.addWidget(label("L", "muted"))
-        self.balance = QSlider(Qt.Horizontal)
-        self.balance.setRange(-100, 100)
-        self.balance.setStyleSheet(f"QSlider::sub-page:horizontal{{background:{T.TRACK};}}")
-        self.balance.valueChanged.connect(Throttle(self._balance, 60))
-        self.balance.setToolTip("Double-click the label to centre")
-        bal.addWidget(self.balance, 1)
-        bal.addWidget(label("R", "muted"))
-        bal.addSpacing(10)
-        self.bal_val = label("", "muted")
-        self.bal_val.setMinimumWidth(66)
-        bal.addWidget(self.bal_val)
-        center = QPushButton("Centre")
-        center.clicked.connect(lambda: self.balance.setValue(0))
-        bal.addWidget(center)
-        g.addLayout(bal, r, 1)
+        # one slider per PipeWire channel, like the desktop's own mixer; rows are
+        # built once the sink's channel map is known
+        g.addWidget(label("Channels"), r, 0, Qt.AlignTop)
+        chan_box = QVBoxLayout()
+        chan_box.setSpacing(8)
+        self.chan_rows = QGridLayout()
+        self.chan_rows.setHorizontalSpacing(12)
+        self.chan_rows.setVerticalSpacing(8)
+        self.chan_rows.setColumnStretch(1, 1)
+        chan_box.addLayout(self.chan_rows)
+        self.no_chan = label("No AE-9 output in PipeWire.", "muted")
+        chan_box.addWidget(self.no_chan)
+        tools = QHBoxLayout()
+        self.link = QPushButton(" Link channels")
+        self.link.setIcon(icons.icon("link"))
+        self.link.setCheckable(True)
+        self.link.setToolTip("Move all channels together")
+        tools.addWidget(self.link)
+        even = QPushButton("Equalise")
+        even.setToolTip("Set every channel to the loudest one")
+        even.clicked.connect(self._equalise)
+        tools.addWidget(even)
+        tools.addStretch()
+        chan_box.addLayout(tools)
+        g.addLayout(chan_box, r, 1)
+        self.chan_map = None
+        self.chan_sliders = []
+        self.chan_vals = []
+        self._pw_edit = 0.0
+        self._chan_set = Throttle(self._apply_channels, 60)
         r += 1
         g.addWidget(label("", "muted"), r, 0)
         r += 1
@@ -910,16 +923,77 @@ class MixerPage(Page):
         self.lay.addWidget(box)
         self.lay.addWidget(label(
             "Speakers and headphones each keep their own volume on the card. "
-            "Balance is applied by PipeWire.", "hint", wrap=True))
+            "Channel levels are applied by PipeWire, the same ones the desktop's volume "
+            "control shows.", "hint", wrap=True))
         self.lay.addStretch()
         ctx.pw.updated.connect(self._on_pw)
 
-    def _balance(self, v):
+    def _build_channels(self, chmap):
+        while self.chan_rows.count():
+            w = self.chan_rows.takeAt(0).widget()
+            if w:
+                w.deleteLater()
+        self.chan_sliders, self.chan_vals = [], []
+        for i, pos in enumerate(chmap):
+            self.chan_rows.addWidget(label(f"{pipewire.channel_name(pos)}:"), i, 0)
+            sl = QSlider(Qt.Horizontal)
+            sl.setRange(0, 100)
+            sl.setCursor(Qt.PointingHandCursor)
+            sl.valueChanged.connect(lambda v, i=i: self._channel_moved(i, v))
+            self.chan_rows.addWidget(sl, i, 1)
+            val = label("", "muted")
+            val.setMinimumWidth(48)
+            val.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            self.chan_rows.addWidget(val, i, 2)
+            self.chan_sliders.append(sl)
+            self.chan_vals.append(val)
+        self.chan_map = list(chmap)
+        self.no_chan.setVisible(not chmap)
+
+    def _channel_moved(self, i, v):
+        if self.link.isChecked():
+            for j, sl in enumerate(self.chan_sliders):
+                if j != i:
+                    sl.blockSignals(True)
+                    sl.setValue(v)
+                    sl.blockSignals(False)
+        for sl, val in zip(self.chan_sliders, self.chan_vals):
+            val.setText(f"{sl.value()}%")
+        self._pw_edit = time.monotonic()
+        self._chan_set()
+
+    def _apply_channels(self):
         n = self.ctx.pw.nodes
-        cv = n.sink_channel_volumes()
-        if n.sink and cv:
-            pipewire.set_balance(n.sink["id"], v / 100, cv)
-            self.bal_val.setText("centre" if v == 0 else f"{'L' if v < 0 else 'R'} {abs(v)}%")
+        if n.sink and self.chan_sliders:
+            # desktop % is cubic: linear volume = (pct / 100) ** 3
+            pipewire.set_channel_volumes(n, [(sl.value() / 100) ** 3 for sl in self.chan_sliders])
+
+    def _equalise(self):
+        if self.chan_sliders:
+            top = max(sl.value() for sl in self.chan_sliders)
+            for sl in self.chan_sliders:
+                sl.blockSignals(True)
+                sl.setValue(top)
+                sl.blockSignals(False)
+            self._channel_moved(0, top)
+
+    def _refresh_channels(self):
+        n = self.ctx.pw.nodes
+        chmap = n.sink_channel_map()
+        if chmap != self.chan_map:
+            self._build_channels(chmap)
+        # PipeWire state is polled; skip a few seconds after an edit so a stale
+        # dump doesn't snap the sliders back
+        if time.monotonic() - self._pw_edit < 3.5:
+            return
+        cv = n.sink_channel_volumes() or []
+        for sl, val, v in zip(self.chan_sliders, self.chan_vals, cv):
+            pct = int(round(max(0.0, v) ** (1 / 3) * 100))
+            if not sl.isSliderDown():
+                sl.blockSignals(True)
+                sl.setValue(min(100, pct))
+                sl.blockSignals(False)
+            val.setText(f"{pct}%")
 
     def _mic_mute(self, muted):
         n = self.ctx.pw.nodes
@@ -928,12 +1002,7 @@ class MixerPage(Page):
 
     def refresh(self):
         n = self.ctx.pw.nodes
-        if not self.balance.isSliderDown():
-            b = int(round(pipewire.balance_of(n.sink_channel_volumes()) * 100))
-            self.balance.blockSignals(True)
-            self.balance.setValue(b)
-            self.balance.blockSignals(False)
-            self.bal_val.setText("centre" if b == 0 else f"{'L' if b < 0 else 'R'} {abs(b)}%")
+        self._refresh_channels()
         if not self.card.present:
             return
         self.out_name.setText("Headphones" if self.card.get(C.OUTPUT) == 1 else "Speakers")
