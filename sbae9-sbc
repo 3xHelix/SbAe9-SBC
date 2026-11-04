@@ -1,0 +1,4 @@
+#!/bin/sh
+# Launch Sound Blaster Command for Linux from wherever this script lives.
+HERE="$(dirname "$(readlink -f "$0")")"
+exec python3 -c "import sys; sys.path.insert(0, sys.argv[1]); from sbcommand.__main__ import main; sys.exit(main())" "$HERE" "$@"

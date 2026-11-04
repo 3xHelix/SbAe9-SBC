@@ -1,0 +1,259 @@
+"""The AE-9 as a Qt object: named hardware features on top of the ALSA controls.
+
+Every change made anywhere (this app, alsamixer, the head-unit knob, the
+desktop volume slider) arrives as an ALSA event and is re-emitted as
+`changed(name)`, so the UI never has to poll the card.
+"""
+
+import math
+import os
+
+from PySide6.QtCore import QObject, QSocketNotifier, QTimer, Signal
+
+from . import alsa
+
+# Control names (from the snd-hda-codec-creative-ae9 driver)
+OUTPUT = "Head Unit Output"            # Speakers / Headphones
+MASTER = "Master Playback Volume"      # 0..254, 0.5 dB steps, -127..0 dB
+MASTER_SW = "Master Playback Switch"
+MIC = "Capture Volume"                 # 0..99, -90 + v dB, 0 = mute
+XLR_GAIN = "XLR Gain Capture Volume"   # 0/1/2 = 0/+10/+20 dB
+DAC_FILTER = "DAC Filter"              # Default / Fast / Slow
+DIRECT = "Direct Mode Switch"
+SBX = "SBX Switch"
+SPEAKER_CFG = "Speaker Config"         # 2.0 / 2.1
+SV_MODE = "FX Smart Volume Mode"       # Normal / Loud / Night
+EQ_ON = "EQ Switch"
+EQ_PRESET = "EQ Preset"
+SCOUT = "Scout Mode Switch"
+
+EFFECTS = ["Surround", "Crystalizer", "Bass", "Smart Volume", "Dialog Plus"]
+EFFECT_LABELS = {"Surround": "Surround", "Crystalizer": "Crystalizer", "Bass": "Bass",
+                 "Smart Volume": "Smart Vol", "Dialog Plus": "Dialog +"}
+EQ_BANDS = ["31Hz", "62Hz", "125Hz", "250Hz", "500Hz", "1kHz", "2kHz", "4kHz", "8kHz", "16kHz"]
+EQ_BAND_LABELS = ["31", "62", "125", "250", "500", "1k", "2k", "4k", "8k", "16k"]
+EQ_PREGAIN = "EQ Pre-gain Volume"
+
+
+def fx_switch(effect):
+    return f"FX {effect} Switch"
+
+
+def fx_level(effect):
+    return f"FX {effect} Volume"
+
+
+def eq_band(band):
+    return f"EQ {band} Volume"
+
+
+EQ_CONTROLS = [EQ_PREGAIN] + [eq_band(b) for b in EQ_BANDS]
+
+MODULE_PARAMS = "/sys/module/snd_hda_codec_creative_ae9/parameters"
+
+
+# --- volume curves ------------------------------------------------------------
+# The desktop (PipeWire) maps its slider cubically: amplitude = pct^3. Using the
+# same curve keeps our slider at the same spot as the KDE/GNOME one.
+def master_raw_to_pct(raw):
+    if raw <= 0:
+        return 0.0
+    db = (raw - 254) / 2.0
+    return min(1.0, 10 ** (db / 60.0))
+
+
+def master_pct_to_raw(pct):
+    if pct <= 0.0005:
+        return 0
+    db = 60.0 * math.log10(pct)
+    return max(0, min(254, int(round(254 + db * 2))))
+
+
+def master_raw_to_db(raw):
+    return (raw - 254) / 2.0
+
+
+def mic_raw_to_db(raw):
+    return raw - 90  # 99 -> +9 dB
+
+
+class AE9(QObject):
+    changed = Signal(str)         # control name whose value changed
+    info_changed = Signal(str)    # control name whose active state changed
+    connection_changed = Signal(bool)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.mixer = None
+        self.card_index = -1
+        self.longname = ""
+        self._notifier = None
+        self._retry = QTimer(self, interval=3000)
+        self._retry.timeout.connect(self._try_open)
+        self._try_open()
+
+    # --- connection ---------------------------------------------------------
+    @property
+    def present(self):
+        return self.mixer is not None
+
+    def _try_open(self):
+        idx = alsa.find_card("AE9", "Sound Blaster AE-9", "AE-9")
+        if idx < 0:
+            self._retry.start()
+            return
+        try:
+            self.mixer = alsa.Mixer(idx)
+        except OSError:
+            self._retry.start()
+            return
+        self._retry.stop()
+        self.card_index = idx
+        self.longname = alsa.card_longname(idx)
+        fd = self.mixer.subscribe()
+        self._notifier = QSocketNotifier(fd, QSocketNotifier.Read, self)
+        self._notifier.activated.connect(self._on_events)
+        self.connection_changed.emit(True)
+
+    def _lost(self):
+        if self._notifier:
+            self._notifier.setEnabled(False)
+            self._notifier.deleteLater()
+            self._notifier = None
+        if self.mixer:
+            self.mixer.close()
+        self.mixer = None
+        self.connection_changed.emit(False)
+        self._retry.start()
+
+    def _on_events(self, *_):
+        if not self.mixer:
+            return
+        try:
+            events = self.mixer.read_events()
+        except OSError:
+            self._lost()
+            return
+        if not events:
+            # readable but nothing to read: card went away
+            try:
+                self.mixer.get(MASTER)
+            except (OSError, KeyError):
+                self._lost()
+            return
+        for numid, mask in events:
+            if mask == alsa.EVENT_MASK_REMOVE:
+                self._lost()
+                return
+            if mask & alsa.EVENT_MASK_ADD:
+                self.mixer.rescan()
+            c = self.mixer.by_numid.get(numid)
+            if not c:
+                continue
+            if mask & alsa.EVENT_MASK_INFO:
+                self.mixer.refresh_info(numid)
+                self.info_changed.emit(c.name)
+            if mask & alsa.EVENT_MASK_VALUE:
+                self.changed.emit(c.name)
+
+    # --- generic access ----------------------------------------------------------
+    def has(self, name):
+        return bool(self.mixer and self.mixer.has(name))
+
+    def get(self, name, default=None):
+        if not self.has(name):
+            return default
+        try:
+            return self.mixer.get(name)
+        except OSError:
+            return default
+
+    def set(self, name, value, force=False):
+        if not self.has(name):
+            return False
+        try:
+            if isinstance(value, str):
+                value = self.mixer.controls[name].items.index(value)
+            if not force and self.mixer.get(name) == value:
+                return True
+            self.mixer.set(name, value)
+            return True
+        except OSError:
+            return False
+
+    def control(self, name):
+        return self.mixer.controls.get(name) if self.mixer else None
+
+    def items(self, name):
+        c = self.control(name)
+        return list(c.items) if c else []
+
+    def get_item(self, name):
+        c = self.control(name)
+        v = self.get(name)
+        if c is None or v is None or v >= len(c.items):
+            return None
+        return c.items[v]
+
+    def inactive(self, name):
+        c = self.control(name)
+        return bool(c and c.inactive)
+
+    def all_controls(self):
+        return list(self.mixer.controls.values()) if self.mixer else []
+
+    # --- feature helpers --------------------------------------------------------
+    @property
+    def dsp_active(self):
+        """True when audio runs through the DSP with SBX on (effects audible)."""
+        return self.present and not self.get(DIRECT, True) and bool(self.get(SBX, False))
+
+    def eq_db(self):
+        """[pre-gain, 31Hz .. 16kHz] in dB."""
+        return [(self.get(n, 12) or 0) - 12 for n in EQ_CONTROLS]
+
+    def set_eq_db(self, values):
+        for name, db in zip(EQ_CONTROLS, values):
+            self.set(name, int(round(db)) + 12)
+
+    def snapshot(self):
+        """Everything an SBX profile stores."""
+        return {
+            "fx": {e: [bool(self.get(fx_switch(e), False)), int(self.get(fx_level(e), 50))] for e in EFFECTS},
+            "sv_mode": self.get_item(SV_MODE) or "Normal",
+            "eq_on": bool(self.get(EQ_ON, False)),
+            "eq_preset": self.get_item(EQ_PRESET),
+            "eq": self.eq_db(),
+        }
+
+    def apply(self, profile, include_eq=True):
+        for e, (on, lvl) in profile.get("fx", {}).items():
+            self.set(fx_level(e), int(lvl))
+            self.set(fx_switch(e), bool(on))
+        if profile.get("sv_mode") in self.items(SV_MODE):
+            self.set(SV_MODE, profile["sv_mode"])
+        if include_eq and "eq" in profile:
+            preset = profile.get("eq_preset")
+            if preset in self.items(EQ_PRESET):
+                # The preset carries 0.1 dB values the band controls can't; only
+                # write bands when the profile edited them.
+                self.set(EQ_PRESET, preset, force=True)
+            if any(abs(a - b) > 0.55 for a, b in zip(self.eq_db(), profile["eq"])):
+                self.set_eq_db(profile["eq"])
+            self.set(EQ_ON, bool(profile.get("eq_on", True)))
+
+
+def module_param(name):
+    try:
+        with open(os.path.join(MODULE_PARAMS, name)) as f:
+            return f.read().strip()
+    except OSError:
+        return None
+
+
+def module_version():
+    try:
+        with open("/sys/module/snd_hda_codec_creative_ae9/version") as f:
+            return f.read().strip()
+    except OSError:
+        return None

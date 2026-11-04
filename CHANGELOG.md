@@ -1,0 +1,21 @@
+# Changelog
+
+Sound Blaster Command for Linux: the UI for the Creative Sound Blaster AE-9
+driver ([SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv)).
+
+## 0.1.0 (2026-11-04)
+
+First release. Needs driver 0.6.x (the one with SBX on the card's DSP).
+
+- **SBX Profile:** SBX switch, Surround / Crystalizer / Bass / Smart Volume
+  (Night, Normal, Loud) / Dialog+ dials, built-in profiles (Default, Gaming,
+  Movie, Music, Night) and your own.
+- **Equalizer:** 10 bands + pre-gain on the card's DSP, Creative's 20 presets,
+  saved custom curves.
+- **Playback:** speakers / headphones, 2.0 / 2.1, Direct Mode, DAC filter,
+  sample rate (48-384 kHz via PipeWire), default device, L/R test tone.
+- **Recording:** XLR mic level and gain, live input meter, mute, listen to mic.
+- **Scout Mode**, **Mixer** (volume, mute, balance) and **Settings** (driver
+  info, every ALSA control including inactive ones).
+- Follows the head-unit knob, alsamixer and the desktop slider live (ALSA
+  control events).

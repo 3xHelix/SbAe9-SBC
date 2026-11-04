@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+
+# Local reference material (Creative app screenshots, system dumps): not distributed
+SBC - *
+amixer-*.txt
+asound.txt
+pw-dump-output.txt
