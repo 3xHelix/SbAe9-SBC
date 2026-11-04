@@ -3,6 +3,12 @@
 Sound Blaster Command for Linux: the UI for the Creative Sound Blaster AE-9
 driver ([SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv)).
 
+## Unreleased
+
+- **Second colour palette, "Helix"**: blue-black and violet with coral-orange
+  and amber accents and a mint EQ curve. Switch between it and the original
+  "Command" palette under Settings → Appearance; the choice is remembered.
+
 ## 0.1.0 (2026-11-04)
 
 First release. Needs driver 0.6.x (the one with SBX on the card's DSP).

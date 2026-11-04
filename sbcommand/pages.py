@@ -4,7 +4,7 @@
 import subprocess
 
 from PySide6.QtCore import QSize, Qt, QTimer
-from PySide6.QtGui import QAction
+from PySide6.QtGui import QAction, QColor
 from PySide6.QtWidgets import (QButtonGroup, QCheckBox, QComboBox, QFrame, QGridLayout, QHBoxLayout,
                                QHeaderView, QInputDialog, QLabel, QMenu, QMessageBox, QPushButton,
                                QRadioButton, QScrollArea, QSizePolicy, QSlider, QSpinBox, QTableWidget,
@@ -14,7 +14,7 @@ from . import __version__
 from . import card as C
 from . import icons, pipewire, profiles
 from . import theme as T
-from .widgets import (Dial, EffectControl, EqGraph, LevelBar, ProfileCarousel, Segmented,
+from .widgets import (Dial, EffectControl, EqGraph, LevelBar, PaletteCard, ProfileCarousel, Segmented,
                       SpeakerDiagram, Throttle, ToggleSwitch, VolumeRow, label)
 
 
@@ -81,7 +81,16 @@ class Page(QWidget):
         self.lay.setSpacing(12)
         self.card.changed.connect(self._changed)
         self.card.info_changed.connect(self._changed)
-        self.card.connection_changed.connect(lambda _: self.refresh())
+        self.card.connection_changed.connect(self._on_connection)
+
+    # Slots for long-lived signals are methods (not lambdas) so Qt drops the
+    # connection when the page is deleted, e.g. when the palette changes.
+    def _on_connection(self, *_):
+        self.refresh()
+
+    def _on_pw(self, *_):
+        if self.isVisible():
+            self.refresh()
 
     def header(self, text, switch=None, extra=()):
         row = QHBoxLayout()
@@ -584,7 +593,7 @@ class PlaybackPage(Page):
         self.lay.addLayout(grid)
         self.lay.addStretch()
         self._quality_built = None
-        ctx.pw.updated.connect(lambda _: self.isVisible() and self.refresh())
+        ctx.pw.updated.connect(self._on_pw)
 
     def _make_default(self):
         n = self.ctx.pw.nodes
@@ -728,7 +737,7 @@ class RecordingPage(Page):
         self.lay.addStretch()
         ctx.meter.levels.connect(self._levels)
         ctx.monitor.state.connect(self.listen.setCheckedSilently)
-        ctx.pw.updated.connect(lambda _: self.isVisible() and self.refresh())
+        ctx.pw.updated.connect(self._on_pw)
 
     def _make_default(self):
         n = self.ctx.pw.nodes
@@ -862,7 +871,7 @@ class MixerPage(Page):
         bal.addWidget(label("L", "muted"))
         self.balance = QSlider(Qt.Horizontal)
         self.balance.setRange(-100, 100)
-        self.balance.setStyleSheet("QSlider::sub-page:horizontal{background:#4a4b5c;}")
+        self.balance.setStyleSheet(f"QSlider::sub-page:horizontal{{background:{T.TRACK};}}")
         self.balance.valueChanged.connect(Throttle(self._balance, 60))
         self.balance.setToolTip("Double-click the label to centre")
         bal.addWidget(self.balance, 1)
@@ -903,7 +912,7 @@ class MixerPage(Page):
             "Speakers and headphones each keep their own volume on the card. "
             "Balance is applied by PipeWire.", "hint", wrap=True))
         self.lay.addStretch()
-        ctx.pw.updated.connect(lambda _: self.isVisible() and self.refresh())
+        ctx.pw.updated.connect(self._on_pw)
 
     def _balance(self, v):
         n = self.ctx.pw.nodes
@@ -956,6 +965,19 @@ class SettingsPage(Page):
         self.rates_banner.button.clicked.connect(self._enable_rates)
         self.lay.addWidget(self.rates_banner)
 
+        self.lay.addWidget(label("Appearance", "sectionTitle"))
+        pal = QHBoxLayout()
+        pal.setSpacing(16)
+        self.palettes = {}
+        for key in T.PALETTES:
+            pc = PaletteCard(key)
+            pc.set_selected(key == T.CURRENT)
+            pc.clicked.connect(self._pick_palette)
+            self.palettes[key] = pc
+            pal.addWidget(pc)
+        pal.addStretch()
+        self.lay.addLayout(pal)
+
         self.lay.addWidget(label("App", "sectionTitle"))
         self.restore = QCheckBox("Re-apply the active SBX profile when the app starts")
         self.restore.setToolTip("Usually not needed: the driver and alsa-state keep the card's "
@@ -988,6 +1010,10 @@ class SettingsPage(Page):
         self.table.setColumnWidth(1, 200)
         self.lay.addWidget(self.table, 1)
         self._editors = {}
+
+    def _pick_palette(self, key):
+        if key != T.CURRENT:
+            self.ctx.palette_requested.emit(key)
 
     def _enable_rates(self):
         path = f"{C.MODULE_PARAMS}/pcm_rates"
@@ -1071,4 +1097,4 @@ class SettingsPage(Page):
             ed.blockSignals(False)
             st = self.table.item(i, 2)
             st.setText("inactive" if c.inactive else "active")
-            st.setForeground(Qt.gray if c.inactive else Qt.white)
+            st.setForeground(QColor(T.DIM if c.inactive else T.TEXT))

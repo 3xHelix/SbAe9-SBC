@@ -1,24 +1,70 @@
 # SPDX-License-Identifier: GPL-2.0-only
-"""Colors and the Qt style sheet, modelled on Sound Blaster Command."""
+"""Colour palettes and the Qt style sheet.
 
-ACCENT = "#1fa6b8"
-ACCENT_HI = "#35c3d6"
-TEXT = "#e8eaf3"
-MUTED = "#a4a8bf"
-DIM = "#6b6f86"
-TRACK = "#4a4b5c"
-PANEL = "#4b4c58"
-PANEL_HI = "#585a68"
-TITLE_BG = "#1b2034"
-BOTTOM_BG = "#191d30"
-SIDEBAR_TOP = "#272c5c"
-SIDEBAR_BOTTOM = "#2d2a63"
-MAIN_TOP = "#2b2b55"
-MAIN_BOTTOM = "#33294f"
-DANGER = "#e2505c"
-OK = "#33d14f"
+Every colour the app draws comes from the active palette. `apply(name)`
+switches palettes; widgets read the module attributes (T.ACCENT, ...) when
+they paint, and `stylesheet()` builds the QSS from them.
+"""
 
-QSS = f"""
+PALETTES = {
+    # Navy and purple with teal, like Creative's app.
+    "command": {
+        "label": "Command",
+        "ACCENT": "#1fa6b8", "ACCENT_HI": "#35c3d6", "ACCENT_TEXT": "#ffffff",
+        "TEXT": "#e8eaf3", "MUTED": "#a4a8bf", "DIM": "#6b6f86",
+        "TRACK": "#4a4b5c", "PANEL": "#4b4c58", "PANEL_HI": "#585a68", "PANEL_LO": "#3d3e4b",
+        "TITLE_BG": "#1b2034", "BOTTOM_BG": "#191d30",
+        "SIDEBAR_TOP": "#272c5c", "SIDEBAR_BOTTOM": "#2d2a63",
+        "MAIN_TOP": "#2b2b55", "MAIN_BOTTOM": "#33294f",
+        "POPUP": "#1e2238", "POPUP_BORDER": "#343957", "LIST_BG": "#2d2f45",
+        "DIALOG": "#24284a", "TOOLTIP": "#303247",
+        "SWITCH_OFF": "#5a5c6c", "DIAL_TRACK": "#4a4b58", "IDLE": "#7d8296",
+        "GRAPH_BG": "#45454f", "GRAPH_TEXT": "#d5d6de", "EQ_LINE": "#7f9cf5",
+        "SEG": "#3d3e4c", "SEG_HOVER": "#4c4e5e", "CARD_CAP": "#3f3f4a", "SPEAKER_BOX": "#33355a",
+        "DANGER": "#e2505c", "OK": "#33d14f", "WARN": "#e9c64a",
+        "METER": ["#1fa6b8", "#7fd16a", "#e9c64a", "#e2505c"],
+    },
+    # From the 3xHelix avatar: blue-black, violet, coral-orange to amber, mint.
+    "helix": {
+        "label": "Helix",
+        "ACCENT": "#f57a45", "ACCENT_HI": "#ffb63a", "ACCENT_TEXT": "#1b1230",
+        "TEXT": "#f2edff", "MUTED": "#ab9fcb", "DIM": "#6d6190",
+        "TRACK": "#3a2f5a", "PANEL": "#3b2e5e", "PANEL_HI": "#4b3b74", "PANEL_LO": "#2e2449",
+        "TITLE_BG": "#120f21", "BOTTOM_BG": "#110e1f",
+        "SIDEBAR_TOP": "#2a1850", "SIDEBAR_BOTTOM": "#3a1452",
+        "MAIN_TOP": "#1d1832", "MAIN_BOTTOM": "#26183f",
+        "POPUP": "#16122a", "POPUP_BORDER": "#3b2f5c", "LIST_BG": "#211b38",
+        "DIALOG": "#1d1832", "TOOLTIP": "#2a2145",
+        "SWITCH_OFF": "#4a3d6e", "DIAL_TRACK": "#3a2f5a", "IDLE": "#7a6c9e",
+        "GRAPH_BG": "#241d3d", "GRAPH_TEXT": "#d9d0f0", "EQ_LINE": "#5dcaa8",
+        "SEG": "#2e2449", "SEG_HOVER": "#3b2e5e", "CARD_CAP": "#2a2145", "SPEAKER_BOX": "#3b2e5e",
+        "DANGER": "#e31b49", "OK": "#5dcaa8", "WARN": "#ffb63a",
+        "METER": ["#5dcaa8", "#5dcaa8", "#ffb63a", "#e31b49"],
+    },
+}
+
+CURRENT = "command"
+
+
+def rgba(hex_color, alpha):
+    h = hex_color.lstrip("#")
+    return f"rgba({int(h[0:2], 16)},{int(h[2:4], 16)},{int(h[4:6], 16)},{alpha})"
+
+
+def apply(name):
+    """Make `name` the active palette (unknown names fall back to Command)."""
+    global CURRENT
+    CURRENT = name if name in PALETTES else "command"
+    for k, v in PALETTES[CURRENT].items():
+        if k.isupper():
+            globals()[k] = v
+
+
+apply("command")
+
+
+def _qss():
+    return f"""
 * {{
     font-family: "Roboto Condensed", "Barlow Semi Condensed", "Noto Sans", "DejaVu Sans Condensed", sans-serif;
     color: {TEXT};
@@ -47,24 +93,24 @@ QMainWindow, #root {{ background: {MAIN_TOP}; }}
 #profileLabel {{ font-size: 20px; font-weight: 600; }}
 #sbxLogo {{ font-size: 26px; font-weight: 900; font-style: italic; color: {TEXT}; letter-spacing: 1px; }}
 #banner {{
-    background: rgba(31,166,184,0.16); border: 1px solid rgba(31,166,184,0.55);
+    background: {rgba(ACCENT, 0.16)}; border: 1px solid {rgba(ACCENT, 0.55)};
     border-radius: 4px;
 }}
 #banner QLabel {{ font-size: 13px; }}
 #warnBanner {{
-    background: rgba(226,80,92,0.15); border: 1px solid rgba(226,80,92,0.6); border-radius: 4px;
+    background: {rgba(DANGER, 0.15)}; border: 1px solid {rgba(DANGER, 0.6)}; border-radius: 4px;
 }}
 #card {{ background: rgba(0,0,0,0.16); border-radius: 6px; }}
 
-QToolTip {{ background: #303247; color: {TEXT}; border: 1px solid #555; padding: 4px; }}
+QToolTip {{ background: {TOOLTIP}; color: {TEXT}; border: 1px solid {POPUP_BORDER}; padding: 4px; }}
 
 QPushButton {{
     background: {PANEL}; border: none; padding: 7px 18px; border-radius: 2px; font-size: 14px;
 }}
 QPushButton:hover {{ background: {PANEL_HI}; }}
-QPushButton:pressed {{ background: #3e3f4b; }}
-QPushButton:disabled {{ color: {DIM}; background: #3d3e4b; }}
-QPushButton#accentButton {{ background: {ACCENT}; color: white; }}
+QPushButton:pressed {{ background: {PANEL_LO}; }}
+QPushButton:disabled {{ color: {DIM}; background: {PANEL_LO}; }}
+QPushButton#accentButton {{ background: {ACCENT}; color: {ACCENT_TEXT}; }}
 QPushButton#accentButton:hover {{ background: {ACCENT_HI}; }}
 QToolButton {{ background: transparent; border: none; padding: 4px; border-radius: 3px; }}
 QToolButton:hover {{ background: rgba(255,255,255,0.08); }}
@@ -79,15 +125,16 @@ QComboBox:disabled {{ color: {DIM}; }}
 QComboBox::drop-down {{ border: none; width: 34px; }}
 QComboBox::down-arrow {{ image: url(__CHEVRON__); width: 16px; height: 16px; }}
 QComboBox QAbstractItemView {{
-    background: #2d2f45; border: 1px solid #3f4260; selection-background-color: {ACCENT};
+    background: {LIST_BG}; border: 1px solid {POPUP_BORDER}; selection-background-color: {ACCENT};
+    selection-color: {ACCENT_TEXT};
     outline: none; padding: 4px;
 }}
 
-QMenu {{ background: #1e2238; border: 1px solid #343957; padding: 6px 0; }}
+QMenu {{ background: {POPUP}; border: 1px solid {POPUP_BORDER}; padding: 6px 0; }}
 QMenu::item {{ padding: 8px 34px 8px 20px; }}
-QMenu::item:selected {{ background: rgba(31,166,184,0.35); }}
+QMenu::item:selected {{ background: {rgba(ACCENT, 0.35)}; }}
 QMenu::item:disabled {{ color: {DIM}; }}
-QMenu::separator {{ height: 1px; background: #343957; margin: 4px 8px; }}
+QMenu::separator {{ height: 1px; background: {POPUP_BORDER}; margin: 4px 8px; }}
 
 QRadioButton {{ spacing: 10px; font-size: 15px; }}
 QRadioButton::indicator {{
@@ -129,7 +176,7 @@ QHeaderView::section {{
     background: rgba(0,0,0,0.3); color: {MUTED}; border: none; padding: 5px; font-size: 12px;
 }}
 QLineEdit {{ background: {PANEL}; border: none; padding: 6px 8px; selection-background-color: {ACCENT}; }}
-QInputDialog, QMessageBox, QDialog {{ background: #24284a; }}
+QInputDialog, QMessageBox, QDialog {{ background: {DIALOG}; }}
 """
 
 
@@ -138,9 +185,9 @@ def stylesheet():
     import os
     from . import config, icons
 
-    out = QSS
-    for key, name, color in (("__CHEVRON__", "chevron-down", TEXT), ("__CHECK__", "check", "#ffffff")):
-        path = os.path.join(config.cache_dir(), f"qss-{name}.png")
+    out = _qss()
+    for key, name, color in (("__CHEVRON__", "chevron-down", TEXT), ("__CHECK__", "check", ACCENT_TEXT)):
+        path = os.path.join(config.cache_dir(), f"qss-{name}-{color.lstrip('#')}.png")
         if not os.path.exists(path):
             icons.pixmap(name, color, 16, 2.0).save(path)
         out = out.replace(key, path)

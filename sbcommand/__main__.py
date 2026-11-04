@@ -18,10 +18,11 @@ def main():
     app.setOrganizationName("sbae9-sbc")
     app.setDesktopFileName("sbae9-sbc")
     app.setStyle("Fusion")
-    app.setStyleSheet(theme.stylesheet())
 
     ctx = Context()
     s = ctx.settings
+    theme.apply(s["palette"])
+    app.setStyleSheet(theme.stylesheet())
     if s["restore_on_start"] and ctx.card.present:
         prof = profiles.find(s, s["active_profile"])
         if prof:
@@ -31,6 +32,21 @@ def main():
 
     win = MainWindow(ctx)
     win.show()
+
+    def switch_palette(name):
+        """Restyle by rebuilding the window; the card, PipeWire helpers and
+        settings live in ctx and carry over (mic monitor keeps running)."""
+        nonlocal win
+        s["palette"] = name
+        theme.apply(name)
+        app.setStyleSheet(theme.stylesheet())
+        old, win = win, MainWindow(ctx)
+        win.setGeometry(old.geometry())
+        win.showMaximized() if old.isMaximized() else win.show()
+        old.hide()
+        old.deleteLater()
+
+    ctx.palette_requested.connect(switch_palette)
 
     # let Ctrl+C in a terminal close the app
     signal.signal(signal.SIGINT, lambda *_: app.quit())

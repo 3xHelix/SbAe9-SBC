@@ -91,7 +91,7 @@ class ToggleSwitch(QAbstractButton):
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
         r = QRectF(1, 1, self._w - 2, self._h - 2)
-        off, on = QColor("#5a5c6c"), QColor(T.ACCENT)
+        off, on = QColor(T.SWITCH_OFF), QColor(T.ACCENT)
         if not self.isEnabled():
             on = QColor(T.DIM)
         c = QColor(
@@ -181,11 +181,11 @@ class Dial(QWidget):
         p.setRenderHint(QPainter.Antialiasing)
         w = 11
         r = QRectF(4 + w / 2, 4 + w / 2, self._d - w, self._d - w)
-        pen = QPen(QColor("#4a4b58"), w, Qt.SolidLine, Qt.FlatCap)
+        pen = QPen(QColor(T.DIAL_TRACK), w, Qt.SolidLine, Qt.FlatCap)
         p.setPen(pen)
         p.drawArc(r, 225 * 16, -270 * 16)
         if self._value > 0:
-            pen.setColor(QColor(T.ACCENT if self._active else "#7d8296"))
+            pen.setColor(QColor(T.ACCENT if self._active else T.IDLE))
             p.setPen(pen)
             p.drawArc(r, 225 * 16, int(-270 * 16 * self._value / 100))
         if self.hasFocus():
@@ -253,11 +253,11 @@ class Segmented(QWidget):
             b.setCursor(Qt.PointingHandCursor)
             first, last = i == 0, i == len(options) - 1
             b.setStyleSheet(
-                "QPushButton{background:#3d3e4c;padding:4px 10px;font-size:12px;border-radius:0;"
+                f"QPushButton{{background:{T.SEG};padding:4px 10px;font-size:12px;border-radius:0;"
                 f"border-top-left-radius:{9 if first else 0}px;border-bottom-left-radius:{9 if first else 0}px;"
                 f"border-top-right-radius:{9 if last else 0}px;border-bottom-right-radius:{9 if last else 0}px;}}"
-                "QPushButton:hover{background:#4c4e5e;}"
-                f"QPushButton:checked{{background:{T.ACCENT};color:white;}}")
+                f"QPushButton:hover{{background:{T.SEG_HOVER};}}"
+                f"QPushButton:checked{{background:{T.ACCENT};color:{T.ACCENT_TEXT};}}")
             b.clicked.connect(lambda _=False, o=opt: self._click(o))
             lay.addWidget(b)
             self.buttons[opt] = b
@@ -382,15 +382,15 @@ class EqGraph(QWidget):
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
         pts, pre, main = self._points()
-        line = QColor("#7f9cf5" if self._active else "#8a8da0")
+        line = QColor(T.EQ_LINE if self._active else T.IDLE)
         for rect, plot, grid in ((self._pre_rect(), pre, False), (self._main_rect(), main, True)):
-            p.fillRect(rect, QColor("#45454f"))
+            p.fillRect(rect, QColor(T.GRAPH_BG))
             f = p.font()
             f.setPixelSize(13)
             p.setFont(f)
             for db in (12, 0, -12):
                 y = self._y(plot, db)
-                p.setPen(QColor("#d5d6de"))
+                p.setPen(QColor(T.GRAPH_TEXT))
                 p.drawText(QRectF(rect.left() + 2, y - 9, 22, 18), Qt.AlignCenter, str(db))
             if grid:
                 n = len(self.labels)
@@ -398,12 +398,12 @@ class EqGraph(QWidget):
                     x = plot.left() + plot.width() * i / (n - 1)
                     p.setPen(QPen(QColor(255, 255, 255, 26), 1))
                     p.drawLine(QPointF(x, plot.top() - 10), QPointF(x, plot.bottom() + 6))
-                    p.setPen(QColor("#d5d6de"))
+                    p.setPen(QColor(T.GRAPH_TEXT))
                     p.drawText(QRectF(x - 24, plot.bottom() + 14, 48, 20), Qt.AlignCenter, lb)
             else:
                 p.setPen(QPen(QColor(255, 255, 255, 26), 1))
                 p.drawLine(QPointF(plot.center().x(), plot.top() - 10), QPointF(plot.center().x(), plot.bottom() + 6))
-                p.setPen(QColor("#d5d6de"))
+                p.setPen(QColor(T.GRAPH_TEXT))
                 p.drawText(QRectF(rect.left(), plot.bottom() + 14, rect.width(), 20), Qt.AlignCenter, "Pre")
             p.setPen(QPen(QColor(255, 255, 255, 40), 1, Qt.DashLine))
             p.drawLine(QPointF(plot.left() - 4, self._y(plot, 0)), QPointF(plot.right() + 4, self._y(plot, 0)))
@@ -496,7 +496,7 @@ class ProfileCard(QWidget):
         icons.paint(p, ic, QRectF(art.center().x() - s / 2, art.center().y() - s / 2, s, s), "#ffffff")
         p.setOpacity(1.0)
         cap = QRectF(r.left(), art.bottom(), r.width(), r.bottom() - art.bottom())
-        p.fillRect(cap, QColor("#3f3f4a"))
+        p.fillRect(cap, QColor(T.CARD_CAP))
         f = p.font()
         f.setPixelSize(17 if self.selected else 15)
         f.setBold(True)
@@ -666,10 +666,8 @@ class LevelBar(QWidget):
         frac = max(0.0, min(1.0, (self.db + 60) / 60))
         if frac > 0:
             g = QLinearGradient(r.topLeft(), r.topRight())
-            g.setColorAt(0, QColor(T.ACCENT))
-            g.setColorAt(0.75, QColor("#7fd16a"))
-            g.setColorAt(0.92, QColor("#e9c64a"))
-            g.setColorAt(1, QColor(T.DANGER))
+            for stop, col in zip((0, 0.75, 0.92, 1), T.METER):
+                g.setColorAt(stop, QColor(col))
             p.setBrush(QBrush(g))
             p.setClipRect(QRectF(r.left(), r.top(), r.width() * frac, r.height()))
             p.drawRoundedRect(r, 3, 3)
@@ -707,7 +705,7 @@ class SpeakerDiagram(QWidget):
             col = T.ACCENT_HI if self.playing == name else T.TEXT
             box = QRectF(pt.x() - size / 2, pt.y() - size / 2, size, size)
             p.setPen(Qt.NoPen)
-            p.setBrush(QColor(T.ACCENT if self.playing == name else "#33355a"))
+            p.setBrush(QColor(T.ACCENT if self.playing == name else T.SPEAKER_BOX))
             p.drawRoundedRect(box.adjusted(-3, -3, 3, 3), 4, 4)
             icons.paint(p, "speaker", box, col)
 
@@ -726,3 +724,69 @@ class SpeakerDiagram(QWidget):
         spk("right", QPointF(c.x() + rad * math.sin(a), c.y() - rad * math.cos(a)))
         if self.config == "2.1":
             spk("sub", QPointF(c.x(), c.y() + rad), 22)
+
+
+class PaletteCard(QWidget):
+    """Clickable miniature of the app drawn in one palette."""
+    clicked = Signal(str)
+
+    def __init__(self, key, parent=None):
+        super().__init__(parent)
+        self.key = key
+        self.selected = False
+        self.setFixedSize(200, 128)
+        self.setCursor(Qt.PointingHandCursor)
+        self.setToolTip(f"Use the {T.PALETTES[key]['label']} palette")
+
+    def set_selected(self, sel):
+        self.selected = sel
+        self.update()
+
+    def mouseReleaseEvent(self, e):
+        if e.button() == Qt.LeftButton:
+            self.clicked.emit(self.key)
+
+    def paintEvent(self, _):
+        c = T.PALETTES[self.key]
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        r = QRectF(4, 4, self.width() - 8, self.height() - 30)
+        clip = QPainterPath()
+        clip.addRoundedRect(r, 6, 6)
+        p.setClipPath(clip)
+        p.fillRect(r, QColor(c["MAIN_TOP"]))
+        p.fillRect(QRectF(r.left(), r.top(), r.width(), 12), QColor(c["TITLE_BG"]))
+        side = QRectF(r.left(), r.top() + 12, 46, r.height() - 26)
+        g = QLinearGradient(side.topLeft(), side.bottomLeft())
+        g.setColorAt(0, QColor(c["SIDEBAR_TOP"]))
+        g.setColorAt(1, QColor(c["SIDEBAR_BOTTOM"]))
+        p.fillRect(side, g)
+        p.fillRect(QRectF(side.left(), side.top() + 10, 3, 9), QColor(c["ACCENT"]))
+        for i in range(4):
+            p.fillRect(QRectF(side.left() + 9, side.top() + 12 + i * 14, 28, 4),
+                       QColor(c["ACCENT_HI"] if i == 0 else c["MUTED"]))
+        p.fillRect(QRectF(r.left(), r.bottom() - 14, r.width(), 14), QColor(c["BOTTOM_BG"]))
+        # dials and an EQ line in the main area
+        for i in range(3):
+            d = QRectF(side.right() + 12 + i * 44, r.top() + 22, 32, 32)
+            p.setPen(QPen(QColor(c["DIAL_TRACK"]), 4, Qt.SolidLine, Qt.FlatCap))
+            p.drawArc(d, 225 * 16, -270 * 16)
+            p.setPen(QPen(QColor(c["ACCENT"]), 4, Qt.SolidLine, Qt.FlatCap))
+            p.drawArc(d, 225 * 16, int(-270 * 16 * (0.35 + 0.2 * i)))
+        path = QPainterPath(QPointF(side.right() + 10, r.top() + 72))
+        path.cubicTo(QPointF(side.right() + 50, r.top() + 60), QPointF(side.right() + 90, r.top() + 82),
+                     QPointF(r.right() - 8, r.top() + 66))
+        p.setPen(QPen(QColor(c["EQ_LINE"]), 2))
+        p.setBrush(Qt.NoBrush)
+        p.drawPath(path)
+        p.fillRect(QRectF(r.right() - 60, r.bottom() - 9, 50, 4), QColor(c["ACCENT"]))
+        p.setClipping(False)
+        if self.selected:
+            p.setPen(QPen(QColor(T.ACCENT), 3))
+            p.drawRoundedRect(r.adjusted(-1.5, -1.5, 1.5, 1.5), 7, 7)
+        f = p.font()
+        f.setPixelSize(14)
+        f.setBold(self.selected)
+        p.setFont(f)
+        p.setPen(QColor(T.ACCENT_HI if self.selected else T.TEXT))
+        p.drawText(QRectF(0, self.height() - 24, self.width(), 22), Qt.AlignCenter, c["label"])

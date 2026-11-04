@@ -29,6 +29,7 @@ DEFAULTS = {
     "restore_on_start": False,  # the driver + alsa-state already keep settings
     "rate_mode": None,       # None = leave PipeWire alone, 0 = follow source, else Hz
     "page": 0,
+    "palette": "command",    # see theme.PALETTES
 }
 
 

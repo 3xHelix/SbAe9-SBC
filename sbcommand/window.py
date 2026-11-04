@@ -15,6 +15,7 @@ from .widgets import Throttle, VolumeRow, label
 class Context(QObject):
     """Shared state handed to every page."""
     profile_changed = Signal()
+    palette_requested = Signal(str)
 
     def __init__(self):
         super().__init__()
@@ -37,7 +38,8 @@ NAV = [
 ]
 NAV_BOTTOM = [("Settings", "settings", pages.SettingsPage)]
 
-NAV_QSS = f"""
+def nav_qss():
+    return f"""
 QPushButton {{
     background: transparent; border: none; border-left: 3px solid transparent; border-radius: 0;
     text-align: left; padding: 11px 16px; font-size: 16px;
@@ -56,7 +58,11 @@ class OutputSwitch(QWidget):
         self.setFixedSize(58, 30)
         self.setCursor(Qt.PointingHandCursor)
         self.setToolTip("Switch between speakers and the head unit's headphone jack")
-        card.changed.connect(lambda n: n == C.OUTPUT and self.update())
+        card.changed.connect(self._on_change)
+
+    def _on_change(self, name):
+        if name == C.OUTPUT:
+            self.update()
 
     def mouseReleaseEvent(self, e):
         if self.card.present:
@@ -67,12 +73,12 @@ class OutputSwitch(QWidget):
         p.setRenderHint(QPainter.Antialiasing)
         hp = self.card.get(C.OUTPUT) == 1
         p.setPen(Qt.NoPen)
-        p.setBrush(QColor("#4b4c58"))
+        p.setBrush(QColor(T.PANEL))
         p.drawRoundedRect(self.rect(), 15, 15)
         p.setBrush(QColor(T.ACCENT))
         p.drawEllipse(2 if hp else 30, 2, 26, 26)
-        icons.paint(p, "headphones", self.rect().adjusted(6, 7, -36, -7), "#ffffff" if hp else T.MUTED)
-        icons.paint(p, "speaker", self.rect().adjusted(35, 7, -7, -7), "#ffffff" if not hp else T.MUTED)
+        icons.paint(p, "headphones", self.rect().adjusted(6, 7, -36, -7), T.ACCENT_TEXT if hp else T.MUTED)
+        icons.paint(p, "speaker", self.rect().adjusted(35, 7, -7, -7), T.ACCENT_TEXT if not hp else T.MUTED)
 
 
 class StatusDot(QWidget):
@@ -132,7 +138,7 @@ class MainWindow(QMainWindow):
         side = QFrame()
         side.setObjectName("sidebar")
         side.setFixedWidth(232)
-        side.setStyleSheet(NAV_QSS.replace("QPushButton", "#sidebar QPushButton"))
+        side.setStyleSheet(nav_qss().replace("QPushButton", "#sidebar QPushButton"))
         sl = QVBoxLayout(side)
         sl.setContentsMargins(0, 10, 0, 12)
         sl.setSpacing(2)
@@ -204,11 +210,11 @@ class MainWindow(QMainWindow):
         bl.addWidget(self.vol)
         v.addWidget(bottom)
 
-        self.card.changed.connect(lambda _: self.refresh())
-        self.card.info_changed.connect(lambda _: self.refresh())
-        self.card.connection_changed.connect(lambda _: self.refresh())
+        self.card.changed.connect(self._on_card)
+        self.card.info_changed.connect(self._on_card)
+        self.card.connection_changed.connect(self._on_card)
         ctx.profile_changed.connect(self.refresh)
-        ctx.pw.updated.connect(lambda _: self._refresh_mic_mute())
+        ctx.pw.updated.connect(self._refresh_mic_mute)
 
         start = ctx.settings["page"]
         self.go(start if isinstance(start, int) and 0 <= start < self.stack.count() else 0)
@@ -225,7 +231,10 @@ class MainWindow(QMainWindow):
         if n.source:
             pipewire.set_mute(n.source["id"], muted)
 
-    def _refresh_mic_mute(self):
+    def _on_card(self, *_):
+        self.refresh()
+
+    def _refresh_mic_mute(self, *_):
         n = self.ctx.pw.nodes
         if n.source and self.card.present:
             _, muted = pipewire.get_volume(n.source["id"])
@@ -254,7 +263,7 @@ class MainWindow(QMainWindow):
             scout = "  ·  Scout Mode" if self.card.get(C.SCOUT) else ""
             self.profile_lbl.setText(f"{name}{mod}{scout}")
         else:
-            self.dot.set_color("#e9c64a")
+            self.dot.set_color(T.WARN)
             self.dot.setToolTip("DSP path, SBX off")
             self.profile_lbl.setText("SBX off")
         raw = self.card.get(C.MASTER, 0)
