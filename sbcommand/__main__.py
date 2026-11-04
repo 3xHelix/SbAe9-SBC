@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: GPL-2.0-only
 """Entry point: python3 -m sbcommand"""
 
+import argparse
 import signal
 import sys
 
@@ -11,8 +12,20 @@ from . import __version__, pipewire, profiles, theme
 from .window import Context, MainWindow
 
 
+def parse_args(argv):
+    names = ", ".join(f"{k} ({v['label']})" for k, v in theme.PALETTES.items())
+    ap = argparse.ArgumentParser(
+        prog="sbae9-sbc", description="Sound Blaster Command for Linux: AE-9 control panel.")
+    ap.add_argument("--palette", type=str.lower, choices=list(theme.PALETTES), metavar="NAME",
+                    help=f"colour palette for this launch, without changing the saved one: {names}")
+    ap.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
+    # Qt's own options (e.g. -platform, -style) pass through untouched.
+    return ap.parse_known_args(argv[1:])
+
+
 def main():
-    app = QApplication(sys.argv)
+    args, qt_args = parse_args(sys.argv)
+    app = QApplication(sys.argv[:1] + qt_args)
     app.setApplicationName("Sound Blaster Command")
     app.setApplicationVersion(__version__)
     app.setOrganizationName("sbae9-sbc")
@@ -21,7 +34,7 @@ def main():
 
     ctx = Context()
     s = ctx.settings
-    theme.apply(s["palette"])
+    theme.apply(args.palette or s["palette"])
     app.setStyleSheet(theme.stylesheet())
     if s["restore_on_start"] and ctx.card.present:
         prof = profiles.find(s, s["active_profile"])

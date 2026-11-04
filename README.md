@@ -60,6 +60,7 @@ doesn't support these yet.
 ```sh
 ./sbae9-sbc            # run from this folder
 ./install.sh           # adds a menu entry + ~/.local/bin/sbae9-sbc
+./sbae9-sbc --palette helix   # one launch in the Helix palette (saved choice unchanged)
 ```
 
 ## Files it writes
