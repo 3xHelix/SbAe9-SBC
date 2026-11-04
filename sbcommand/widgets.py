@@ -741,7 +741,7 @@ class PaletteCard(QWidget):
         super().__init__(parent)
         self.key = key
         self.selected = False
-        self.setFixedSize(200, 128)
+        self.setFixedSize(166, 112)
         self.setCursor(Qt.PointingHandCursor)
         self.setToolTip(f"Use the {T.PALETTES[key]['label']} palette")
 
@@ -763,30 +763,34 @@ class PaletteCard(QWidget):
         p.setClipPath(clip)
         p.fillRect(r, QColor(c["MAIN_TOP"]))
         p.fillRect(QRectF(r.left(), r.top(), r.width(), 12), QColor(c["TITLE_BG"]))
-        side = QRectF(r.left(), r.top() + 12, 46, r.height() - 26)
+        side = QRectF(r.left(), r.top() + 12, 38, r.height() - 26)
         g = QLinearGradient(side.topLeft(), side.bottomLeft())
         g.setColorAt(0, QColor(c["SIDEBAR_TOP"]))
         g.setColorAt(1, QColor(c["SIDEBAR_BOTTOM"]))
         p.fillRect(side, g)
         p.fillRect(QRectF(side.left(), side.top() + 10, 3, 9), QColor(c["ACCENT"]))
         for i in range(4):
-            p.fillRect(QRectF(side.left() + 9, side.top() + 12 + i * 14, 28, 4),
+            p.fillRect(QRectF(side.left() + 8, side.top() + 10 + i * 11, 22, 3),
                        QColor(c["ACCENT_HI"] if i == 0 else c["MUTED"]))
         p.fillRect(QRectF(r.left(), r.bottom() - 14, r.width(), 14), QColor(c["BOTTOM_BG"]))
         # dials and an EQ line in the main area
+        step = (r.right() - side.right() - 16) / 3
+        size = min(30.0, step - 10)
         for i in range(3):
-            d = QRectF(side.right() + 12 + i * 44, r.top() + 22, 32, 32)
+            d = QRectF(side.right() + 10 + i * step, r.top() + 20, size, size)
             p.setPen(QPen(QColor(c["DIAL_TRACK"]), 4, Qt.SolidLine, Qt.FlatCap))
             p.drawArc(d, 225 * 16, -270 * 16)
             p.setPen(QPen(QColor(c["ACCENT"]), 4, Qt.SolidLine, Qt.FlatCap))
             p.drawArc(d, 225 * 16, int(-270 * 16 * (0.35 + 0.2 * i)))
-        path = QPainterPath(QPointF(side.right() + 10, r.top() + 72))
-        path.cubicTo(QPointF(side.right() + 50, r.top() + 60), QPointF(side.right() + 90, r.top() + 82),
-                     QPointF(r.right() - 8, r.top() + 66))
+        y = r.top() + 20 + size + 12
+        w = r.right() - side.right()
+        path = QPainterPath(QPointF(side.right() + 8, y + 4))
+        path.cubicTo(QPointF(side.right() + w * 0.35, y - 6), QPointF(side.right() + w * 0.65, y + 12),
+                     QPointF(r.right() - 6, y))
         p.setPen(QPen(QColor(c["EQ_LINE"]), 2))
         p.setBrush(Qt.NoBrush)
         p.drawPath(path)
-        p.fillRect(QRectF(r.right() - 60, r.bottom() - 9, 50, 4), QColor(c["ACCENT"]))
+        p.fillRect(QRectF(r.right() - 48, r.bottom() - 9, 40, 4), QColor(c["ACCENT"]))
         p.setClipping(False)
         if self.selected:
             p.setPen(QPen(QColor(T.ACCENT), 3))

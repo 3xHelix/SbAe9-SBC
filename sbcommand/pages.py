@@ -967,7 +967,7 @@ class SettingsPage(Page):
 
         self.lay.addWidget(label("Appearance", "sectionTitle"))
         pal = QHBoxLayout()
-        pal.setSpacing(16)
+        pal.setSpacing(12)
         self.palettes = {}
         for key in T.PALETTES:
             pc = PaletteCard(key)

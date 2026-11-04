@@ -64,6 +64,26 @@ PALETTES = {
         "OVERLAY": "#5a3a36", "SHADE": "#8a5a50", "DOT_IDLE": "#b9aaa5",
         "HANDLE": "#ffffff", "HANDLE_BORDER": "#cf7166", "HANDLE_HOVER": "#fff4f1",
     },
+    # Wololo: the monk's royal-blue robe and white cloth, sun gold, grass
+    # green, sky blue, and his staff's brown.
+    "wololo": {
+        "label": "Wololo",
+        "ACCENT": "#f0d050", "ACCENT_HI": "#fdf2a0", "ACCENT_TEXT": "#1a2350",
+        "TEXT": "#eef3e6", "MUTED": "#a9c6d6", "DIM": "#6a7eaa",
+        "TRACK": "#33448a", "PANEL": "#2e3f86", "PANEL_HI": "#3a4d9c", "PANEL_LO": "#26356f",
+        "TITLE_BG": "#121a3f", "BOTTOM_BG": "#101735",
+        "SIDEBAR_TOP": "#2a3d9a", "SIDEBAR_BOTTOM": "#1f2f7a",
+        "MAIN_TOP": "#1a2558", "MAIN_BOTTOM": "#1b2f52",
+        "POPUP": "#141d48", "POPUP_BORDER": "#33458f", "LIST_BG": "#1a2558",
+        "DIALOG": "#1a2558", "TOOLTIP": "#22306a",
+        "SWITCH_OFF": "#44558f", "DIAL_TRACK": "#2e3f80", "IDLE": "#7183b3",
+        "GRAPH_BG": "#17214f", "GRAPH_TEXT": "#c9dbe3", "EQ_LINE": "#8fce6f",
+        "SEG": "#26356f", "SEG_HOVER": "#33458f", "CARD_CAP": "#3d3527", "SPEAKER_BOX": "#2e3f86",
+        "DANGER": "#e05a4f", "OK": "#8fce6f", "WARN": "#f0d050",
+        "METER": ["#6fb660", "#94ce7b", "#f0d050", "#e05a4f"],
+        "OVERLAY": "#ffffff", "SHADE": "#000000", "DOT_IDLE": "#eef3e6",
+        "HANDLE": "#eef3e6", "HANDLE_BORDER": "#eef3e6", "HANDLE_HOVER": "#ffffff",
+    },
 }
 
 CURRENT = "command"

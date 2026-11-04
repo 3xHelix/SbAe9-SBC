@@ -10,6 +10,8 @@ driver ([SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv)).
   "Command" palette under Settings → Appearance; the choice is remembered.
 - **Third palette, "Albino"**: a light theme in off-white, cream, blush and
   peach with a coral accent.
+- **Fourth palette, "Wololo"**: a monk's royal-blue robe and white cloth with
+  sun-gold controls, a grass-green EQ curve and a staff-brown touch.
 - `--palette NAME` starts the app in a palette for one launch; `--version`.
 
 ## 0.1.0 (2026-11-04)
