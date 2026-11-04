@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0-only
 """PipeWire side of the card: its sink/source nodes, default device, sample
 rate, per-node volume, a test tone, mic monitoring and an input level meter.
 

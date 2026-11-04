@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0-only
 """Colors and the Qt style sheet, modelled on Sound Blaster Command."""
 
 ACCENT = "#1fa6b8"

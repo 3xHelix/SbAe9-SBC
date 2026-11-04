@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0-only
 """Entry point: python3 -m sbcommand"""
 
 import signal

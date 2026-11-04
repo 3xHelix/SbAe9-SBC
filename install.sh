@@ -1,4 +1,5 @@
 #!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
 # Installs a menu entry and a `sbae9-sbc` command for the current user.
 # The app runs from this folder; re-run after moving it.
 set -e

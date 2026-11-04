@@ -68,6 +68,10 @@ sbcommand/
   theme.py      colors + Qt style sheet
 ```
 
+## License
+
+GPL-2.0-only, same as the driver. See [LICENSE](LICENSE).
+
 ## Disclaimer
 
 Not affiliated with Creative. "Sound Blaster", "SBX" and related names are

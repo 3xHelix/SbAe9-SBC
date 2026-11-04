@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0-only
 """Minimal ALSA control (snd_ctl_*) binding via ctypes.
 
 Talks to the card's mixer controls directly, the same way alsamixer does,

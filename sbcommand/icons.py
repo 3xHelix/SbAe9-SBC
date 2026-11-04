@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0-only
 """Line icons drawn as inline SVG and tinted on demand."""
 
 from functools import lru_cache

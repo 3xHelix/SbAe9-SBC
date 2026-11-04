@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0-only
 """Custom widgets: toggle switch, effect dial, EQ graph, profile carousel..."""
 
 import math

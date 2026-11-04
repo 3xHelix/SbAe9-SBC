@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0-only
 """Main window: sidebar navigation, page stack and the bottom status bar."""
 
 from PySide6.QtCore import QObject, QSize, Qt, Signal

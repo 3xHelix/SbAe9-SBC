@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0-only
 """App settings and user profiles, stored as JSON in ~/.config/sbae9-sbc/."""
 
 import copy

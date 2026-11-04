@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0-only
 """SBX profiles: a full set of effect and EQ settings, applied in one go.
 
 "Default" is what the driver (and Windows) start with. Gaming, Movie and

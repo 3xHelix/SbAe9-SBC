@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0-only
 """The AE-9 as a Qt object: named hardware features on top of the ALSA controls.
 
 Every change made anywhere (this app, alsamixer, the head-unit knob, the

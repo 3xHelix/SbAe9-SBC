@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0-only
 """The app's pages, one per sidebar entry."""
 
 import subprocess
