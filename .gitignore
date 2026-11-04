@@ -6,3 +6,6 @@ SBC - *
 amixer-*.txt
 asound.txt
 pw-dump-output.txt
+
+# Local artwork, not part of the app
+3xHelixLogo.png
