@@ -3,7 +3,10 @@
 Sound Blaster Command for Linux: the UI for the Creative Sound Blaster AE-9
 driver ([SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv)).
 
-## Unreleased
+## 0.2.1 (2026-11-04)
+
+Mixer round: independent Left/Right volume, like the desktop's own mixer.
+Same driver as before (0.6.x).
 
 ### Changed
 
@@ -11,6 +14,10 @@ driver ([SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv)).
   channel (Front Left, Front Right, and more on surround outputs), on the same
   percent scale as the desktop's volume control. **Link channels** moves them
   together; **Equalise** sets them all to the loudest.
+- Channel levels are set on the card's output route, the way the desktop
+  mixer does it: the card's hardware Master follows the loudest channel and
+  only the quieter ones are trimmed in software, so one side can be quiet
+  without pulling the whole output down.
 
 ## 0.2.0 (2026-11-04)
 
