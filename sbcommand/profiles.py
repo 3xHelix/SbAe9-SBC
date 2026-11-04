@@ -41,21 +41,21 @@ HW_EQ_PRESETS = {
 }
 
 BUILTIN = [
-    _p("Default", "default", "The Sound Blaster Team",
+    _p("Default", "default", "Built-in",
        {"Surround": (True, 67), "Crystalizer": (True, 65), "Bass": (False, 50),
         "Smart Volume": (True, 74), "Dialog Plus": (False, 50)}),
-    _p("Gaming", "gaming", "The Sound Blaster Team",
+    _p("Gaming", "gaming", "Built-in",
        {"Surround": (True, 60), "Crystalizer": (True, 50), "Bass": (True, 30),
         "Smart Volume": (True, 50), "Dialog Plus": (False, 50)},
        eq_on=True, eq_preset="Gaming", eq=HW_EQ_PRESETS["Gaming"]),
-    _p("Movie", "movie", "The Sound Blaster Team",
+    _p("Movie", "movie", "Built-in",
        {"Surround": (True, 70), "Crystalizer": (True, 40), "Bass": (True, 55),
         "Smart Volume": (True, 40), "Dialog Plus": (True, 60)},
        eq_on=True, eq_preset="Cinema", eq=HW_EQ_PRESETS["Cinema"]),
-    _p("Music", "music", "The Sound Blaster Team",
+    _p("Music", "music", "Built-in",
        {"Surround": (True, 30), "Crystalizer": (True, 55), "Bass": (True, 45),
         "Smart Volume": (False, 50), "Dialog Plus": (False, 50)}),
-    _p("Night", "night", "The Sound Blaster Team",
+    _p("Night", "night", "Built-in",
        {"Surround": (True, 40), "Crystalizer": (False, 50), "Bass": (False, 50),
         "Smart Volume": (True, 80), "Dialog Plus": (True, 50)}, sv_mode="Night"),
 ]
