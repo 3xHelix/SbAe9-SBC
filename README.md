@@ -22,6 +22,19 @@ switches and adjusts them.
 | **Mixer** | Output volume (same as the head-unit knob), mute, balance, mic level | ALSA + PipeWire |
 | **Settings** | Driver/device info, every ALSA control (including inactive ones), reset | ALSA |
 
+## Screenshots
+
+<table>
+  <tr>
+    <td><img src="docs/equalizer.png" alt="Equalizer page"><br><sub>Equalizer</sub></td>
+    <td><img src="docs/playback.png" alt="Playback page"><br><sub>Playback</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/recording.png" alt="Recording page"><br><sub>Recording</sub></td>
+    <td><img src="docs/mixer.png" alt="Mixer page"><br><sub>Mixer</sub></td>
+  </tr>
+</table>
+
 Volume, mute and output changes made with the head-unit knob, `alsamixer` or the
 desktop slider show up in the app immediately (it listens to ALSA control events).
 
