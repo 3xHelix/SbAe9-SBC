@@ -133,6 +133,9 @@ def _qss():
 }}
 QMainWindow, #root {{ background: {MAIN_TOP}; }}
 #titleBar {{ background: {TITLE_BG}; }}
+#winButton, #winClose {{ background: transparent; border: none; border-radius: 3px; }}
+#winButton:hover {{ background: {rgba(OVERLAY, 0.10)}; }}
+#winClose:hover {{ background: {DANGER}; }}
 #appTitle {{ font-size: 16px; color: {TEXT}; }}
 #deviceName {{ font-size: 17px; font-weight: 700; color: {ACCENT}; }}
 #sidebar {{

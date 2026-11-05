@@ -3,7 +3,13 @@
 Sound Blaster Command for Linux: the UI for the Creative Sound Blaster AE-9
 driver ([SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv)).
 
-## Unreleased
+## 0.5.0 (2026-11-05)
+
+Catching up with [SbAe9-Drv v0.7.0](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.7.0),
+which slayed the dragons: 5.1 at 96 kHz plays clean now, so the app treats
+it like any other rate. Plus a few comfort things: shrink the whole app
+down, lose the window frame, and decide whether your last rate comes back
+when the app starts. Older drivers still work, same as before.
 
 ### Added
 
@@ -12,13 +18,28 @@ driver ([SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv)).
   a smaller window. Hit Apply and the window pops back up at the new size
   in about a second. `--scale 80` tries a size for one launch without
   saving it.
-- A test suite (`python3 -m unittest discover -s tests`): ~60 tests, a few
+- **No more window frame.** The app wears its own title bar now: grab the
+  AE-9 header to move it, double-click it to maximize, drag any edge to
+  resize, and there's a little minimize and close up in the corner (close
+  goes red, so you know). Like the frame back? Settings → Appearance, one
+  checkbox.
+- **"Reload the last sample rate when the app starts"** (Settings → App).
+  On (as before): your last pick comes back at launch. Off: the app opens,
+  shows whatever PipeWire is running and touches nothing until you pick a
+  rate. Your last pick is still remembered for when you turn it back on.
+- A test suite (`python3 -m unittest discover -s tests`): ~70 tests, a few
   seconds, no card needed. It runs against a fake AE-9 and a fake PipeWire,
   so it never touches your card, your PipeWire or your settings.
 - `tools/screenshots.py` regenerates the README screenshots in any palette.
 
 ### Changed
 
+- **5.1 at 96 kHz, for real** (driver v0.7.0 or newer, with its
+  `surround_96k` option on, which is the default): the picker offers a plain
+  "96 kHz" on a 5.1 stream, it comes back at start like any other pick, and
+  a higher pick (192 / 384 kHz) lands on 96 kHz in 5.1 instead of dropping
+  to 48. DSP mode still runs at 48 kHz. On older drivers it stays the
+  "here be dragons" option it was.
 - README screenshots redone in the Helix palette, on a 5.1 setup.
 
 ### Fixed

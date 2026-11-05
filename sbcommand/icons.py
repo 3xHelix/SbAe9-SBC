@@ -27,6 +27,8 @@ PATHS = {
     "mute": f'<path {_S} d="M3 9h4l5-4v14l-5-4H3z"/><path {_S} d="M16 9l5 6M21 9l-5 6"/>',
     "mic": f'<rect {_S} x="9" y="3" width="6" height="11" rx="3"/><path {_S} d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/>',
     "mic-off": f'<rect {_S} x="9" y="3" width="6" height="11" rx="3"/><path {_S} d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/><path stroke="#e2505c" stroke-width="1.9" stroke-linecap="round" d="M4 3l16 18"/>',
+    "minimize": f'<path {_S} d="M6 12.5h12"/>',
+    "close": f'<path {_S} d="M6.5 6.5l11 11M17.5 6.5l-11 11"/>',
     "info": f'<circle {_S} cx="12" cy="12" r="9.5"/><path {_S} d="M12 11v6"/><circle cx="12" cy="7.5" r="1.2" fill="currentColor"/>',
     "link": f'<path {_S} d="M10 14a4.5 4.5 0 0 0 6.4 0l3-3a4.5 4.5 0 0 0-6.4-6.4l-1.2 1.2"/><path {_S} d="M14 10a4.5 4.5 0 0 0-6.4 0l-3 3a4.5 4.5 0 0 0 6.4 6.4l1.2-1.2"/>',
     "plus": f'<path {_S} d="M12 4v16M4 12h16"/>',

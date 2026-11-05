@@ -6,7 +6,7 @@ A desktop control panel for the Creative Sound Blaster AE-9, styled after
 Creative's *Sound Blaster Command*. This is the UI half of
 [SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv): it drives the card through that
 driver (`snd-hda-codec-creative-ae9`, 0.6.x; 0.6.7+ for 5.1, 0.6.8+ for
-bit depth) and
+bit depth, 0.7.0+ for 5.1 at 96 kHz) and
 works with the normal Linux audio stack: apps play to the AE-9 through
 PipeWire as usual. The effects run on the card's own DSP, and this app
 switches and adjusts them.
@@ -21,7 +21,7 @@ switches and adjusts them.
 | **Recording** | XLR mic level, XLR gain (0/+10/+20 dB), live input meter, mute, "listen to mic", default device | ALSA + PipeWire |
 | **Scout Mode** | Creative's Scout Mode (footstep EQ + Smart Volume) | card DSP |
 | **Mixer** | Output volume (same as the head-unit knob), mute, per-channel levels (Front Left / Right, …), mic level | ALSA + PipeWire |
-| **Settings** | Colour palette (Command, Helix, Albino or Wololo), UI scale (70–150%), driver/device info, every ALSA control (including inactive ones), reset | ALSA |
+| **Settings** | Colour palette (Command, Helix, Albino or Wololo), UI scale (70–150%), own title bar or the desktop frame, driver/device info, every ALSA control (including inactive ones), reset | ALSA |
 
 ## Screenshots
 
@@ -43,7 +43,8 @@ Volume, mute and output changes made with the head-unit knob, `alsamixer` or the
 desktop slider show up in the app immediately (it listens to ALSA control events).
 
 **Direct Mode on** = audio goes straight to the DAC at the source's rate (up
-to 384 kHz in stereo; 5.1 plays at 48 kHz) with no effects. **Direct Mode off** =
+to 384 kHz in stereo; 5.1 at up to 96 kHz with driver 0.7.0+, 48 kHz
+before) with no effects. **Direct Mode off** =
 audio goes through the DSP at 48 kHz, and SBX, the EQ and Scout Mode are
 heard. The app keeps your effect settings either way, and your chosen sample
 rate comes back when Direct Mode is switched on again.
@@ -69,6 +70,10 @@ doesn't support these yet.
   (it adds the "PCM Bit Depth" control and reorders the presets). With older
   drivers the depth is set by the driver's `pcm_bits` option and shown greyed
   out, and the presets keep the driver's old order.
+- For 5.1 at 96 kHz: driver
+  [v0.7.0](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.7.0) or newer
+  (with its `surround_96k` option on, the default). Older drivers play 5.1 at
+  48 kHz.
 - `alsa-utils` for the spoken speaker test (it brings the "Front Left…"
   voice files); without it the test plays a tone.
 - Python 3, PySide6 (`sudo dnf install python3-pyside6`), PipeWire tools
@@ -90,7 +95,7 @@ doesn't support these yet.
 python3 -m unittest discover -s tests
 ```
 
-About 60 tests, a few seconds, no card needed. They run against a fake AE-9
+About 70 tests, a few seconds, no card needed. They run against a fake AE-9
 (control shapes copied from a real card on driver 0.6.8) and a fake
 PipeWire, with settings in a temp folder: nothing touches your card, your
 PipeWire or `~/.config`. They cover the rate rules (caps, quantum, hands off

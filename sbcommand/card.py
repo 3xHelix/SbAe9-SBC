@@ -259,3 +259,18 @@ def module_version():
             return f.read().strip()
     except OSError:
         return None
+
+
+def driver_at_least(*want):
+    """True if the loaded driver's version is want (e.g. 0, 7, 0) or newer."""
+    try:
+        have = tuple(int(x) for x in (module_version() or "").split("-")[0].split("."))
+    except ValueError:
+        return False
+    return bool(have) and have >= want
+
+
+def surround_96k_stable():
+    """Driver 0.7.0 fixed 5.1 at 96 kHz and turned it on by default
+    (surround_96k=1). Before that the option was an unstable experiment."""
+    return driver_at_least(0, 7, 0) and module_param("surround_96k") == "1"

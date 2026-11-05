@@ -263,6 +263,7 @@ pipewire._run = lambda *a, **k: PW.run(*a, **k)
 pipewire.card_stream = lambda card_id="AE9": PW.stream
 pipewire.RATES_CONF = os.path.join(_TMP, "pipewire", "90-sbae9-sbc-rates.conf")
 C.module_param = lambda name: PARAMS.get(name)
+C.module_version = lambda: PARAMS.get("version")
 import subprocess  # noqa: E402
 subprocess.run = _no_subprocess
 subprocess.Popen = _no_subprocess
@@ -283,7 +284,8 @@ def reset():
     global PW
     PW.__init__()
     PARAMS.clear()
-    PARAMS.update({"pcm_rates": "1", "pcm_bits": "24", "surround": "1", "surround_96k": "0"})
+    PARAMS.update({"pcm_rates": "1", "pcm_bits": "24", "surround": "1", "surround_96k": "0",
+                   "version": "0.6.8"})
     shutil.rmtree(os.environ["XDG_CONFIG_HOME"], ignore_errors=True)
     if os.path.exists(pipewire.RATES_CONF):
         os.remove(pipewire.RATES_CONF)

@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-2.0-only
 """Main window: sidebar navigation, page stack and the bottom status bar."""
 
-from PySide6.QtCore import QObject, QSize, Qt, QTimer, Signal
+from PySide6.QtCore import QEvent, QObject, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QIcon, QPainter
 from PySide6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QMainWindow, QPushButton, QStackedWidget,
                                QToolButton, QVBoxLayout, QWidget)
@@ -43,13 +43,15 @@ class Context(QObject):
     def rate_cap(self):
         direct = bool(self.card.get(C.DIRECT, True)) if self.card.present else True
         surround = self.pw.nodes.stream_layout() == "surround"
-        return pipewire.max_rate(direct, surround, C.module_param("pcm_rates") != "0")
+        return pipewire.max_rate(direct, surround, C.module_param("pcm_rates") != "0",
+                                 C.surround_96k_stable())
 
     def dragons_available(self):
-        """5.1 at 96 kHz: experimental, only when the driver's root-only
-        surround_96k option reads 1 (Direct Mode, high rates on). Offered for an
-        explicit pick only: never clamped to, restored or chosen automatically."""
-        return (self.rate_cap() == 48000 and self.pw.nodes.stream_layout() == "surround"
+        """5.1 at 96 kHz on drivers before 0.7.0: experimental, only when the
+        driver's root-only surround_96k option reads 1 (Direct Mode, high rates
+        on). Offered for an explicit pick only: never clamped to, restored or
+        chosen automatically. From 0.7.0 it's a normal rate (see rate_cap)."""
+        return (not C.surround_96k_stable() and self.rate_cap() == 48000 and self.pw.nodes.stream_layout() == "surround"
                 and self.card.present and bool(self.card.get(C.DIRECT, True))
                 and C.module_param("pcm_rates") != "0"
                 and C.module_param("surround_96k") == "1")
@@ -177,8 +179,9 @@ class Context(QObject):
     def restore_rate(self):
         """Restore the saved pick at start, once the first PipeWire snapshot
         is in: before it, a 5.1 profile isn't known yet and the cap would be
-        too high (6 ch above 48 kHz falls apart)."""
-        if not self.settings["rate_mode"]:
+        too high (6 ch above 48 kHz falls apart). With "Reload last rate on
+        start" off the app only shows what PipeWire is running."""
+        if not self.settings["rate_mode"] or not self.settings["restore_rate_on_start"]:
             return
         if self.pw.nodes.device or self.pw.nodes.sink:
             self.apply_rate(startup=True)
@@ -269,6 +272,70 @@ class StatusDot(QWidget):
         p.drawEllipse(2, 2, 12, 12)
 
 
+class TitleBar(QFrame):
+    """The AE-9 header. Without the desktop's frame it is the window's
+    handle: drag to move, double-click to maximize."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setObjectName("titleBar")
+
+    def _frameless(self):
+        return bool(self.window().windowFlags() & Qt.FramelessWindowHint)
+
+    def mousePressEvent(self, e):
+        if e.button() == Qt.LeftButton and self._frameless() and self.window().windowHandle():
+            self.window().windowHandle().startSystemMove()   # the desktop moves it (works on Wayland)
+            e.accept()
+            return
+        super().mousePressEvent(e)
+
+    def mouseDoubleClickEvent(self, e):
+        if e.button() == Qt.LeftButton and self._frameless():
+            w = self.window()
+            w.showNormal() if w.isMaximized() else w.showMaximized()
+            e.accept()
+            return
+        super().mouseDoubleClickEvent(e)
+
+
+class EdgeGrip(QWidget):
+    """An invisible strip along a window edge (or corner) that resizes the
+    frameless window."""
+    CURSORS = {
+        Qt.LeftEdge: Qt.SizeHorCursor, Qt.RightEdge: Qt.SizeHorCursor,
+        Qt.TopEdge: Qt.SizeVerCursor, Qt.BottomEdge: Qt.SizeVerCursor,
+        Qt.TopEdge | Qt.LeftEdge: Qt.SizeFDiagCursor, Qt.BottomEdge | Qt.RightEdge: Qt.SizeFDiagCursor,
+        Qt.TopEdge | Qt.RightEdge: Qt.SizeBDiagCursor, Qt.BottomEdge | Qt.LeftEdge: Qt.SizeBDiagCursor,
+    }
+    SIZE = 6
+
+    def __init__(self, edges, parent):
+        super().__init__(parent)
+        self.edges = edges
+        self.setCursor(self.CURSORS[edges])
+
+    def mousePressEvent(self, e):
+        if e.button() == Qt.LeftButton and self.window().windowHandle():
+            self.window().windowHandle().startSystemResize(self.edges)
+            e.accept()
+
+    def place(self, w, h):
+        s, c, ed = self.SIZE, self.SIZE * 2, self.edges
+        horiz = bool(ed & (Qt.LeftEdge | Qt.RightEdge))
+        vert = bool(ed & (Qt.TopEdge | Qt.BottomEdge))
+        if horiz and vert:
+            gw, gh = c, c                 # corner
+        elif horiz:
+            gw, gh = s, h - 2 * c         # left / right side
+        else:
+            gw, gh = w - 2 * c, s         # top / bottom side
+        x = 0 if ed & Qt.LeftEdge else w - gw if ed & Qt.RightEdge else c
+        y = 0 if ed & Qt.TopEdge else h - gh if ed & Qt.BottomEdge else c
+        self.setGeometry(x, y, gw, gh)
+        self.raise_()
+
+
 class MainWindow(QMainWindow):
     def __init__(self, ctx):
         super().__init__()
@@ -287,13 +354,28 @@ class MainWindow(QMainWindow):
         v.setSpacing(0)
 
         # title strip
-        title = QFrame()
-        title.setObjectName("titleBar")
-        tl = QVBoxLayout(title)
-        tl.setContentsMargins(18, 8, 18, 6)
+        title = TitleBar()
+        th = QHBoxLayout(title)
+        th.setContentsMargins(18, 8, 10, 6)
+        th.setSpacing(4)
+        tl = QVBoxLayout()
         tl.setSpacing(0)
         tl.addWidget(label("Sound Blaster Command", "appTitle"))
         tl.addWidget(label("AE-9", "deviceName"))
+        th.addLayout(tl)
+        th.addStretch()
+        self.win_buttons = []
+        for name, tip, slot in (("minimize", "Minimize", self.showMinimized), ("close", "Close", self.close)):
+            b = QToolButton()
+            b.setObjectName("winClose" if name == "close" else "winButton")
+            b.setIcon(icons.icon(name, T.MUTED, active=T.TEXT, size=18))
+            b.setIconSize(QSize(18, 18))
+            b.setFixedSize(34, 28)
+            b.setToolTip(tip)
+            b.setFocusPolicy(Qt.NoFocus)
+            b.clicked.connect(slot)
+            th.addWidget(b, 0, Qt.AlignTop)
+            self.win_buttons.append(b)
         v.addWidget(title)
 
         self.missing = pages.Banner("Sound Blaster AE-9 not found. Is the snd-hda-codec-creative-ae9 "
@@ -396,6 +478,39 @@ class MainWindow(QMainWindow):
         ctx.applier.step.connect(self.applying.set_step)
         if ctx.applier.busy:
             self.applying.set_busy(True)
+
+        self.grips = [EdgeGrip(edges, self) for edges in EdgeGrip.CURSORS]
+        self.set_frameless(bool(ctx.settings["frameless"]))
+
+    # own title bar vs. the desktop's frame
+    def frameless(self):
+        return bool(self.windowFlags() & Qt.FramelessWindowHint)
+
+    def set_frameless(self, on):
+        shown, state = self.isVisible(), self.windowState()
+        self.setWindowFlag(Qt.FramelessWindowHint, on)   # hides the window if it was shown
+        for b in self.win_buttons:
+            b.setVisible(on)
+        self._place_grips()
+        if shown:
+            self.setWindowState(state)
+            self.show()
+
+    def _place_grips(self):
+        on = self.frameless() and not (self.isMaximized() or self.isFullScreen())
+        for g in self.grips:
+            g.setVisible(on)
+            if on:
+                g.place(self.width(), self.height())
+
+    def resizeEvent(self, e):
+        super().resizeEvent(e)
+        self._place_grips()
+
+    def changeEvent(self, e):
+        super().changeEvent(e)
+        if e.type() == QEvent.WindowStateChange:
+            self._place_grips()
 
     def go(self, idx):
         self.stack.setCurrentIndex(idx)

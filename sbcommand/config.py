@@ -27,9 +27,11 @@ DEFAULTS = {
     "profiles": [],          # user SBX profiles (built-ins live in profiles.py)
     "eq_presets": {},        # name -> [pre-gain, 10 bands] in dB
     "restore_on_start": False,  # the driver + alsa-state already keep settings
+    "restore_rate_on_start": True,  # off: show PipeWire's rate as found, change nothing
     "rate_mode": None,       # None = leave PipeWire alone, 0 = follow source, else Hz
     "page": 0,
     "palette": "command",    # see theme.PALETTES
+    "frameless": True,       # the app's own title bar instead of the desktop's frame
     "ui_scale": 100,         # percent, see theme.SCALES
 }
 

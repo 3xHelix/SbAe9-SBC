@@ -263,14 +263,16 @@ def clock_settings():
 QUANTUM = {384000: 2048, 192000: 1024}
 
 
-def max_rate(direct, surround, high_rates=True):
+def max_rate(direct, surround, high_rates=True, surround_96k=False):
     """Highest rate the card takes: DSP mode runs at 48 kHz (96 kHz through
-    the DSP played twice, so the driver blocks it), 5.1 plays at 48 kHz (6 ch
-    at 96 kHz fell apart while playing), and stereo in Direct Mode goes to
-    384 kHz."""
+    the DSP played twice, so the driver blocks it), 5.1 plays at 48 kHz (96
+    kHz with driver 0.7.0+, which fixed it; before that 6 ch at 96 kHz fell
+    apart while playing), and stereo in Direct Mode goes to 384 kHz."""
     if not high_rates or not direct:
         return 48000
-    return 48000 if surround else 384000
+    if surround:
+        return 96000 if surround_96k else 48000
+    return 384000
 
 
 def effective_rate(mode, cap):

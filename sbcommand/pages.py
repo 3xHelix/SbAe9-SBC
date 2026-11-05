@@ -737,7 +737,7 @@ class PlaybackPage(Page):
         elif not direct:
             note = "DSP mode runs at 48 kHz."
         elif n.stream_layout() == "surround":
-            note = "5.1 plays at 48 kHz."
+            note = f"5.1 plays at up to {ctx.rate_cap() // 1000} kHz."
             if dragons:
                 note += (" 96 kHz is experimental: it stutters more and more as it plays, "
                          "and needs a Windows capture to fix.")
@@ -1257,6 +1257,12 @@ class SettingsPage(Page):
                                  "The window reopens to apply it (about a second).", "hint", wrap=True))
         self._scale_moved(T.SCALE)
 
+        self.frameless = QCheckBox("Use the app's own title bar (drag the AE-9 header to move the window)")
+        self.frameless.setToolTip("Off: the desktop's usual window frame and title bar")
+        self.frameless.setChecked(bool(ctx.settings["frameless"]))
+        self.frameless.toggled.connect(self._frameless)
+        self.lay.addWidget(self.frameless)
+
         self.lay.addWidget(label("App", "sectionTitle"))
         self.restore = QCheckBox("Re-apply the active SBX profile when the app starts")
         self.restore.setToolTip("Usually not needed: the driver and alsa-state keep the card's "
@@ -1264,6 +1270,12 @@ class SettingsPage(Page):
         self.restore.setChecked(bool(ctx.settings["restore_on_start"]))
         self.restore.toggled.connect(lambda on: ctx.settings.__setitem__("restore_on_start", on))
         self.lay.addWidget(self.restore)
+        self.restore_rate = QCheckBox("Reload the last sample rate when the app starts")
+        self.restore_rate.setToolTip("Off: the app opens showing whatever rate PipeWire is running "
+                                     "and changes nothing until you pick one.")
+        self.restore_rate.setChecked(bool(ctx.settings["restore_rate_on_start"]))
+        self.restore_rate.toggled.connect(lambda on: ctx.settings.__setitem__("restore_rate_on_start", on))
+        self.lay.addWidget(self.restore_rate)
         row = QHBoxLayout()
         reset = QPushButton("Reset SBX and EQ to defaults")
         reset.clicked.connect(self._reset)
@@ -1297,6 +1309,12 @@ class SettingsPage(Page):
             return
         self.scale_lbl.setText(f"{v}%")
         self.scale_apply.setEnabled(v != T.SCALE)
+
+    def _frameless(self, on):
+        self.ctx.settings["frameless"] = on
+        win = self.window()
+        if hasattr(win, "set_frameless"):
+            win.set_frameless(on)
 
     def _apply_scale(self):
         self.ctx.settings["ui_scale"] = self.scale.value()

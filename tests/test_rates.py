@@ -8,7 +8,7 @@ import support as S
 from sbcommand import card as C, pages, pipewire
 
 
-class RateTest(S.AppTestCase):
+class RateBase(S.AppTestCase):
     def setUp(self):
         super().setUp()
         self.mixer.external(C.DIRECT, True)
@@ -32,6 +32,9 @@ class RateTest(S.AppTestCase):
         self.snapshot()
         self.settle()
 
+
+
+class RateTest(RateBase):
     # caps
     def test_384_gets_the_big_quantum(self):
         self.pick(384000)
@@ -104,6 +107,25 @@ class RateTest(S.AppTestCase):
         self.settle()
         self.assertEqual(self.rate()[0], 192000)
 
+    def test_startup_reload_can_be_switched_off(self):
+        self.ctx.settings["rate_mode"] = 96000
+        self.ctx.settings["restore_rate_on_start"] = False
+        self.ctx.restore_rate()
+        self.settle()
+        self.direct(False)                          # cap events don't write either
+        self.direct(True)
+        self.assertEqual([c for c in S.PW.calls if c[0] == "pw-metadata"], [])
+        self.assertEqual(self.rate(), (0, 0))
+        self.pick(192000)                           # a pick still works and is saved
+        self.assertEqual(self.rate(), (192000, 1024))
+        self.assertEqual(self.ctx.settings["rate_mode"], 192000)
+
+    def test_settings_checkbox(self):
+        pg = self.page(pages.SettingsPage)
+        self.assertTrue(pg.restore_rate.isChecked())
+        pg.restore_rate.setChecked(False)
+        self.assertFalse(self.ctx.settings["restore_rate_on_start"])
+
     # experimental 5.1 at 96 kHz
     def test_dragons_only_by_explicit_pick(self):
         self.layout(S.SURROUND)
@@ -125,6 +147,51 @@ class RateTest(S.AppTestCase):
         self.snapshot()
         self.settle()
         self.assertEqual(self.rate(), (48000, 0))   # never comes back by itself
+
+
+class Driver070Test(RateBase):
+    """Driver 0.7.0 fixed 5.1 at 96 kHz and turned it on by default."""
+
+    def setUp(self):
+        super().setUp()
+        S.PARAMS.update({"version": "0.7.0", "surround_96k": "1"})
+
+    def test_5_1_goes_to_96_like_any_rate(self):
+        self.assertFalse(self.ctx.dragons_available())
+        self.pick(384000)
+        self.layout(S.SURROUND)
+        self.assertEqual(self.rate(), (96000, 0))   # high pick clamps to 96, not 48
+        self.layout(S.STEREO)
+        self.assertEqual(self.rate(), (384000, 2048))
+
+    def test_5_1_at_96_comes_back_at_start(self):
+        S.PW.set_profile(S.SURROUND)
+        self.snapshot()
+        self.ctx.settings["rate_mode"] = 96000
+        self.ctx.restore_rate()
+        self.settle()
+        self.assertEqual(self.rate(), (96000, 0))
+
+    def test_surround_96k_off_keeps_5_1_at_48(self):
+        S.PARAMS["surround_96k"] = "0"
+        self.pick(96000)
+        self.layout(S.SURROUND)
+        self.assertEqual(self.rate(), (48000, 0))
+
+    def test_dsp_mode_still_48(self):
+        self.layout(S.SURROUND)
+        self.pick(96000)
+        self.direct(False)
+        self.assertEqual(self.rate(), (48000, 0))
+
+    def test_picker_shows_plain_96_on_5_1(self):
+        pg = self.page(pages.PlaybackPage)
+        self.layout(S.SURROUND)
+        pg.refresh()
+        q = pg.quality
+        enabled = [q.itemText(k) for k in range(q.count()) if q.model().item(k).isEnabled()]
+        self.assertEqual(enabled, ["Auto (48–96 kHz)", "48 kHz", "96 kHz"])
+        self.assertIn("5.1 plays at up to 96 kHz", pg.rate_note.text())
 
 
 class RatePickerUiTest(S.AppTestCase):
