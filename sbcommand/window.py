@@ -265,7 +265,7 @@ class MainWindow(QMainWindow):
         else:
             self.dot.set_color(T.WARN)
             self.dot.setToolTip("DSP path, SBX off")
-            self.profile_lbl.setText("SBX off")
+            self.profile_lbl.setText("Off")
         raw = self.card.get(C.MASTER, 0)
         self.vol.set_state(C.master_raw_to_pct(raw), not self.card.get(C.MASTER_SW, True))
         self.vol.setToolTip(f"Volume {C.master_raw_to_db(raw):.1f} dB (same as the head unit knob)")

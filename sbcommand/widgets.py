@@ -681,14 +681,33 @@ class LevelBar(QWidget):
 
 
 class SpeakerDiagram(QWidget):
-    """Listener with stereo speakers (and sub for 2.1) or headphones; lights the one playing."""
+    """Listener with the speaker layout (2.0 .. 5.1) or headphones; lights the
+    one playing. Speakers named in `clickable` emit clicked(name)."""
+    clicked = Signal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.mode = "speakers"
         self.config = "2.1"
         self.playing = ""
+        self.clickable = set()
+        self._hit = {}
         self.setFixedSize(220, 200)
+        self.setMouseTracking(True)
+
+    def _speaker_at(self, pos):
+        for name, box in self._hit.items():
+            if name in self.clickable and box.contains(QPointF(pos)):
+                return name
+        return None
+
+    def mouseMoveEvent(self, e):
+        self.setCursor(Qt.PointingHandCursor if self._speaker_at(e.position()) else Qt.ArrowCursor)
+
+    def mouseReleaseEvent(self, e):
+        name = self._speaker_at(e.position()) if e.button() == Qt.LeftButton else None
+        if name:
+            self.clicked.emit(name)
 
     def set_state(self, mode=None, config=None, playing=None):
         if mode is not None:
@@ -704,6 +723,7 @@ class SpeakerDiagram(QWidget):
         p.setRenderHint(QPainter.Antialiasing)
         c = QPointF(self.width() / 2, self.height() / 2)
         rad = 72
+        self._hit = {}
         p.setPen(QPen(tint(T.OVERLAY, 80), 1.2))
         p.setBrush(Qt.NoBrush)
         p.drawEllipse(c, rad, rad)
@@ -711,6 +731,7 @@ class SpeakerDiagram(QWidget):
         def spk(name, pt, size=24):
             col = T.ACCENT_HI if self.playing == name else T.TEXT
             box = QRectF(pt.x() - size / 2, pt.y() - size / 2, size, size)
+            self._hit[name] = box.adjusted(-6, -6, 6, 6)
             p.setPen(Qt.NoPen)
             p.setBrush(QColor(T.ACCENT if self.playing == name else T.SPEAKER_BOX))
             p.drawRoundedRect(box.adjusted(-3, -3, 3, 3), 4, 4)
@@ -726,11 +747,20 @@ class SpeakerDiagram(QWidget):
                               (90 if dx < 0 else -90) * 16, 180 * 16)
             return
         icons.paint(p, "headphones", QRectF(c.x() - 13, c.y() - 13, 26, 26), T.MUTED)
-        a = math.radians(50)
-        spk("left", QPointF(c.x() - rad * math.sin(a), c.y() - rad * math.cos(a)))
-        spk("right", QPointF(c.x() + rad * math.sin(a), c.y() - rad * math.cos(a)))
-        if self.config == "2.1":
-            spk("sub", QPointF(c.x(), c.y() + rad), 22)
+        def at(deg):   # 0 = straight ahead, clockwise
+            a = math.radians(deg)
+            return QPointF(c.x() + rad * math.sin(a), c.y() - rad * math.cos(a))
+
+        cfg = self.config or "2.0"
+        spk("left", at(-40))
+        spk("right", at(40))
+        if cfg == "5.1":
+            spk("center", at(0), 22)
+        if cfg in ("4.0", "4.1", "5.1"):
+            spk("rear-left", at(-130))
+            spk("rear-right", at(130))
+        if cfg.endswith(".1"):
+            spk("sub", at(180) if cfg == "2.1" else QPointF(c.x() + rad * 0.62, c.y() - rad * 0.2), 20)
 
 
 class PaletteCard(QWidget):

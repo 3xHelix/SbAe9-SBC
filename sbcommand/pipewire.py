@@ -105,6 +105,38 @@ class Nodes:
                 return p["channelVolumes"]
         return None
 
+    # --- card profile (stereo vs 5.1 stream) -----------------------------------
+    def card_profiles(self):
+        """Names of the card's PipeWire profiles."""
+        if not self.device:
+            return []
+        return [p.get("name") for p in self.device["params"].get("EnumProfile") or [] if p.get("name")]
+
+    def card_profile(self):
+        """Name of the active card profile, e.g. "output:analog-stereo+input:analog-stereo"."""
+        if not self.device:
+            return None
+        for p in self.device["params"].get("Profile") or []:
+            if p.get("name"):
+                return p["name"]
+        return None
+
+    def can_switch_layout(self):
+        """True when the driver's profile set (creative-ae9.conf) offers both a
+        stereo and a 5.1 output; the stock *-fallback profiles don't."""
+        names = self.card_profiles()
+        return (any(n.startswith(STEREO_OUT) for n in names)
+                and any(n.startswith(SURROUND_OUT) for n in names))
+
+    def stream_layout(self):
+        """"surround", "stereo", or None (no output, pro-audio, unknown)."""
+        prof = self.card_profile() or ""
+        if "analog-surround-51" in prof:
+            return "surround"
+        if prof.startswith("output:analog-stereo"):
+            return "stereo"
+        return None
+
     def sink_channel_map(self):
         """Channel positions of the sink, e.g. ["FL", "FR"]."""
         if not self.sink:
@@ -135,6 +167,41 @@ def set_volume(node_id, vol):
 
 def set_mute(node_id, muted):
     _run("wpctl", "set-mute", str(node_id), "1" if muted else "0")
+
+
+# Output profiles from the driver's profile set (config/creative-ae9.conf).
+STEREO_OUT = "output:analog-stereo"
+SURROUND_OUT = "output:analog-surround-51"
+STEREO_IN = "input:analog-stereo"
+
+
+def layout_profile(nodes, surround):
+    """The card profile that plays a stereo or 5.1 stream, keeping the input
+    if the current profile has one. None when there's nothing to switch: no
+    profile set, already there, or the user picked off / pro-audio."""
+    if not nodes.can_switch_layout():
+        return None
+    cur = nodes.card_profile() or ""
+    if cur in ("off", "pro-audio") or cur.startswith("pro-audio"):
+        return None
+    name = SURROUND_OUT if surround else STEREO_OUT
+    if STEREO_IN in cur:
+        name += "+" + STEREO_IN
+    if name == cur or name not in nodes.card_profiles():
+        return None
+    return name
+
+
+def set_card_profile(nodes, name):
+    """Switch the AE-9's card profile (the stream reopens; a short gap is normal)."""
+    if not nodes.device:
+        return False
+    for p in nodes.device["params"].get("EnumProfile") or []:
+        if p.get("name") == name and p.get("index") is not None:
+            if _run("pw-cli", "set-param", str(nodes.device["id"]), "Profile",
+                    f"{{ index: {p['index']}, save: true }}") is not None:
+                return True
+    return _run("pactl", "set-card-profile", nodes.device["name"], name) is not None
 
 
 CHANNEL_NAMES = {
@@ -227,23 +294,48 @@ def current_rate_mode():
 
 
 # --- test tone ----------------------------------------------------------------
-def _tone_file(channel):
-    path = os.path.join(config.cache_dir(), f"test-{channel}.wav")
+# test tone channels -> position in the stream
+TONE_POS = {"left": "FL", "right": "FR", "center": "FC", "sub": "LFE",
+            "rear-left": "RL", "rear-right": "RR"}
+SURROUND_MAP = ["FL", "FR", "FC", "LFE", "RL", "RR"]
+
+# Spoken channel names from alsa-utils (not shipped with this app). The sub
+# gets the noise burst, as in speaker-test.
+VOICE_DIR = "/usr/share/sounds/alsa"
+VOICE_FILES = {"left": "Front_Left.wav", "right": "Front_Right.wav", "center": "Front_Center.wav",
+               "sub": "Noise.wav", "rear-left": "Rear_Left.wav", "rear-right": "Rear_Right.wav"}
+
+
+def voice_file(channel):
+    path = os.path.join(VOICE_DIR, VOICE_FILES.get(channel, ""))
+    return path if os.path.isfile(path) else None
+
+
+def voices_available():
+    return all(voice_file(c) for c in ("left", "right"))
+
+
+def _tone_file(channel, surround=False):
+    """A short tone on one channel: stereo file, or 6-channel FL FR FC LFE RL RR."""
+    layout = SURROUND_MAP if surround else ["FL", "FR"]
+    path = os.path.join(config.cache_dir(), f"test-{channel}{'-51' if surround else ''}.wav")
     if os.path.exists(path):
         return path
-    rate, secs, freq = 48000, 1.2, 440.0
+    pos = TONE_POS.get(channel)
+    rate, secs = 48000, 1.2
+    freq = 55.0 if pos == "LFE" else 440.0   # the sub gets a low note
     n = int(rate * secs)
     frames = bytearray()
     for i in range(n):
         env = min(1.0, i / 2400, (n - i) / 2400)  # 50 ms fades, no clicks
-        # pink-ish chirp: 440 Hz with a little 880 so small speakers show it too
+        # 440 Hz with a little 880 so small speakers show it too
         s = 0.25 * env * (math.sin(2 * math.pi * freq * i / rate) +
                           0.3 * math.sin(4 * math.pi * freq * i / rate))
         v = int(max(-1.0, min(1.0, s)) * 32767)
-        l, r = (v, 0) if channel == "left" else (0, v) if channel == "right" else (v, v)
-        frames += struct.pack("<hh", l, r)
+        frames += struct.pack(f"<{len(layout)}h", *[
+            v if (ch == pos or pos is None) else 0 for ch in layout])
     with wave.open(path, "wb") as w:
-        w.setnchannels(2)
+        w.setnchannels(len(layout))
         w.setsampwidth(2)
         w.setframerate(rate)
         w.writeframes(bytes(frames))
@@ -251,22 +343,28 @@ def _tone_file(channel):
 
 
 class TestTone(QObject):
-    """Plays a tone on the left speaker, then the right."""
-    step = Signal(str)   # "left", "right" or "" when done
+    """Tests each speaker in turn (left, right, ... on a 5.1 stream).
+
+    Uses the spoken channel names from alsa-utils when installed: a mono
+    stream with one channel position, which PipeWire routes to that speaker
+    only. Without them, a generated tone."""
+    step = Signal(str)   # "left", "right", "center", ... or "" when done
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self._queue = []
         self._proc = None
         self._target = None
+        self._surround = False
 
     @property
     def running(self):
         return self._proc is not None
 
-    def start(self, target_name, channels=("left", "right")):
+    def start(self, target_name, channels=("left", "right"), surround=False):
         self.stop()
         self._target = target_name
+        self._surround = surround
         self._queue = list(channels)
         self._next()
 
@@ -285,7 +383,13 @@ class TestTone(QObject):
             self.step.emit("")
             return
         ch = self._queue.pop(0)
-        args = [_tone_file(ch)]
+        voice = voice_file(ch)
+        if voice and ch in TONE_POS:
+            args = ["--channels", "1", "--channel-map", TONE_POS[ch], voice]
+        else:
+            args = [_tone_file(ch, self._surround)]
+            if self._surround:
+                args = ["--channels", "6", "--channel-map", ",".join(SURROUND_MAP)] + args
         if self._target:
             args = ["--target", self._target] + args
         self._proc = QProcess(self)

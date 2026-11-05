@@ -21,7 +21,7 @@ PALETTES = {
         "SWITCH_OFF": "#5a5c6c", "DIAL_TRACK": "#4a4b58", "IDLE": "#7d8296",
         "GRAPH_BG": "#45454f", "GRAPH_TEXT": "#d5d6de", "EQ_LINE": "#7f9cf5",
         "SEG": "#3d3e4c", "SEG_HOVER": "#4c4e5e", "CARD_CAP": "#3f3f4a", "SPEAKER_BOX": "#33355a",
-        "DANGER": "#e2505c", "OK": "#33d14f", "WARN": "#e9c64a",
+        "OK": "#33d14f", "WARN": "#e9c64a",
         "METER": ["#1fa6b8", "#7fd16a", "#e9c64a", "#e2505c"],
         "OVERLAY": "#ffffff", "SHADE": "#000000", "DOT_IDLE": "#f2f2f2",
         "HANDLE": "#f2f2f6", "HANDLE_BORDER": "#f2f2f6", "HANDLE_HOVER": "#ffffff",
@@ -40,7 +40,7 @@ PALETTES = {
         "SWITCH_OFF": "#4a3d6e", "DIAL_TRACK": "#3a2f5a", "IDLE": "#7a6c9e",
         "GRAPH_BG": "#241d3d", "GRAPH_TEXT": "#d9d0f0", "EQ_LINE": "#5dcaa8",
         "SEG": "#2e2449", "SEG_HOVER": "#3b2e5e", "CARD_CAP": "#2a2145", "SPEAKER_BOX": "#3b2e5e",
-        "DANGER": "#e31b49", "OK": "#5dcaa8", "WARN": "#ffb63a",
+        "OK": "#5dcaa8", "WARN": "#ffb63a",
         "METER": ["#5dcaa8", "#5dcaa8", "#ffb63a", "#e31b49"],
         "OVERLAY": "#ffffff", "SHADE": "#000000", "DOT_IDLE": "#f2f2f2",
         "HANDLE": "#f2f2f6", "HANDLE_BORDER": "#f2f2f6", "HANDLE_HOVER": "#ffffff",
@@ -59,7 +59,7 @@ PALETTES = {
         "SWITCH_OFF": "#dccdc6", "DIAL_TRACK": "#ebe0d9", "IDLE": "#c9b8b2",
         "GRAPH_BG": "#fbfaf6", "GRAPH_TEXT": "#7a6864", "EQ_LINE": "#d0838c",
         "SEG": "#ebe1da", "SEG_HOVER": "#e3d4cc", "CARD_CAP": "#f5eee8", "SPEAKER_BOX": "#efe3dd",
-        "DANGER": "#c8463f", "OK": "#7fae8c", "WARN": "#d9a441",
+        "OK": "#7fae8c", "WARN": "#d9a441",
         "METER": ["#dda394", "#db8176", "#cf6a5e", "#b8433a"],
         "OVERLAY": "#5a3a36", "SHADE": "#8a5a50", "DOT_IDLE": "#b9aaa5",
         "HANDLE": "#ffffff", "HANDLE_BORDER": "#cf7166", "HANDLE_HOVER": "#fff4f1",
@@ -79,7 +79,7 @@ PALETTES = {
         "SWITCH_OFF": "#44558f", "DIAL_TRACK": "#2e3f80", "IDLE": "#7183b3",
         "GRAPH_BG": "#17214f", "GRAPH_TEXT": "#c9dbe3", "EQ_LINE": "#8fce6f",
         "SEG": "#26356f", "SEG_HOVER": "#33458f", "CARD_CAP": "#3d3527", "SPEAKER_BOX": "#2e3f86",
-        "DANGER": "#e05a4f", "OK": "#8fce6f", "WARN": "#f0d050",
+        "OK": "#8fce6f", "WARN": "#f0d050",
         "METER": ["#6fb660", "#94ce7b", "#f0d050", "#e05a4f"],
         "OVERLAY": "#ffffff", "SHADE": "#000000", "DOT_IDLE": "#eef3e6",
         "HANDLE": "#eef3e6", "HANDLE_BORDER": "#eef3e6", "HANDLE_HOVER": "#ffffff",
@@ -92,6 +92,10 @@ CURRENT = "command"
 def rgba(hex_color, alpha):
     h = hex_color.lstrip("#")
     return f"rgba({int(h[0:2], 16)},{int(h[2:4], 16)},{int(h[4:6], 16)},{alpha})"
+
+
+# Warnings use one red in every palette, so they always look the same.
+DANGER = "#e2505c"
 
 
 def apply(name):
@@ -141,8 +145,14 @@ QMainWindow, #root {{ background: {MAIN_TOP}; }}
 }}
 #banner QLabel {{ font-size: 13px; }}
 #warnBanner {{
-    background: {rgba(DANGER, 0.15)}; border: 1px solid {rgba(DANGER, 0.6)}; border-radius: 4px;
+    background: {rgba(DANGER, 0.24)}; border: 1px solid {DANGER}; border-radius: 4px;
 }}
+#warnBanner QLabel {{ font-size: 13px; }}
+#warnBanner QPushButton, #warnBanner QPushButton#accentButton {{
+    background: {DANGER}; color: #ffffff; border: none; font-weight: 600;
+}}
+#warnBanner QPushButton#accentButton:hover {{ background: #ec6a74; }}
+#warnBanner QPushButton#accentButton:pressed {{ background: #c63e4a; }}
 #card {{ background: {rgba(SHADE, 0.10)}; border-radius: 6px; }}
 
 QToolTip {{ background: {TOOLTIP}; color: {TEXT}; border: 1px solid {POPUP_BORDER}; padding: 4px; }}

@@ -146,7 +146,7 @@ class SbxPage(Page):
         dots.setMenu(self.menu)
         self.header("SBX Profile", self.sbx, [self.combo, plus, dots, self.modified])
 
-        self.banner = Banner("", "Turn Direct Mode off")
+        self.banner = Banner("", "Turn Direct Mode off", warn=True)
         self.banner.button.clicked.connect(lambda: self.card.set(C.DIRECT, False))
         self.lay.addWidget(self.banner)
 
@@ -335,7 +335,7 @@ class EqPage(Page):
         row.addStretch()
         self.lay.addLayout(row)
 
-        self.banner = Banner("")
+        self.banner = Banner("", warn=True)
         self.lay.addWidget(self.banner)
 
         self.graph = EqGraph(C.EQ_BAND_LABELS)
@@ -514,8 +514,17 @@ class PlaybackPage(Page):
         w, g, self.spk_sub = out_row(self.r_spk, "speaker", "Speakers")
         self.spk_cfg = QComboBox()
         self.spk_cfg.setToolTip("Speaker setup the DSP mixes for (used when Direct Mode is off)")
-        self.spk_cfg.activated.connect(lambda i: self.card.set(C.SPEAKER_CFG, self.spk_cfg.itemData(i)))
+        self.spk_cfg.activated.connect(self._speaker_cfg)
         g.addWidget(self.spk_cfg, 0, 4)
+        # PipeWire profile: stereo or 5.1 stream. Offered only with the driver's
+        # profile set; usable in Direct Mode too, where Speaker Config is greyed.
+        self.stream = QComboBox()
+        self.stream.addItem("Stereo stream", False)
+        self.stream.addItem("5.1 stream", True)
+        self.stream.setToolTip(STREAM_TIP)
+        self.stream.activated.connect(lambda i: self._switch_stream(self.stream.itemData(i)))
+        g.addWidget(self.stream, 1, 4)
+        self._stream_pending = None
         left.addWidget(w)
         w, g, self.hp_sub = out_row(self.r_hp, "headphones", "Headphones")
         left.addWidget(w)
@@ -550,7 +559,9 @@ class PlaybackPage(Page):
         self.test.setFixedWidth(120)
         self.test.clicked.connect(self._test)
         right.addWidget(self.test, 0, Qt.AlignHCenter)
-        self.test_hint = label("Plays a tone left, then right", "muted")
+        self.diagram.clicked.connect(self._test_one)
+        self.test_hint = label("", "muted")
+        self.test_hint.setAlignment(Qt.AlignCenter)
         right.addWidget(self.test_hint, 0, Qt.AlignHCenter)
         ctx.tone.step.connect(self._tone_step)
 
@@ -596,6 +607,29 @@ class PlaybackPage(Page):
         self._quality_built = None
         ctx.pw.updated.connect(self._on_pw)
 
+    def _speaker_cfg(self, i):
+        """User picked a speaker layout: set it on the card, then match the stream.
+        Only user picks switch the profile; driver changes to Speaker Config
+        (it follows the stream itself) just refresh the view."""
+        k = self.spk_cfg.itemData(i)
+        self.card.set(C.SPEAKER_CFG, k)
+        items = self.card.items(C.SPEAKER_CFG)
+        if 0 <= k < len(items):
+            self._switch_stream(items[k] in SURROUND_CFGS)
+
+    def _switch_stream(self, surround):
+        n = self.ctx.pw.nodes
+        target = pipewire.layout_profile(n, surround)
+        if not target:
+            return
+        if self.ctx.tone.running:
+            self.ctx.tone.stop()
+        if pipewire.set_card_profile(n, target):
+            # the dump lags behind; hold the shown choice until it catches up
+            self._stream_pending = (surround, time.monotonic())
+            for ms in (400, 1500, 3000):
+                QTimer.singleShot(ms, self.ctx.pw.refresh)
+
     def _make_default(self):
         n = self.ctx.pw.nodes
         if n.sink:
@@ -606,8 +640,34 @@ class PlaybackPage(Page):
         if self.ctx.tone.running:
             self.ctx.tone.stop()
             return
+        self._play_test(self.test_channels())
+
+    def _test_one(self, ch):
+        self._play_test([ch])
+
+    def _play_test(self, chans):
         n = self.ctx.pw.nodes
-        self.ctx.tone.start(n.sink["name"] if n.sink else None)
+        self.ctx.tone.start(n.sink["name"] if n.sink else None, chans,
+                            n.stream_layout() == "surround")
+
+    def test_channels(self):
+        """Speakers that can be tested on their own: all of the layout on a 5.1
+        stream; left and right on a stereo one (the DSP makes the rest)."""
+        if self.ctx.pw.nodes.stream_layout() == "surround" or self.diagram.mode == "headphones":
+            spk = self.diagram_speakers() if self.diagram.mode != "headphones" else {"left", "right"}
+            return [c for c in TONE_ORDER if c in spk]
+        return ["left", "right"]
+
+    def diagram_speakers(self):
+        cfg = self.diagram.config or "2.0"
+        spk = {"left", "right"}
+        if cfg == "5.1":
+            spk.add("center")
+        if cfg in SURROUND_CFGS:
+            spk |= {"rear-left", "rear-right"}
+        if cfg.endswith(".1"):
+            spk.add("sub")
+        return spk
 
     def _tone_step(self, ch):
         self.diagram.set_state(playing=ch)
@@ -644,6 +704,19 @@ class PlaybackPage(Page):
         i = self.quality.findData(cur)
         self.quality.setCurrentIndex(i if i >= 0 else 0)
 
+        layout = n.stream_layout()
+        if self._stream_pending:
+            want, t = self._stream_pending
+            if (layout == "surround") == want or time.monotonic() - t > 6:
+                self._stream_pending = None
+            else:
+                layout = "surround" if want else "stereo"
+        self.stream.setVisible(n.can_switch_layout())
+        self.stream.setEnabled(layout is not None)
+        self.stream.setCurrentIndex(1 if layout == "surround" else 0)
+        self.stream.setToolTip(STREAM_TIP if layout or not n.card_profile() else
+                               f"Card profile: {n.card_profile()} (set elsewhere; left alone)")
+
         if not self.card.present:
             return
         out = self.card.get(C.OUTPUT, 0)
@@ -656,8 +729,19 @@ class PlaybackPage(Page):
         self.spk_cfg.setCurrentIndex(self.card.get(C.SPEAKER_CFG, 0) or 0)
         direct = bool(self.card.get(C.DIRECT, True))
         self.spk_cfg.setEnabled(not direct)
-        self.spk_sub.setText(f"{cfg} {'Stereo' if cfg == '2.0' else 'Stereo + Sub'} · RCA outputs")
-        self.diagram.set_state(mode="headphones" if out == 1 else "speakers", config=cfg)
+        # In Direct Mode the DSP (and Speaker Config) is bypassed: the stream's
+        # channels go straight to the outputs.
+        shown = ("5.1" if layout == "surround" else "2.0") if direct else cfg
+        stream_txt = "6-ch stream" if layout == "surround" else "stereo stream" if layout else ""
+        self.spk_sub.setText(" · ".join(x for x in (
+            SPEAKER_TEXT.get(shown, shown), stream_txt) if x))
+        self.diagram.set_state(mode="headphones" if out == 1 else "speakers", config=shown)
+        self.diagram.clickable = set(self.test_channels())
+        what = "says each speaker's name" if pipewire.voices_available() else "plays a tone on each speaker"
+        hint = f"Test {what};\nclick a speaker to test just that one"
+        if not pipewire.voices_available():
+            hint += "\n(install alsa-utils for spoken names)"
+        self.test_hint.setText(hint)
         self.direct.setCheckedSilently(direct)
         self.direct_lbl.setText("On — DSP bypassed" if direct else "Off — SBX / EQ active")
         names = {"Default": "Default (Windows startup filter)", "Fast": "Fast Roll Off",
@@ -667,6 +751,21 @@ class PlaybackPage(Page):
             for k, it in enumerate(self.card.items(C.DAC_FILTER)):
                 self.filter.addItem(names.get(it, it), k)
         self.filter.setCurrentIndex(self.card.get(C.DAC_FILTER, 0) or 0)
+
+
+SURROUND_CFGS = ("4.0", "4.1", "5.1")
+STREAM_TIP = ("Channels PipeWire sends to the card (its card profile). Picking 4.0, 4.1 or 5.1 "
+              "speakers switches to the 5.1 stream, 2.0 or 2.1 back to stereo. The sound "
+              "pauses for a moment while the stream reopens.")
+
+TONE_ORDER = ["left", "center", "right", "rear-right", "rear-left", "sub"]
+SPEAKER_TEXT = {
+    "2.0": "2.0 Stereo · front RCA",
+    "2.1": "2.1 Stereo + Sub · RCA outputs",
+    "4.0": "4.0 Quad · front RCA + Rear",
+    "4.1": "4.1 Quad + Sub · front RCA, Center/Sub, Rear",
+    "5.1": "5.1 Surround · front RCA, Center/Sub, Rear",
+}
 
 
 # =====================================================================================
@@ -827,7 +926,7 @@ class ScoutPage(Page):
         col.addStretch()
         bl.addLayout(col, 1)
         self.lay.addWidget(box)
-        self.banner = Banner("", "Enable DSP effects")
+        self.banner = Banner("", "Enable DSP effects", warn=True)
         self.banner.button.clicked.connect(self._enable)
         self.lay.addWidget(self.banner)
         self.lay.addStretch()

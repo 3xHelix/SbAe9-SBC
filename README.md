@@ -5,7 +5,7 @@
 A desktop control panel for the Creative Sound Blaster AE-9, styled after
 Creative's *Sound Blaster Command*. This is the UI half of
 [SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv): it drives the card through that
-driver (`snd-hda-codec-creative-ae9`, 0.6.x) and
+driver (`snd-hda-codec-creative-ae9`, 0.6.x; 0.6.7+ for 5.1) and
 works with the normal Linux audio stack: apps play to the AE-9 through
 PipeWire as usual. The effects run on the card's own DSP, and this app
 switches and adjusts them.
@@ -16,7 +16,7 @@ switches and adjusts them.
 |---|---|---|
 | **SBX Profile** | SBX on/off; Surround, Crystalizer, Bass, Smart Volume (Night/Normal/Loud), Dialog+; built-in and personal profiles | card DSP (ALSA `SBX Switch`, `FX …`) |
 | **Equalizer** | 10-band EQ + pre-gain, Creative's 20 presets, your own saved curves | card DSP (`EQ …`) |
-| **Playback** | Speakers / headphones, speaker config (2.0/2.1), Direct Mode, DAC filter, sample rate, default device, left/right test tone | ALSA + PipeWire |
+| **Playback** | Speakers / headphones, speaker config (2.0 – 5.1) with matching stereo / 5.1 stream, Direct Mode, DAC filter, sample rate, default device, spoken speaker test | ALSA + PipeWire |
 | **Recording** | XLR mic level, XLR gain (0/+10/+20 dB), live input meter, mute, "listen to mic", default device | ALSA + PipeWire |
 | **Scout Mode** | Creative's Scout Mode (footstep EQ + Smart Volume) | card DSP |
 | **Mixer** | Output volume (same as the head-unit knob), mute, per-channel levels (Front Left / Right, …), mic level | ALSA + PipeWire |
@@ -51,6 +51,14 @@ doesn't support these yet.
 
 - The AE-9 driver loaded ([SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv)), with the "Stereo Output + Stereo
   Input" PipeWire profile.
+- For 5.1 (4.0 / 4.1 / 5.1 speakers, the stereo / 5.1 stream switch) and a
+  speaker test on every channel: driver
+  [v0.6.7](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.6.7) or newer
+  with its PipeWire profile set installed
+  ([setup step 4](https://github.com/3xHelix/SbAe9-Drv#4-pipewire-profiles-stereo-and-51)).
+  Older drivers work as before, in stereo.
+- `alsa-utils` for the spoken speaker test (it brings the "Front Left…"
+  voice files); without it the test plays a tone.
 - Python 3, PySide6 (`sudo dnf install python3-pyside6`), PipeWire tools
   (`pw-dump`, `wpctl`, `pw-metadata`, `pw-play`, `pw-record`, `pw-loopback`),
   and `libasound`. All of these come with Fedora's standard desktop install.
