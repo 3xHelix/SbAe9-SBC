@@ -3,6 +3,57 @@
 Sound Blaster Command for Linux: the UI for the Creative Sound Blaster AE-9
 driver ([SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv)).
 
+## 0.4.0 (2026-11-04)
+
+The "slow down, cowboy" release. Sample rate and bit depth get a proper
+picker, and the app now gives the card a moment to breathe between big
+changes, because tonight's testing showed it really, really wants one.
+
+Works with [SbAe9-Drv v0.6.7](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.6.7).
+The bit-depth picker and the experimental 5.1 at 96 kHz light up with the
+next driver release (it adds the "PCM Bit Depth" control and the
+`surround_96k` option); until then the depth shows greyed out.
+
+### Added
+
+- **Sample rate + bit depth picker** (Playback → Audio Quality): Automatic,
+  48, 96, 192 or 384 kHz, and 24- or 32-bit. Picking a depth reopens the card
+  so it kicks in right away. On older drivers the depth shows what the
+  driver's `pcm_bits` option is set to, greyed out.
+- **"Applying changes…"**, like Creative's own app. Direct Mode, speaker
+  layout, stereo / 5.1 stream, sample rate and bit depth now go one at a
+  time, each with a few seconds to settle (3-4 s, done early once the card
+  is back, never more than 10 s), behind a notice that keeps you from
+  clicking the next one too soon. Several at once (say 5.1 plus the rate it
+  needs) go in a row inside one notice. Turns out this card doesn't do a 180
+  on a dime: fast bursts of changes were behind every stuck-DSP and
+  stuttering-stream moment in testing. Effects, sliders and the EQ aren't
+  slowed down.
+- Shows what the card is actually running right now, e.g. "384 kHz · 32-bit ·
+  stereo".
+
+### Changed
+
+- Rates the card can't take right now are greyed out, with the reason:
+  DSP mode runs at 48 kHz, and so does 5.1. Switch Direct Mode
+  off while forced to 384 kHz and the app drops PipeWire to 48 kHz; switch it
+  back on and your 384 kHz comes back. Same for leaving 5.1.
+- 5.1 at 96 kHz is in there, but you have to go looking for it: with the
+  driver's `surround_96k` option set to 1, the picker offers "96 kHz
+  (experimental: here be dragons)" on a 5.1 stream. It stutters more and
+  more as it plays, so the app never picks or restores it on its own. Leave
+  5.1 or restart the app and you're back at a sensible 48 kHz.
+- The app only touches PipeWire's rate when you pick one in it. Set a rate
+  or quantum by hand (`pw-metadata`) and it stays put; the picker just shows
+  "PipeWire is set to … outside the app". On Automatic the app leaves
+  PipeWire completely alone.
+- The PipeWire drop-in (`90-sbae9-sbc-rates.conf`) always lists all four
+  rates. Caps like DSP mode's 48 kHz only go into the live forced rate, so
+  PipeWire never gets stuck opening the card at 48 kHz and resampling.
+- 192 and 384 kHz get a bigger PipeWire buffer (quantum 1024 / 2048), so 384
+  kHz stops crackling. 48/96 kHz and Automatic leave PipeWire's own buffer
+  alone.
+
 ## 0.3.0 (2026-11-04)
 
 5.1 has entered the building. Goes hand in hand with
