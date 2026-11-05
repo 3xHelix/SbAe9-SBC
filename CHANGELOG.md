@@ -3,6 +3,30 @@
 Sound Blaster Command for Linux: the UI for the Creative Sound Blaster AE-9
 driver ([SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv)).
 
+## 0.4.1 (2026-11-04)
+
+The driver caught up. [SbAe9-Drv v0.6.8](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.6.8)
+is out, and it's the one 0.4.0 was waiting for: 48–384 kHz out of the box,
+the "PCM Bit Depth" control (so the 24 / 32-bit picker finally does
+something), 5.1 locked to a sane 48 kHz with the `surround_96k` dragons
+behind a door, and the EQ presets in a sensible order. Get v0.6.8 or newer
+for all of that; older drivers still work, just with less to pick from.
+
+### Changed
+
+- "Applying changes…" gives the card one more second per change: 5 s after
+  Direct Mode or a stereo / 5.1 switch, 4 s after speakers, rate or bit
+  depth (11 s at most). The card asked nicely.
+- EQ presets: the list follows the driver, so with v0.6.8 it's music A-Z
+  with the game presets (Project CARS, Racing, Rocket League, RPG) under
+  their own "Games" heading at the bottom, like on Windows. Older drivers
+  keep their old order. Presets are kept by name, so nothing gets mixed up
+  when the order changes.
+- README: which features need v0.6.8 (rate picker in full, bit depth,
+  preset order).
+- README: Helvum gets a mention as a handy companion for seeing where your
+  audio actually goes.
+
 ## 0.4.0 (2026-11-04)
 
 The "slow down, cowboy" release. Sample rate and bit depth get a proper
