@@ -1229,6 +1229,34 @@ class SettingsPage(Page):
         pal.addStretch()
         self.lay.addLayout(pal)
 
+        row = QHBoxLayout()
+        row.setSpacing(12)
+        row.addWidget(QLabel("UI scale"))
+        self.scale = QSlider(Qt.Horizontal)
+        self.scale.setRange(*T.SCALES)
+        self.scale.setSingleStep(5)
+        self.scale.setPageStep(10)
+        self.scale.setFixedWidth(240)
+        self.scale.setValue(T.SCALE)
+        self.scale.valueChanged.connect(self._scale_moved)
+        row.addWidget(self.scale)
+        self.scale_lbl = label("", "bigValue")
+        self.scale_lbl.setMinimumWidth(50)
+        row.addWidget(self.scale_lbl)
+        self.scale_apply = QPushButton("Apply")
+        self.scale_apply.setToolTip("Saves the scale and reopens the window at the new size")
+        self.scale_apply.clicked.connect(self._apply_scale)
+        row.addWidget(self.scale_apply)
+        reset = QPushButton("100%")
+        reset.setToolTip("Back to the normal size")
+        reset.clicked.connect(lambda: self.scale.setValue(100))
+        row.addWidget(reset)
+        row.addStretch()
+        self.lay.addLayout(row)
+        self.lay.addWidget(label("Shrinks or enlarges everything, so the app fits a smaller window. "
+                                 "The window reopens to apply it (about a second).", "hint", wrap=True))
+        self._scale_moved(T.SCALE)
+
         self.lay.addWidget(label("App", "sectionTitle"))
         self.restore = QCheckBox("Re-apply the active SBX profile when the app starts")
         self.restore.setToolTip("Usually not needed: the driver and alsa-state keep the card's "
@@ -1261,6 +1289,18 @@ class SettingsPage(Page):
         self.table.setColumnWidth(1, 200)
         self.lay.addWidget(self.table, 1)
         self._editors = {}
+
+    def _scale_moved(self, v):
+        snapped = T.clamp_scale(v)
+        if snapped != v:
+            self.scale.setValue(snapped)
+            return
+        self.scale_lbl.setText(f"{v}%")
+        self.scale_apply.setEnabled(v != T.SCALE)
+
+    def _apply_scale(self):
+        self.ctx.settings["ui_scale"] = self.scale.value()
+        self.ctx.restart_requested.emit()
 
     def _pick_palette(self, key):
         if key != T.CURRENT:

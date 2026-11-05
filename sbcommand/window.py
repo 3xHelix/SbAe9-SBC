@@ -17,6 +17,7 @@ class Context(QObject):
     """Shared state handed to every page."""
     profile_changed = Signal()
     palette_requested = Signal(str)
+    restart_requested = Signal()
 
     def __init__(self):
         super().__init__()

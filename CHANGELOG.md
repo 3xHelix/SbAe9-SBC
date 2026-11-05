@@ -7,7 +7,12 @@ driver ([SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv)).
 
 ### Added
 
-- A test suite (`python3 -m unittest discover -s tests`): ~50 tests, a few
+- **UI scale** (Settings → Appearance): a slider from 70% to 150% that
+  shrinks or grows the whole app, dials, text and all, so it sits nicely in
+  a smaller window. Hit Apply and the window pops back up at the new size
+  in about a second. `--scale 80` tries a size for one launch without
+  saving it.
+- A test suite (`python3 -m unittest discover -s tests`): ~60 tests, a few
   seconds, no card needed. It runs against a fake AE-9 and a fake PipeWire,
   so it never touches your card, your PipeWire or your settings.
 - `tools/screenshots.py` regenerates the README screenshots in any palette.

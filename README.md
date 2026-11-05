@@ -21,7 +21,7 @@ switches and adjusts them.
 | **Recording** | XLR mic level, XLR gain (0/+10/+20 dB), live input meter, mute, "listen to mic", default device | ALSA + PipeWire |
 | **Scout Mode** | Creative's Scout Mode (footstep EQ + Smart Volume) | card DSP |
 | **Mixer** | Output volume (same as the head-unit knob), mute, per-channel levels (Front Left / Right, …), mic level | ALSA + PipeWire |
-| **Settings** | Colour palette (Command, Helix, Albino or Wololo), driver/device info, every ALSA control (including inactive ones), reset | ALSA |
+| **Settings** | Colour palette (Command, Helix, Albino or Wololo), UI scale (70–150%), driver/device info, every ALSA control (including inactive ones), reset | ALSA |
 
 ## Screenshots
 
@@ -81,6 +81,7 @@ doesn't support these yet.
 ./sbae9-sbc            # run from this folder
 ./install.sh           # adds a menu entry + ~/.local/bin/sbae9-sbc
 ./sbae9-sbc --palette helix   # one launch in the Helix palette (saved choice unchanged)
+./sbae9-sbc --scale 80        # one launch at 80% size (saved UI scale unchanged)
 ```
 
 ## Tests
@@ -89,7 +90,7 @@ doesn't support these yet.
 python3 -m unittest discover -s tests
 ```
 
-About 50 tests, a few seconds, no card needed. They run against a fake AE-9
+About 60 tests, a few seconds, no card needed. They run against a fake AE-9
 (control shapes copied from a real card on driver 0.6.8) and a fake
 PipeWire, with settings in a temp folder: nothing touches your card, your
 PipeWire or `~/.config`. They cover the rate rules (caps, quantum, hands off

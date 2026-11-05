@@ -88,6 +88,20 @@ PALETTES = {
 
 CURRENT = "command"
 
+# UI scale in percent. Qt scales the whole window (fonts, dials, spacing,
+# minimum size) from QT_SCALE_FACTOR, which it only reads at start-up, so a
+# new scale means reopening the window.
+SCALES = (70, 150)
+SCALE = 100          # what this launch runs at
+
+
+def clamp_scale(pct):
+    try:
+        pct = int(round(int(pct) / 5) * 5)
+    except (TypeError, ValueError):
+        return 100
+    return max(SCALES[0], min(SCALES[1], pct))
+
 
 def rgba(hex_color, alpha):
     h = hex_color.lstrip("#")

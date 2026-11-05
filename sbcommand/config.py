@@ -30,6 +30,7 @@ DEFAULTS = {
     "rate_mode": None,       # None = leave PipeWire alone, 0 = follow source, else Hz
     "page": 0,
     "palette": "command",    # see theme.PALETTES
+    "ui_scale": 100,         # percent, see theme.SCALES
 }
 
 
