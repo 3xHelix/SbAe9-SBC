@@ -20,25 +20,30 @@ def _p(name, art, author, fx, sv_mode="Normal", eq_on=False, eq_preset="Flat", e
 
 
 # Driver's preset tables (0.1 dB -> dB), used to label/draw presets exactly.
+# Same order as the driver's "EQ Preset" control (newer drivers): music A-Z,
+# then the game presets A-Z. The app lists whatever order the driver reports
+# and keeps presets by name, so older drivers' order works too.
 HW_EQ_PRESETS = {
-    "Flat": FLAT,
-    "Rock": [0, 0, 0, 2, 1, 0, 3, 1, -1, 3, 3],
-    "Concert": [0, 0, 0, 0, 0, 0, 0, 0, -1, 3, -5],
-    "Night": [0, 0, 0, 0, 0, 0, 0, 0, -1, 3, -5],
     "Acoustic": [0, 0, 0, 2, 0, 0, 2.5, 2, 2, 2, 3],
+    "Cinema": [0, 0, 0, 0, 0, 2, 3, 0, 0, 1, 1],
     "Classical": [0, 0, 0, 1.5, 2, 1, 3, 1, 0, 3, 3],
+    "Concert": [0, 0, 0, 0, 0, 0, 0, 0, -1, 3, -5],
     "Country": [0, 0, 0, 0, 0, 2, 2.5, 2.5, 2, 3, 3],
     "Dance": [0, 0, 0, 1, 1.5, 0.5, 1.5, 2, 1, 2.5, 2.5],
+    "Flat": FLAT,
+    "Gaming": [0, 0, 0, 3, -2, 0, 3, 0, 0, 3, 2],
     "Hip Hop": [0, 0, 0, 2, 2.5, 1.5, 2.5, 0, -2.5, -1, -1.5],
     "Jazz": [0, 0, 0, 0, 2.5, 2.5, 3, 1, 1, 3, 3],
+    "Night": [0, 0, 0, 0, 0, 0, 0, 0, -1, 3, -5],
     "Pop": [-1, 1.7, 2.6, 2.1, 2.7, 0.7, 3.4, 1.2, 5.6, 6, 5.2],
     "R&B": [0, 0, 0, 0, -1.5, 2.5, 1.5, 2, 0, 2, 1],
-    "Vocal": [0, 0, 0, -1.5, -0.5, 3, 3, 3, 0, 0, 1],
-    "Gaming": [0, 0, 0, 3, -2, 0, 3, 0, 0, 3, 2],
-    "Cinema": [0, 0, 0, 0, 0, 2, 3, 0, 0, 1, 1],
-    "Project CARS": FLAT, "Racing": FLAT, "Rocket League": FLAT, "RPG": FLAT,
+    "Rock": [0, 0, 0, 2, 1, 0, 3, 1, -1, 3, 3],
     "Stadium": [0, 3.9, 5.7, 4.3, 3, 3.6, 3.5, 3.3, 4, 6, 6.8],
+    "Vocal": [0, 0, 0, -1.5, -0.5, 3, 3, 3, 0, 0, 1],
+    "Project CARS": FLAT, "Racing": FLAT, "Rocket League": FLAT, "RPG": FLAT,
 }
+# Presets made for particular games: shown under a "Games" heading.
+GAME_EQ_PRESETS = ("Project CARS", "Racing", "Rocket League", "RPG")
 
 BUILTIN = [
     _p("Default", "default", "Built-in",

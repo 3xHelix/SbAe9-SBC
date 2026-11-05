@@ -102,7 +102,7 @@ class Context(QObject):
 
         text = "Sample rate: automatic" if not eff else f"Sample rate: {eff / 1000:g} kHz"
         self.applier.submit(Change(
-            "rate", text, run, 3000, settled,
+            "rate", text, run, 4000, settled,
             lambda: (pipewire.current_force_rate(), pipewire.current_quantum()) != want))
 
     def _recheck_rate(self):
@@ -122,7 +122,7 @@ class Context(QObject):
             return
         self.applier.submit(Change(
             "direct", "Direct Mode on" if on else "Direct Mode off",
-            lambda: self.card.set(C.DIRECT, on), 4000,
+            lambda: self.card.set(C.DIRECT, on), 5000,
             lambda: bool(self.card.get(C.DIRECT)) == on and self._sink_ok(),
             lambda: bool(self.card.get(C.DIRECT)) != on))
 
@@ -130,7 +130,7 @@ class Context(QObject):
         items = self.card.items(C.SPEAKER_CFG)
         name = items[k] if 0 <= k < len(items) else str(k)
         self.applier.submit(Change(
-            "speakers", f"Speakers: {name}", lambda: self.card.set(C.SPEAKER_CFG, k), 3000,
+            "speakers", f"Speakers: {name}", lambda: self.card.set(C.SPEAKER_CFG, k), 4000,
             lambda: self.card.get(C.SPEAKER_CFG) == k and self._sink_ok(),
             lambda: self.card.get(C.SPEAKER_CFG) != k))
 
@@ -157,7 +157,7 @@ class Context(QObject):
                     and (live is None or live[1] == chans))
 
         self.applier.submit(Change("profile", "5.1 stream" if surround else "Stereo stream",
-                                   run, 4000, settled,
+                                   run, 5000, settled,
                                    lambda: bool(pipewire.layout_profile(self.pw.nodes, surround))))
         return True
 
@@ -170,7 +170,7 @@ class Context(QObject):
             # the depth is taken when the card opens: reopen it now
             self.depth_pending = not pipewire.reopen_sink(self.pw.nodes)
 
-        self.applier.submit(Change("depth", f"Bit depth: {name}", run, 3000, self._sink_ok,
+        self.applier.submit(Change("depth", f"Bit depth: {name}", run, 4000, self._sink_ok,
                                    lambda: self.card.get(C.BIT_DEPTH) != k))
 
     def restore_rate(self):

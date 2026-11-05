@@ -5,7 +5,8 @@
 A desktop control panel for the Creative Sound Blaster AE-9, styled after
 Creative's *Sound Blaster Command*. This is the UI half of
 [SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv): it drives the card through that
-driver (`snd-hda-codec-creative-ae9`, 0.6.x; 0.6.7+ for 5.1) and
+driver (`snd-hda-codec-creative-ae9`, 0.6.x; 0.6.7+ for 5.1, 0.6.8+ for
+bit depth) and
 works with the normal Linux audio stack: apps play to the AE-9 through
 PipeWire as usual. The effects run on the card's own DSP, and this app
 switches and adjusts them.
@@ -58,9 +59,13 @@ doesn't support these yet.
   with its PipeWire profile set installed
   ([setup step 4](https://github.com/3xHelix/SbAe9-Drv#4-pipewire-profiles-stereo-and-51)).
   Older drivers work as before, in stereo.
-- For picking the bit depth (24 / 32-bit) in the app: a driver newer than
-  v0.6.7 (it adds the "PCM Bit Depth" control). With v0.6.7 the depth is set
-  by the driver's `pcm_bits` option and shown greyed out.
+- For the full sample-rate picker (48–384 kHz out of the box), picking the
+  bit depth (24 / 32-bit) and the EQ presets in A–Z order with the game
+  presets last: driver
+  [v0.6.8](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.6.8) or newer
+  (it adds the "PCM Bit Depth" control and reorders the presets). With older
+  drivers the depth is set by the driver's `pcm_bits` option and shown greyed
+  out, and the presets keep the driver's old order.
 - `alsa-utils` for the spoken speaker test (it brings the "Front Left…"
   voice files); without it the test plays a tone.
 - Python 3, PySide6 (`sudo dnf install python3-pyside6`), PipeWire tools
@@ -95,6 +100,14 @@ sbcommand/
   window.py     sidebar, page stack, bottom bar
   theme.py      colors + Qt style sheet
 ```
+
+## Related tools
+
+- [Helvum](https://gitlab.freedesktop.org/pipewire/helvum): a patchbay for
+  PipeWire (`sudo dnf install helvum`). It draws every app, device and port
+  and the links between them, which makes it easy to see where audio is
+  going, e.g. that a 5.1 stream really reaches all six of the AE-9's
+  channels. A good companion to this app.
 
 ## License
 

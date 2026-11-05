@@ -418,13 +418,25 @@ class EqPage(Page):
 
         self.combo.blockSignals(True)
         self.combo.clear()
-        for n in self.card.items(C.EQ_PRESET):
+        items = self.card.items(C.EQ_PRESET)
+        for k, n in enumerate(items):
+            # newer drivers list the game presets last: give them a heading
+            if n in profiles.GAME_EQ_PRESETS and k > 0 and items[k - 1] not in profiles.GAME_EQ_PRESETS \
+                    and all(m in profiles.GAME_EQ_PRESETS for m in items[k:]):
+                self.combo.insertSeparator(self.combo.count())
+                self.combo.addItem("Games", ("heading", None))
+                head = self.combo.model().item(self.combo.count() - 1)
+                head.setEnabled(False)
+                f = head.font()
+                f.setBold(True)
+                head.setFont(f)
             self.combo.addItem(n, ("hw", n))
         if users:
             self.combo.insertSeparator(self.combo.count())
             for n in users:
                 self.combo.addItem(icons.icon("star", T.ACCENT_HI, size=16), n, ("user", n))
         if current is None:
+            self.combo.insertSeparator(self.combo.count())
             self.combo.addItem("Custom (unsaved)", ("none", None))
             self.combo.setCurrentIndex(self.combo.count() - 1)
         else:

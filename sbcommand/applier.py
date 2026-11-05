@@ -18,7 +18,7 @@ from typing import Callable, Optional
 
 from PySide6.QtCore import QObject, QTimer, Signal
 
-MAX_MS = 10000      # give up waiting for a change to settle after this
+MAX_MS = 11000      # give up waiting for a change to settle after this
 POLL_MS = 400
 
 
@@ -27,7 +27,7 @@ class Change:
     key: str                         # one queued change per key; a newer pick replaces it
     label: str                       # shown under "Applying changes…"
     run: Callable[[], object]        # does the write
-    min_ms: int = 3000               # always wait at least this long afterwards
+    min_ms: int = 4000               # always wait at least this long afterwards
     settled: Optional[Callable[[], bool]] = None   # True once the card looks settled
     needed: Optional[Callable[[], bool]] = None    # checked when its turn comes; False = skip
     started: float = field(default=0.0)
