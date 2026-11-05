@@ -40,8 +40,7 @@ def main():
         prof = profiles.find(s, s["active_profile"])
         if prof:
             ctx.card.apply(prof)
-    if s["rate_mode"] is not None and pipewire.current_rate_mode() != s["rate_mode"]:
-        pipewire.set_rate_mode(s["rate_mode"])
+    ctx.restore_rate()   # the saved pick, after a PipeWire restart
 
     win = MainWindow(ctx)
     win.show()

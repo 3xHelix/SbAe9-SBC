@@ -1,15 +1,16 @@
 # SPDX-License-Identifier: GPL-2.0-only
 """Main window: sidebar navigation, page stack and the bottom status bar."""
 
-from PySide6.QtCore import QObject, QSize, Qt, Signal
+from PySide6.QtCore import QObject, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QIcon, QPainter
 from PySide6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QMainWindow, QPushButton, QStackedWidget,
                                QToolButton, QVBoxLayout, QWidget)
 
 from . import card as C
 from . import config, icons, pages, pipewire, profiles
+from .applier import Applier, Change
 from . import theme as T
-from .widgets import Throttle, VolumeRow, label
+from .widgets import ApplyOverlay, Throttle, VolumeRow, label
 
 
 class Context(QObject):
@@ -25,6 +26,174 @@ class Context(QObject):
         self.tone = pipewire.TestTone(self)
         self.monitor = pipewire.MicMonitor(self)
         self.meter = pipewire.LevelMeter(self)
+        # Keep PipeWire's rate inside what the card takes right now: Direct
+        # Mode, the 5.1 profile and the driver's pcm_rates all change that.
+        # stream changes go one at a time, each with a settle period
+        self.applier = Applier(self.pw.refresh, self)
+        self.applier.add_followup(self._recheck_rate)
+        self._in_followup = False
+        self.depth_pending = False
+        self._rate_written = None   # (rate, quantum) the app last wrote
+        self._dragons = False       # user picked experimental 96 kHz on 5.1
+        self.card.changed.connect(self._on_card_rate)
+        self.card.connection_changed.connect(self._on_card_rate)
+        self.pw.updated.connect(self._on_pw_rate)
+
+    def rate_cap(self):
+        direct = bool(self.card.get(C.DIRECT, True)) if self.card.present else True
+        surround = self.pw.nodes.stream_layout() == "surround"
+        return pipewire.max_rate(direct, surround, C.module_param("pcm_rates") != "0")
+
+    def dragons_available(self):
+        """5.1 at 96 kHz: experimental, only when the driver's root-only
+        surround_96k option reads 1 (Direct Mode, high rates on). Offered for an
+        explicit pick only: never clamped to, restored or chosen automatically."""
+        return (self.rate_cap() == 48000 and self.pw.nodes.stream_layout() == "surround"
+                and self.card.present and bool(self.card.get(C.DIRECT, True))
+                and C.module_param("pcm_rates") != "0"
+                and C.module_param("surround_96k") == "1")
+
+    def active_cap(self):
+        """The cap in force now: 96 kHz on 5.1 only while the user's own
+        experimental pick is live, else rate_cap()."""
+        if self._dragons and not self.dragons_available():
+            self._dragons = False
+        return 96000 if self._dragons else self.rate_cap()
+
+    def apply_rate(self, user=False, startup=False):
+        """Write PipeWire's rate for the app's own pick, capped to what the
+        card takes. Like the profile sync, the app never fights changes made
+        elsewhere (pw-metadata, other tools):
+
+        - user: the user picked in the combo: always written.
+        - startup: restore the saved pick, only if PipeWire forces nothing.
+        - otherwise (Direct Mode / 5.1 / connection changed): re-cap only if
+          PipeWire still holds exactly what the app last wrote.
+        Automatic or nothing saved: PipeWire is left alone (except a user pick).
+        """
+        mode = self.settings["rate_mode"]
+        if user:
+            # 96 kHz on 5.1 only by an explicit pick, and only for this 5.1 run
+            self._dragons = mode == 96000 and self.dragons_available()
+        if not mode and not user:
+            return
+        eff = pipewire.effective_rate(mode or 0, self.active_cap())
+        want = (eff, pipewire.QUANTUM.get(eff, 0))
+        if not user:
+            now = (pipewire.current_force_rate(), pipewire.current_quantum())
+            if self._rate_written is None and now == want:
+                self._rate_written = want   # already ours (e.g. from the last run)
+                return
+            if startup:
+                if now != (0, 0):
+                    return
+            elif want == self._rate_written or now != self._rate_written:
+                return
+            if self.applier.busy and not self._in_followup:
+                return   # re-checked when the current change has settled
+
+        def run():
+            pipewire.set_rate_mode(eff)
+            self._rate_written = want
+
+        def settled():
+            live = pipewire.card_stream()
+            return self._sink_ok() and (live is None or not eff or live[0] == eff)
+
+        text = "Sample rate: automatic" if not eff else f"Sample rate: {eff / 1000:g} kHz"
+        self.applier.submit(Change(
+            "rate", text, run, 3000, settled,
+            lambda: (pipewire.current_force_rate(), pipewire.current_quantum()) != want))
+
+    def _recheck_rate(self):
+        self._in_followup = True
+        try:
+            self.apply_rate()
+        finally:
+            self._in_followup = False
+
+    # --- changes that rebuild the card's stream (paced by the applier) ---------
+    def _sink_ok(self):
+        sink = self.pw.nodes.sink
+        return sink is None or sink.get("state") in ("running", "idle", "suspended")
+
+    def set_direct(self, on):
+        if bool(self.card.get(C.DIRECT)) == on and not self.applier.busy:
+            return
+        self.applier.submit(Change(
+            "direct", "Direct Mode on" if on else "Direct Mode off",
+            lambda: self.card.set(C.DIRECT, on), 4000,
+            lambda: bool(self.card.get(C.DIRECT)) == on and self._sink_ok(),
+            lambda: bool(self.card.get(C.DIRECT)) != on))
+
+    def set_speaker_cfg(self, k):
+        items = self.card.items(C.SPEAKER_CFG)
+        name = items[k] if 0 <= k < len(items) else str(k)
+        self.applier.submit(Change(
+            "speakers", f"Speakers: {name}", lambda: self.card.set(C.SPEAKER_CFG, k), 3000,
+            lambda: self.card.get(C.SPEAKER_CFG) == k and self._sink_ok(),
+            lambda: self.card.get(C.SPEAKER_CFG) != k))
+
+    def set_stream_layout(self, surround):
+        """Switch the card profile to the stereo or 5.1 stream, if there's
+        anything to switch. False when there isn't."""
+        if not pipewire.layout_profile(self.pw.nodes, surround) and not self.applier.busy:
+            return False
+        want = "surround" if surround else "stereo"
+
+        def run():
+            n = self.pw.nodes
+            target = pipewire.layout_profile(n, surround)
+            if target:
+                if self.tone.running:
+                    self.tone.stop()
+                pipewire.set_card_profile(n, target)
+
+        def settled():
+            n = self.pw.nodes
+            live = pipewire.card_stream()
+            chans = 6 if surround else 2
+            return (n.stream_layout() == want and n.sink is not None and self._sink_ok()
+                    and (live is None or live[1] == chans))
+
+        self.applier.submit(Change("profile", "5.1 stream" if surround else "Stereo stream",
+                                   run, 4000, settled,
+                                   lambda: bool(pipewire.layout_profile(self.pw.nodes, surround))))
+        return True
+
+    def set_bit_depth(self, k):
+        items = self.card.items(C.BIT_DEPTH)
+        name = items[k] if 0 <= k < len(items) else str(k)
+
+        def run():
+            self.card.set(C.BIT_DEPTH, k)
+            # the depth is taken when the card opens: reopen it now
+            self.depth_pending = not pipewire.reopen_sink(self.pw.nodes)
+
+        self.applier.submit(Change("depth", f"Bit depth: {name}", run, 3000, self._sink_ok,
+                                   lambda: self.card.get(C.BIT_DEPTH) != k))
+
+    def restore_rate(self):
+        """Restore the saved pick at start, once the first PipeWire snapshot
+        is in: before it, a 5.1 profile isn't known yet and the cap would be
+        too high (6 ch above 48 kHz falls apart)."""
+        if not self.settings["rate_mode"]:
+            return
+        if self.pw.nodes.device or self.pw.nodes.sink:
+            self.apply_rate(startup=True)
+        else:
+            self.pw.updated.connect(self._restore_rate_once)
+
+    def _restore_rate_once(self, *_):
+        self.pw.updated.disconnect(self._restore_rate_once)
+        self.apply_rate(startup=True)
+
+    def _on_card_rate(self, name=None):
+        if name in (None, True, False, C.DIRECT):
+            self.apply_rate()
+
+    def _on_pw_rate(self, *_):
+        self.apply_rate()
 
 
 NAV = [
@@ -219,6 +388,13 @@ class MainWindow(QMainWindow):
         start = ctx.settings["page"]
         self.go(start if isinstance(start, int) and 0 <= start < self.stack.count() else 0)
         self.refresh()
+
+        # "Applying changes…" while a stream change settles
+        self.applying = ApplyOverlay(root)
+        ctx.applier.busy_changed.connect(self.applying.set_busy)
+        ctx.applier.step.connect(self.applying.set_step)
+        if ctx.applier.busy:
+            self.applying.set_busy(True)
 
     def go(self, idx):
         self.stack.setCurrentIndex(idx)

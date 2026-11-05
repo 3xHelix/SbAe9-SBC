@@ -16,7 +16,7 @@ switches and adjusts them.
 |---|---|---|
 | **SBX Profile** | SBX on/off; Surround, Crystalizer, Bass, Smart Volume (Night/Normal/Loud), Dialog+; built-in and personal profiles | card DSP (ALSA `SBX Switch`, `FX …`) |
 | **Equalizer** | 10-band EQ + pre-gain, Creative's 20 presets, your own saved curves | card DSP (`EQ …`) |
-| **Playback** | Speakers / headphones, speaker config (2.0 – 5.1) with matching stereo / 5.1 stream, Direct Mode, DAC filter, sample rate, default device, spoken speaker test | ALSA + PipeWire |
+| **Playback** | Speakers / headphones, speaker config (2.0 – 5.1) with matching stereo / 5.1 stream, Direct Mode, DAC filter, sample rate and bit depth, default device, spoken speaker test | ALSA + PipeWire |
 | **Recording** | XLR mic level, XLR gain (0/+10/+20 dB), live input meter, mute, "listen to mic", default device | ALSA + PipeWire |
 | **Scout Mode** | Creative's Scout Mode (footstep EQ + Smart Volume) | card DSP |
 | **Mixer** | Output volume (same as the head-unit knob), mute, per-channel levels (Front Left / Right, …), mic level | ALSA + PipeWire |
@@ -39,12 +39,13 @@ Volume, mute and output changes made with the head-unit knob, `alsamixer` or the
 desktop slider show up in the app immediately (it listens to ALSA control events).
 
 **Direct Mode on** = audio goes straight to the DAC at the source's rate (up
-to 384 kHz) with no effects. **Direct Mode off** = audio goes through the DSP
-at 96 kHz, and SBX, the EQ and Scout Mode are heard. The app keeps your
-effect settings either way.
+to 384 kHz in stereo; 5.1 plays at 48 kHz) with no effects. **Direct Mode off** =
+audio goes through the DSP at 48 kHz, and SBX, the EQ and Scout Mode are
+heard. The app keeps your effect settings either way, and your chosen sample
+rate comes back when Direct Mode is switched on again.
 
 Not available on Linux (yet): Super X-Fi, Dolby Digital Live / DTS encoding,
-S/PDIF, surround (5.1/7.1) outputs, and 44.1 kHz-family playback. The driver
+S/PDIF, 7.1 output, and 44.1 kHz-family playback. The driver
 doesn't support these yet.
 
 ## Requirements
@@ -57,6 +58,9 @@ doesn't support these yet.
   with its PipeWire profile set installed
   ([setup step 4](https://github.com/3xHelix/SbAe9-Drv#4-pipewire-profiles-stereo-and-51)).
   Older drivers work as before, in stereo.
+- For picking the bit depth (24 / 32-bit) in the app: a driver newer than
+  v0.6.7 (it adds the "PCM Bit Depth" control). With v0.6.7 the depth is set
+  by the driver's `pcm_bits` option and shown greyed out.
 - `alsa-utils` for the spoken speaker test (it brings the "Front Left…"
   voice files); without it the test plays a tone.
 - Python 3, PySide6 (`sudo dnf install python3-pyside6`), PipeWire tools

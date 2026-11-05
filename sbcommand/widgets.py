@@ -3,7 +3,7 @@
 
 import math
 
-from PySide6.QtCore import (Property, QEasingCurve, QPointF, QPropertyAnimation, QRectF, QSize, Qt,
+from PySide6.QtCore import (Property, QEasingCurve, QEvent, QPointF, QPropertyAnimation, QRectF, QSize, Qt,
                             QTimer, Signal)
 from PySide6.QtGui import (QBrush, QColor, QFont, QLinearGradient, QPainter, QPainterPath, QPen,
                            QRadialGradient)
@@ -831,3 +831,98 @@ class PaletteCard(QWidget):
         p.setFont(f)
         p.setPen(QColor(T.ACCENT_HI if self.selected else T.TEXT))
         p.drawText(QRectF(0, self.height() - 24, self.width(), 22), Qt.AlignCenter, c["label"])
+
+
+class ApplyOverlay(QWidget):
+    """'Applying changes…' over the whole window while the card settles. It
+    takes the mouse and keyboard, so stream settings can't be changed again
+    until the card has caught up (like Creative's own app)."""
+
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.text = ""
+        self.counter = ""
+        self.angle = 0
+        self.setFocusPolicy(Qt.StrongFocus)
+        self._spin = QTimer(self, interval=30)
+        self._spin.timeout.connect(self._tick)
+        parent.installEventFilter(self)
+        self.hide()
+
+    def eventFilter(self, obj, e):
+        if obj is self.parent() and e.type() == QEvent.Resize:
+            self.setGeometry(self.parent().rect())
+        return False
+
+    def set_busy(self, busy):
+        if busy:
+            self.setGeometry(self.parent().rect())
+            self.raise_()
+            self.show()
+            self.setFocus()
+            self._spin.start()
+        else:
+            self._spin.stop()
+            self.hide()
+
+    def set_step(self, text, n, total):
+        self.text = text
+        self.counter = f"{n} of {total}" if total > 1 else ""
+        self.update()
+
+    def _tick(self):
+        self.angle = (self.angle - 9) % 360
+        self.update()
+
+    # swallow input while shown
+    def mousePressEvent(self, e):
+        e.accept()
+
+    def mouseReleaseEvent(self, e):
+        e.accept()
+
+    def wheelEvent(self, e):
+        e.accept()
+
+    def keyPressEvent(self, e):
+        e.accept()
+
+    def paintEvent(self, _):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        p.fillRect(self.rect(), QColor(0, 0, 0, 120))
+        w, h = 340, 150
+        box = QRectF((self.width() - w) / 2, (self.height() - h) / 2, w, h)
+        p.setPen(QPen(QColor(T.POPUP_BORDER), 1))
+        p.setBrush(QColor(T.POPUP))
+        p.drawRoundedRect(box, 8, 8)
+        # spinner
+        r = QRectF(box.left() + 26, box.top() + 34, 40, 40)
+        p.setPen(QPen(QColor(T.DIAL_TRACK), 4))
+        p.setBrush(Qt.NoBrush)
+        p.drawEllipse(r)
+        p.setPen(QPen(QColor(T.ACCENT), 4, Qt.SolidLine, Qt.RoundCap))
+        p.drawArc(r, self.angle * 16, 100 * 16)
+        # text
+        x = r.right() + 20
+        f = p.font()
+        f.setPixelSize(18)
+        f.setBold(True)
+        p.setFont(f)
+        p.setPen(QColor(T.TEXT))
+        p.drawText(QRectF(x, box.top() + 26, box.right() - x - 16, 28), Qt.AlignLeft | Qt.AlignVCenter,
+                   "Applying changes…")
+        f.setPixelSize(14)
+        f.setBold(False)
+        p.setFont(f)
+        p.setPen(QColor(T.MUTED))
+        p.drawText(QRectF(x, box.top() + 56, box.right() - x - 16, 24), Qt.AlignLeft | Qt.AlignVCenter,
+                   self.text)
+        if self.counter:
+            p.drawText(QRectF(x, box.top() + 80, box.right() - x - 16, 22), Qt.AlignLeft | Qt.AlignVCenter,
+                       self.counter)
+        f.setPixelSize(12)
+        p.setFont(f)
+        p.setPen(QColor(T.DIM))
+        p.drawText(QRectF(box.left() + 16, box.bottom() - 34, w - 32, 22), Qt.AlignCenter,
+                   "The card needs a few seconds to settle")

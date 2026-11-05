@@ -147,7 +147,7 @@ class SbxPage(Page):
         self.header("SBX Profile", self.sbx, [self.combo, plus, dots, self.modified])
 
         self.banner = Banner("", "Turn Direct Mode off", warn=True)
-        self.banner.button.clicked.connect(lambda: self.card.set(C.DIRECT, False))
+        self.banner.button.clicked.connect(lambda: self.ctx.set_direct(False))
         self.lay.addWidget(self.banner)
 
         self.carousel = ProfileCarousel()
@@ -514,11 +514,13 @@ class PlaybackPage(Page):
         w, g, self.spk_sub = out_row(self.r_spk, "speaker", "Speakers")
         self.spk_cfg = QComboBox()
         self.spk_cfg.setToolTip("Speaker setup the DSP mixes for (used when Direct Mode is off)")
+        self.spk_cfg.setMinimumWidth(150)
         self.spk_cfg.activated.connect(self._speaker_cfg)
         g.addWidget(self.spk_cfg, 0, 4)
         # PipeWire profile: stereo or 5.1 stream. Offered only with the driver's
         # profile set; usable in Direct Mode too, where Speaker Config is greyed.
         self.stream = QComboBox()
+        self.stream.setMinimumWidth(150)
         self.stream.addItem("Stereo stream", False)
         self.stream.addItem("5.1 stream", True)
         self.stream.setToolTip(STREAM_TIP)
@@ -536,7 +538,7 @@ class PlaybackPage(Page):
         dm.addWidget(info_button(
             "Direct Mode sends audio straight to the ESS DAC at the stream's own sample rate "
             "(up to 384 kHz), bypassing the DSP. SBX effects and the EQ are not heard.\n\n"
-            "With Direct Mode off, audio goes through the Sound Core3D DSP at 96 kHz, so "
+            "With Direct Mode off, audio goes through the Sound Core3D DSP at 48 kHz, so "
             "SBX, the EQ and Scout Mode work.\n\n"
             "Switching Direct Mode on during playback goes silent until the stream restarts "
             "(pause and play), same as on Windows."))
@@ -544,7 +546,7 @@ class PlaybackPage(Page):
         left.addLayout(dm)
         dmr = QHBoxLayout()
         self.direct = ToggleSwitch()
-        self.direct.toggled.connect(lambda on: self.card.set(C.DIRECT, on))
+        self.direct.toggled.connect(lambda on: self.ctx.set_direct(on))
         self.direct_lbl = label("", "bigValue")
         dmr.addWidget(self.direct)
         dmr.addWidget(self.direct_lbl)
@@ -585,16 +587,33 @@ class PlaybackPage(Page):
         qh.addWidget(label("Audio Quality", "sectionTitle"))
         qh.addStretch()
         qh.addWidget(info_button(
-            "The sample rate PipeWire runs the card at. Automatic follows what's playing "
-            "(48/96/192/384 kHz). A fixed rate resamples everything to it.\n\n"
-            "44.1 kHz isn't supported by the driver yet, so that music gets resampled.\n"
-            "With Direct Mode off the DSP itself runs at 96 kHz.\n\n"
-            "This sets PipeWire's global clock (written to "
+            "The sample rate PipeWire runs the card at, and the bit depth the card plays.\n\n"
+            "Automatic follows what's playing. A fixed rate resamples everything to it. "
+            "44.1 kHz isn't supported by the driver yet, so that music gets resampled.\n\n"
+            "Direct Mode plays 48–384 kHz in stereo; a 5.1 stream plays at 48 kHz. "
+            "With Direct Mode off the DSP runs at 48 kHz, so your rate comes back when "
+            "Direct Mode is switched on again. 192 and 384 kHz also use a bigger buffer "
+            "(PipeWire quantum), so they don't crackle.\n\n"
+            "The bit depth applies when the card is opened; the app reopens it for you "
+            "(a short gap).\n\n"
+            "The rate is PipeWire's global clock (written to "
             "~/.config/pipewire/pipewire.conf.d/90-sbae9-sbc-rates.conf)."))
         ql.addLayout(qh)
+        qrow = QHBoxLayout()
         self.quality = QComboBox()
+        # the long "experimental" label shouldn't widen the column
+        self.quality.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
+        self.quality.setMinimumContentsLength(15)
+        self.quality.view().setMinimumWidth(300)
         self.quality.activated.connect(self._quality)
-        ql.addWidget(self.quality)
+        qrow.addWidget(self.quality, 1)
+        self.depth = QComboBox()
+        self.depth.activated.connect(self._depth)
+        self.depth.setMaximumWidth(110)
+        qrow.addWidget(self.depth, 0)
+        ql.addLayout(qrow)
+        self.rate_note = label("", "muted", wrap=True)
+        ql.addWidget(self.rate_note)
         self.now_playing = label("", "muted")
         ql.addWidget(self.now_playing)
         fl.addWidget(label("", "muted"))
@@ -604,7 +623,6 @@ class PlaybackPage(Page):
         grid.setColumnStretch(1, 2)
         self.lay.addLayout(grid)
         self.lay.addStretch()
-        self._quality_built = None
         ctx.pw.updated.connect(self._on_pw)
 
     def _speaker_cfg(self, i):
@@ -612,23 +630,16 @@ class PlaybackPage(Page):
         Only user picks switch the profile; driver changes to Speaker Config
         (it follows the stream itself) just refresh the view."""
         k = self.spk_cfg.itemData(i)
-        self.card.set(C.SPEAKER_CFG, k)
+        if k != self.card.get(C.SPEAKER_CFG):
+            self.ctx.set_speaker_cfg(k)
         items = self.card.items(C.SPEAKER_CFG)
         if 0 <= k < len(items):
             self._switch_stream(items[k] in SURROUND_CFGS)
 
     def _switch_stream(self, surround):
-        n = self.ctx.pw.nodes
-        target = pipewire.layout_profile(n, surround)
-        if not target:
-            return
-        if self.ctx.tone.running:
-            self.ctx.tone.stop()
-        if pipewire.set_card_profile(n, target):
+        if self.ctx.set_stream_layout(surround):
             # the dump lags behind; hold the shown choice until it catches up
             self._stream_pending = (surround, time.monotonic())
-            for ms in (400, 1500, 3000):
-                QTimer.singleShot(ms, self.ctx.pw.refresh)
 
     def _make_default(self):
         n = self.ctx.pw.nodes
@@ -674,10 +685,86 @@ class PlaybackPage(Page):
         self.test.setText("Stop" if ch else "Test")
 
     def _quality(self, i):
-        mode = self.quality.itemData(i)
-        pipewire.set_rate_mode(mode)
-        self.ctx.settings["rate_mode"] = mode
-        QTimer.singleShot(300, self.ctx.pw.refresh)
+        self.ctx.settings["rate_mode"] = self.quality.itemData(i)
+        self.ctx.apply_rate(user=True)
+        self.refresh()
+
+    def _depth(self, i):
+        k = self.depth.itemData(i)
+        if k is None or not self.card.has(C.BIT_DEPTH) or k == self.card.get(C.BIT_DEPTH):
+            return
+        self.ctx.set_bit_depth(k)
+
+    def _refresh_quality(self, n):
+        ctx = self.ctx
+        cap = ctx.active_cap()
+        dragons = ctx.dragons_available()
+        choice = ctx.settings["rate_mode"] or 0
+        # show what PipeWire is forced to now, whoever set it (0 = Automatic)
+        eff = pipewire.current_force_rate()
+        if self.quality.count() == 0:
+            self.quality.addItem("", 0)
+            for r in pipewire.RATES:
+                self.quality.addItem(f"{r / 1000:g} kHz", r)
+        model = self.quality.model()
+        auto_top = ctx.rate_cap()   # Automatic never reaches the experimental rate
+        top = "48" if auto_top == 48000 else f"48–{auto_top // 1000}"
+        self.quality.setItemText(0, f"Auto ({top} kHz)")
+        for k in range(1, self.quality.count()):
+            r = self.quality.itemData(k)
+            exp = dragons and r == 96000
+            self.quality.setItemText(k, f"{r / 1000:g} kHz" + (" (experimental: here be dragons)" if exp else ""))
+            model.item(k).setEnabled(r <= cap or exp)
+        i = self.quality.findData(eff)
+        self.quality.setCurrentIndex(i if i >= 0 else 0)
+
+        direct = bool(self.card.get(C.DIRECT, True)) if self.card.present else True
+        note = ""
+        if C.module_param("pcm_rates") == "0":
+            note = "High rates are off in the driver (pcm_rates=0; see Settings)."
+        elif not direct:
+            note = "DSP mode runs at 48 kHz."
+        elif n.stream_layout() == "surround":
+            note = "5.1 plays at 48 kHz."
+            if dragons:
+                note += (" 96 kHz is experimental: it stutters more and more as it plays, "
+                         "and needs a Windows capture to fix.")
+        outside = bool(eff) and eff != pipewire.effective_rate(choice, cap)
+        if choice and choice > cap and note and not outside:
+            note += f" Your {choice / 1000:g} kHz comes back when it can."
+        if outside:
+            note = (note + " " if note else "") + f"PipeWire is set to {eff / 1000:g} kHz outside the app."
+        if self.ctx.depth_pending:
+            note = (note + " " if note else "") + "New bit depth applies to the next stream."
+        self.rate_note.setText(note)
+        self.rate_note.setVisible(bool(note))
+
+        # bit depth: a card control on newer drivers, else the module option
+        items = self.card.items(C.BIT_DEPTH) if self.card.has(C.BIT_DEPTH) else []
+        if items:
+            if [self.depth.itemText(k) for k in range(self.depth.count())] != items:
+                self.depth.clear()
+                for k, it in enumerate(items):
+                    self.depth.addItem(it, k)
+            self.depth.setCurrentIndex(self.card.get(C.BIT_DEPTH, 0) or 0)
+            self.depth.setEnabled(True)
+            self.depth.setToolTip("Bit depth the card plays; the app reopens the card to apply it")
+            bits = items[self.card.get(C.BIT_DEPTH, 0) or 0]
+        else:
+            bits = f"{C.module_param('pcm_bits') or '24'}-bit"
+            self.depth.clear()
+            self.depth.addItem(bits, None)
+            self.depth.setEnabled(False)
+            self.depth.setToolTip("Set by the driver's pcm_bits option; newer drivers let you "
+                                  "change it here")
+
+        live = pipewire.card_stream()
+        if live:
+            rate, ch = live
+            chans = {1: "mono", 2: "stereo", 6: "5.1"}.get(ch, f"{ch} ch")
+            self.now_playing.setText(f"Running now: {rate / 1000:g} kHz · {bits} · {chans}")
+        else:
+            self.now_playing.setText("Idle")
 
     def refresh(self):
         n = self.ctx.pw.nodes
@@ -685,24 +772,7 @@ class PlaybackPage(Page):
         self.set_default.setEnabled(bool(n.sink) and not n.sink_is_default)
         self.set_default.setText("Default device" if n.sink_is_default else "Set Default")
         self.default_ok.setPixmap(icons.pixmap("check", T.ACCENT_HI if n.sink_is_default else T.DIM, 22))
-        fmt = n.sink_format()
-        if fmt and fmt[0]:
-            self.now_playing.setText(f"Running now: {fmt[0] / 1000:g} kHz, {fmt[1]}")
-        else:
-            self.now_playing.setText("Idle")
-
-        bits = C.module_param("pcm_bits") or "24"
-        rates_param = C.module_param("pcm_rates") or "0"
-        modes = [0] + pipewire.RATES if rates_param != "0" else [48000]
-        if self._quality_built != (bits, tuple(modes)):
-            self._quality_built = (bits, tuple(modes))
-            self.quality.clear()
-            for m in modes:
-                text = (f"{bits} bit, automatic (48–384 kHz)" if m == 0 else f"{bits} bit, {m / 1000:g} kHz")
-                self.quality.addItem(text, m)
-        cur = pipewire.current_rate_mode()
-        i = self.quality.findData(cur)
-        self.quality.setCurrentIndex(i if i >= 0 else 0)
+        self._refresh_quality(n)
 
         layout = n.stream_layout()
         if self._stream_pending:
@@ -932,8 +1002,8 @@ class ScoutPage(Page):
         self.lay.addStretch()
 
     def _enable(self):
-        self.card.set(C.DIRECT, False)
         self.card.set(C.SBX, True)
+        self.ctx.set_direct(False)
 
     def refresh(self):
         if not self.card.present:

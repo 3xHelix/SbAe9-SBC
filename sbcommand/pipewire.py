@@ -71,7 +71,7 @@ class Nodes:
                         self.default_source = name
             if not _is_ae9(props):
                 continue
-            node = {"id": o["id"], "name": props.get("node.name"),
+            node = {"id": o["id"], "name": props.get("node.name"), "state": info.get("state"),
                     "description": props.get("node.description"), "props": props,
                     "params": info.get("params") or {}}
             if mc == "Audio/Sink" and not self.sink:
@@ -258,39 +258,86 @@ def clock_settings():
     return s
 
 
-def set_rate_mode(mode):
-    """mode 0 = follow the source (any card rate), else force that rate.
+# Bigger buffers at the top rates: 384 kHz crackles with PipeWire's default
+# quantum (tested by ear on the AE-9; 1024-2048 is clean, 2048 gives margin).
+QUANTUM = {384000: 2048, 192000: 1024}
 
-    Applied live through the settings metadata and written to a PipeWire
-    drop-in so it survives restarts.
+
+def max_rate(direct, surround, high_rates=True):
+    """Highest rate the card takes: DSP mode runs at 48 kHz (96 kHz through
+    the DSP played twice, so the driver blocks it), 5.1 plays at 48 kHz (6 ch
+    at 96 kHz fell apart while playing), and stereo in Direct Mode goes to
+    384 kHz."""
+    if not high_rates or not direct:
+        return 48000
+    return 48000 if surround else 384000
+
+
+def effective_rate(mode, cap):
+    """The rate applied for the user's choice (0 = automatic) under `cap`."""
+    return 0 if not mode else min(mode, cap)
+
+
+def set_rate_mode(mode):
+    """mode 0 = follow the source, else force that rate (with its quantum).
+
+    Only the forced rate is capped by the caller. allowed-rates, live and in
+    the drop-in, always lists the card's full set: PipeWire treats it as the
+    rates the device may open at, so a short list would make it resample.
+    The drop-in keeps PipeWire from falling back to 44.1/48 kHz-only after a
+    restart; the forced rate is restored by the app at start.
     """
-    rates = RATES if mode == 0 else [mode]
-    _run("pw-metadata", "-n", "settings", "0", "clock.allowed-rates",
-         "[ " + " ".join(map(str, rates)) + " ]")
+    full = "[ " + " ".join(map(str, RATES)) + " ]"
+    _run("pw-metadata", "-n", "settings", "0", "clock.allowed-rates", full)
     _run("pw-metadata", "-n", "settings", "0", "clock.force-rate", str(mode))
+    _run("pw-metadata", "-n", "settings", "0", "clock.force-quantum", str(QUANTUM.get(mode, 0)))
     os.makedirs(os.path.dirname(RATES_CONF), exist_ok=True)
     with open(RATES_CONF, "w") as f:
         f.write("# Written by Sound Blaster Command for Linux (sbae9-sbc).\n"
                 "# The AE-9 plays 48/96/192/384 kHz; 44.1 kHz material is resampled.\n"
+                "# The app's chosen rate is applied at run time (clock.force-rate).\n"
                 "context.properties = {\n"
-                f"    default.clock.rate          = {rates[0]}\n"
-                f"    default.clock.allowed-rates = [ {' '.join(map(str, rates))} ]\n"
+                f"    default.clock.rate          = {RATES[0]}\n"
+                f"    default.clock.allowed-rates = {full}\n"
                 "}\n")
 
 
-def current_rate_mode():
-    s = clock_settings()
+def current_force_rate():
     try:
-        force = int(s.get("clock.force-rate", "0"))
+        return int(clock_settings().get("clock.force-rate", "0"))
     except ValueError:
-        force = 0
-    if force:
-        return force
-    allowed = s.get("clock.allowed-rates", "")
-    nums = [int(x) for x in re.findall(r"\d+", allowed)]
-    if len(nums) == 1:
-        return nums[0]
-    return 0
+        return 0
+
+
+def current_quantum():
+    try:
+        return int(clock_settings().get("clock.force-quantum", "0"))
+    except ValueError:
+        return 0
+
+
+def reopen_sink(nodes):
+    """Suspend and resume the AE-9 sink so the card is reopened (a new bit
+    depth takes effect on the next open). False if it couldn't."""
+    if not nodes.sink:
+        return False
+    name = nodes.sink["name"]
+    return (_run("pactl", "suspend-sink", name, "1") is not None
+            and _run("pactl", "suspend-sink", name, "0") is not None)
+
+
+def card_stream(card_id="AE9"):
+    """(rate, channels) the card's playback PCM is open at, or None when closed."""
+    try:
+        with open(f"/proc/asound/{card_id}/pcm0p/sub0/hw_params") as f:
+            text = f.read()
+    except OSError:
+        return None
+    rate = re.search(r"^rate:\s*(\d+)", text, re.M)
+    ch = re.search(r"^channels:\s*(\d+)", text, re.M)
+    if not rate:
+        return None
+    return int(rate.group(1)), int(ch.group(1)) if ch else 2
 
 
 # --- test tone ----------------------------------------------------------------
