@@ -518,7 +518,7 @@ class PlaybackPage(Page):
             t = label(title)
             t.setStyleSheet("font-size:15px;")
             g.addWidget(t, 0, 2)
-            sub = label("", "muted")
+            sub = label("", "muted", wrap=True)
             g.addWidget(sub, 1, 2, 1, 2)
             g.setColumnStretch(3, 1)
             return w, g, sub
@@ -903,6 +903,7 @@ class RecordingPage(Page):
         g.addLayout(xr, 3, 1)
         g.addWidget(label("Listen"), 4, 0)
         lr = QHBoxLayout()
+        lr.setSpacing(12)
         self.listen = ToggleSwitch()
         self.listen.toggled.connect(self._listen)
         lr.addWidget(self.listen)

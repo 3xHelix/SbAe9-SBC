@@ -3,6 +3,25 @@
 Sound Blaster Command for Linux: the UI for the Creative Sound Blaster AE-9
 driver ([SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv)).
 
+## Unreleased
+
+### Added
+
+- A test suite (`python3 -m unittest discover -s tests`): ~50 tests, a few
+  seconds, no card needed. It runs against a fake AE-9 and a fake PipeWire,
+  so it never touches your card, your PipeWire or your settings.
+- `tools/screenshots.py` regenerates the README screenshots in any palette.
+
+### Changed
+
+- README screenshots redone in the Helix palette, on a 5.1 setup.
+
+### Fixed
+
+- Playback: a long speaker description (5.1) could push the bit-depth box
+  off the edge of the window. It wraps now.
+- Recording: the Listen switch had no gap before its text.
+
 ## 0.4.1 (2026-11-04)
 
 The driver caught up. [SbAe9-Drv v0.6.8](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.6.8)

@@ -20,6 +20,7 @@ from PySide6.QtCore import QObject, QTimer, Signal
 
 MAX_MS = 11000      # give up waiting for a change to settle after this
 POLL_MS = 400
+TIME_SCALE = 1.0    # tests shrink every wait with this
 
 
 @dataclass
@@ -44,7 +45,7 @@ class Applier(QObject):
         self._current = None
         self._done = 0
         self._followups = []              # called when the queue runs dry
-        self._poll = QTimer(self, interval=POLL_MS)
+        self._poll = QTimer(self, interval=max(5, int(POLL_MS * TIME_SCALE)))
         self._poll.timeout.connect(self._check)
 
     @property
@@ -92,7 +93,7 @@ class Applier(QObject):
             return
         elapsed = (time.monotonic() - c.started) * 1000
         self._refresh()
-        if elapsed < c.min_ms:
+        if elapsed < c.min_ms * TIME_SCALE:
             return
         ok = True
         if c.settled is not None:
@@ -100,6 +101,6 @@ class Applier(QObject):
                 ok = bool(c.settled())
             except Exception:
                 ok = True
-        if ok or elapsed >= MAX_MS:
+        if ok or elapsed >= MAX_MS * TIME_SCALE:
             self._poll.stop()
             self._next()

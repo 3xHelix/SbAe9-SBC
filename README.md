@@ -36,6 +36,9 @@ switches and adjusts them.
   </tr>
 </table>
 
+Shown in the Helix palette, on a 5.1 setup. Regenerate them with
+`python3 tools/screenshots.py [palette]`.
+
 Volume, mute and output changes made with the head-unit knob, `alsamixer` or the
 desktop slider show up in the app immediately (it listens to ALSA control events).
 
@@ -79,6 +82,19 @@ doesn't support these yet.
 ./install.sh           # adds a menu entry + ~/.local/bin/sbae9-sbc
 ./sbae9-sbc --palette helix   # one launch in the Helix palette (saved choice unchanged)
 ```
+
+## Tests
+
+```sh
+python3 -m unittest discover -s tests
+```
+
+About 50 tests, a few seconds, no card needed. They run against a fake AE-9
+(control shapes copied from a real card on driver 0.6.8) and a fake
+PipeWire, with settings in a temp folder: nothing touches your card, your
+PipeWire or `~/.config`. They cover the rate rules (caps, quantum, hands off
+what others set), the stereo / 5.1 profile sync, "Applying changes…", the
+EQ preset list, per-channel volume and the speaker test.
 
 ## Files it writes
 
