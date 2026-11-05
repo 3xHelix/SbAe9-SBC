@@ -565,6 +565,29 @@ class PlaybackPage(Page):
         dmr.addStretch()
         left.addLayout(dmr)
 
+        # optical (S/PDIF) out, on drivers that have it
+        self.optical_box = QWidget()
+        ob = QVBoxLayout(self.optical_box)
+        ob.setContentsMargins(0, 6, 0, 0)
+        ob.setSpacing(6)
+        oh = QHBoxLayout()
+        oh.addWidget(label("Optical Out", "sectionTitle"))
+        oh.addWidget(info_button(OPTICAL_TIP))
+        oh.addStretch()
+        ob.addLayout(oh)
+        orow = QHBoxLayout()
+        self.optical = ToggleSwitch()
+        self.optical.toggled.connect(lambda on: self.card.set(C.OPTICAL_OUT, on))
+        self.optical_lbl = label("", "bigValue")
+        orow.addWidget(self.optical)
+        orow.addWidget(self.optical_lbl)
+        orow.addStretch()
+        ob.addLayout(orow)
+        self.optical_note = label("", "hint", wrap=True)
+        ob.addWidget(self.optical_note)
+        self.optical_box.setVisible(False)
+        left.addWidget(self.optical_box)
+
         right = QVBoxLayout()
         right.setAlignment(Qt.AlignTop | Qt.AlignHCenter)
         self.diagram = SpeakerDiagram()
@@ -826,6 +849,7 @@ class PlaybackPage(Page):
         self.test_hint.setText(hint)
         self.direct.setCheckedSilently(direct)
         self.direct_lbl.setText("On — DSP bypassed" if direct else "Off — SBX / EQ active")
+        self._refresh_optical(layout)
         names = {"Default": "Default (Windows startup filter)", "Fast": "Fast Roll Off",
                  "Slow": "Slow Roll Off"}
         if self.filter.count() != len(self.card.items(C.DAC_FILTER)):
@@ -834,6 +858,46 @@ class PlaybackPage(Page):
                 self.filter.addItem(names.get(it, it), k)
         self.filter.setCurrentIndex(self.card.get(C.DAC_FILTER, 0) or 0)
 
+    def optical_silent_because(self, layout):
+        """Why optical out is silent right now, though switched on: the
+        driver feeds it only from a stereo, 24-bit stream at up to 192 kHz."""
+        why = []
+        if self.card.has(C.BIT_DEPTH) and (self.card.get_item(C.BIT_DEPTH) or "").startswith("32"):
+            why.append("32-bit")
+        live = pipewire.card_stream()
+        rate = live[0] if live else pipewire.current_force_rate()
+        if rate and rate > 192000:
+            why.append(f"{rate / 1000:g} kHz")
+        if layout == "surround" or (live and live[1] > 2):
+            why.append("5.1 stream")
+        return why
+
+    def _refresh_optical(self, layout):
+        has = self.card.has(C.OPTICAL_OUT)
+        self.optical_box.setVisible(has)
+        if not has:
+            return
+        on = bool(self.card.get(C.OPTICAL_OUT))
+        self.optical.setCheckedSilently(on)
+        why = self.optical_silent_because(layout) if on else []
+        if why:
+            self.optical_lbl.setText("On — silent right now")
+            self.optical_note.setText(f"Silent with {', '.join(why)}: optical plays stereo, "
+                                      "24-bit, up to 192 kHz.")
+            self.optical_note.setStyleSheet(f"color:{T.DANGER};")
+        else:
+            self.optical_lbl.setText("On — same as the main output" if on else "Off")
+            self.optical_note.setText("Plays stereo, 24-bit, up to 192 kHz. No SBX or EQ; "
+                                      "your receiver sets the volume.")
+            self.optical_note.setStyleSheet("")
+
+
+OPTICAL_TIP = ("Optical (S/PDIF) out plays what the main output plays, so you can feed a "
+               "receiver or another device alongside your speakers.\n\n"
+               "It only plays a stereo stream at 24-bit, up to 192 kHz: with Bit Depth at "
+               "32-bit, at 384 kHz or on a 5.1 stream it stays silent.\n\n"
+               "It's taken before the DSP, so SBX and the EQ aren't on it, and the volume "
+               "knob doesn't change it (app volume does): set the level on the receiver.")
 
 SURROUND_CFGS = ("4.0", "4.1", "5.1")
 STREAM_TIP = ("Channels PipeWire sends to the card (its card profile). Picking 4.0, 4.1 or 5.1 "
@@ -917,6 +981,28 @@ class RecordingPage(Page):
         self.lay.addWidget(label(
             "Phantom power (48V) is the button on the head unit's front panel. "
             "The driver records at 48 kHz, 2 channels.", "hint", wrap=True))
+
+        # optical (S/PDIF) in: its own device, records alongside the mic
+        self.optical_box = QWidget()
+        ob = QVBoxLayout(self.optical_box)
+        ob.setContentsMargins(0, 10, 0, 0)
+        ob.setSpacing(6)
+        ob.addWidget(label("Optical In (S/PDIF)", "subTitle"))
+        orow = QHBoxLayout()
+        self.optical_name = label("", "sectionTitle")
+        orow.addWidget(self.optical_name)
+        orow.addStretch()
+        self.optical_default = QPushButton("Set Default")
+        self.optical_default.setMinimumWidth(150)
+        self.optical_default.clicked.connect(self._optical_default)
+        self.optical_ok = QLabel()
+        orow.addWidget(self.optical_default)
+        orow.addWidget(self.optical_ok)
+        ob.addLayout(orow)
+        self.optical_note = label("", "hint", wrap=True)
+        ob.addWidget(self.optical_note)
+        self.optical_box.setVisible(False)
+        self.lay.addWidget(self.optical_box)
         self.lay.addStretch()
         ctx.meter.levels.connect(self._levels)
         ctx.monitor.state.connect(self.listen.setCheckedSilently)
@@ -932,6 +1018,37 @@ class RecordingPage(Page):
         n = self.ctx.pw.nodes
         if n.source:
             pipewire.set_mute(n.source["id"], muted)
+
+    def _optical_default(self):
+        n = self.ctx.pw.nodes
+        if n.optical_in:
+            pipewire.set_default(n.optical_in["id"])
+            self.ctx.pw.refresh()
+
+    def _refresh_optical(self, n):
+        has = bool(n.optical_in) or self.card.has(C.OPTICAL_OUT)
+        self.optical_box.setVisible(has)
+        if not has:
+            return
+        found = bool(n.optical_in)
+        self.optical_name.setText((n.optical_in.get("description") or "AE-9 Optical In") if found
+                                  else "Not set up in PipeWire")
+        self.optical_default.setVisible(found)
+        self.optical_ok.setVisible(found)
+        if found:
+            self.optical_default.setEnabled(not n.optical_in_is_default)
+            self.optical_default.setText("Default device" if n.optical_in_is_default else "Set Default")
+            self.optical_ok.setPixmap(icons.pixmap("check", T.ACCENT_HI if n.optical_in_is_default
+                                                   else T.DIM, 22))
+            self.optical_note.setText(
+                "Records alongside the XLR mic, as its own device: pick it in your recording app. "
+                "S/PDIF can't be resampled, so it opens at the sender's rate (44.1–192 kHz) and "
+                "won't open at all without a signal.")
+        else:
+            self.optical_note.setText(
+                "The driver has an optical input, but PipeWire doesn't list it yet. Copy "
+                "config/ae9-optical-in.conf from the driver to ~/.config/pipewire/pipewire.conf.d/ "
+                "and restart PipeWire (systemctl --user restart pipewire).")
 
     def _listen(self, on):
         n = self.ctx.pw.nodes
@@ -964,6 +1081,7 @@ class RecordingPage(Page):
         self.default_ok.setPixmap(icons.pixmap("check", T.ACCENT_HI if n.source_is_default else T.DIM, 22))
         if n.source and not self.ctx.meter._proc and self.isVisible():
             self.ctx.meter.start(n.source["name"])
+        self._refresh_optical(n)
         muted = False
         if n.source:
             _, muted = pipewire.get_volume(n.source["id"])

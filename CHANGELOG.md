@@ -3,6 +3,31 @@
 Sound Blaster Command for Linux: the UI for the Creative Sound Blaster AE-9
 driver ([SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv)).
 
+## 0.6.0 (2026-11-05)
+
+Optical has entered the chat. Needs
+[SbAe9-Drv v0.8.0](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.8.0) or
+newer; on older drivers none of this shows up.
+
+### Added
+
+- **Optical Out** (Playback): a switch for the card's optical (S/PDIF)
+  output, which plays whatever the main output plays. It's picky: stereo,
+  24-bit, up to 192 kHz. Run 32-bit, 384 kHz or 5.1 and it goes quiet, so
+  the app tells you so in red instead of leaving you wondering. No SBX or
+  EQ on it, and the volume knob doesn't touch it; your receiver does the
+  volume.
+- **Optical In** (Recording): if PipeWire lists the AE-9's optical input
+  (the driver's `ae9-optical-in.conf`), it shows up with its own Set
+  Default, and the app tells you how to set it up if it isn't there yet.
+  It records alongside the XLR mic, and the app never mixes the two up.
+
+### Fixed
+
+- The test suite could fail now and then: each test's app kept running in
+  the background and fiddled with the next test's sample rate. Tests clean
+  up after themselves now. (Tests only; the app itself was fine.)
+
 ## 0.5.0 (2026-11-05)
 
 Catching up with [SbAe9-Drv v0.7.0](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.7.0),

@@ -34,7 +34,7 @@ os.environ["XDG_CACHE_HOME"] = os.path.join(_TMP, "cache")
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 sys.path.insert(0, ROOT)
 
-from PySide6.QtCore import QProcess  # noqa: E402
+from PySide6.QtCore import QCoreApplication, QEvent, QProcess  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
 app = QApplication.instance() or QApplication([])
@@ -140,6 +140,15 @@ class FakeMixer:
         self.controls[name].items = list(items)
         self.values[name] = items.index(cur) if cur in items else 0
 
+    def add_bool(self, name, value=True):
+        """A boolean control the 0.6.8 snapshot doesn't have (e.g. Optical Out)."""
+        numid = max(self.by_numid) + 1
+        c = alsa.Control(numid=numid, name=name, type=alsa.TYPE_BOOLEAN, count=1,
+                         min=0, max=1, items=[], writable=True)
+        self.controls[name] = c
+        self.by_numid[numid] = c
+        self.values[name] = value
+
     def remove(self, name):
         c = self.controls.pop(name)
         self.by_numid.pop(c.numid, None)
@@ -205,6 +214,18 @@ class FakePipeWire:
             if r.get("direction") == "Output":
                 r["device"] = 2 if surround else 1
                 r["index"] = 2 if surround else 1
+
+    def add_optical_in(self, first=True, alsa_props=False):
+        """The source node from the driver's ae9-optical-in.conf. alsa_props:
+        the card props an opened node carries (they'd match the mic's)."""
+        props = {"node.name": "alsa_input.ae9_optical", "node.description": "AE-9 Optical In",
+                 "media.class": "Audio/Source", "api.alsa.path": "hw:AE9,1", "priority.session": 100}
+        if alsa_props:
+            props.update({"alsa.id": "AE9", "alsa.card_name": "Sound Blaster AE-9"})
+        o = {"id": 999, "type": "PipeWire:Interface:Node", "info": {"state": "suspended",
+                                                                  "props": props, "params": {}}}
+        self.objects.insert(0 if first else len(self.objects), o)
+        return o
 
     def channel_volumes(self):
         for p in self.sink["info"]["params"].get("Props", []):
@@ -327,8 +348,14 @@ class AppTestCase(unittest.TestCase):
         for w in getattr(self, "_windows", []):
             w.close()
             w.deleteLater()
+        # Stop this test's app before the next one starts: its PipeWire poll
+        # would otherwise keep running and re-write the shared fake's rate.
+        self.ctx.pw._timer.stop()
+        self.ctx.applier._poll.stop()
         self.ctx.deleteLater()
         process()
+        # deleteLater only runs inside a real event loop; tests never enter one
+        QCoreApplication.sendPostedEvents(None, QEvent.DeferredDelete)
 
     # helpers
     def window(self):

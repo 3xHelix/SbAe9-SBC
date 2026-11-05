@@ -22,6 +22,7 @@ XLR_GAIN = "XLR Gain Capture Volume"   # 0/1/2 = 0/+10/+20 dB
 DAC_FILTER = "DAC Filter"              # Default / Fast / Slow
 DIRECT = "Direct Mode Switch"
 SBX = "SBX Switch"
+OPTICAL_OUT = "Optical Out Playback Switch"   # newer drivers: optical plays what the main output plays
 BIT_DEPTH = "PCM Bit Depth"             # 24-bit / 32-bit (newer drivers), next stream open
 SPEAKER_CFG = "Speaker Config"         # 2.0 / 2.1
 SV_MODE = "FX Smart Volume Mode"       # Normal / Loud / Night

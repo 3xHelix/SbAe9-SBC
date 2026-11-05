@@ -49,12 +49,22 @@ def _is_ae9(props):
     return "AE9" in text or "AE-9" in text or "creative_ae9" in text
 
 
+# The optical (S/PDIF) input: its own capture PCM (hw:AE9,1), made a PipeWire
+# source by the driver's optional config/ae9-optical-in.conf. Never the mic.
+OPTICAL_IN = "alsa_input.ae9_optical"
+
+
+def _is_optical_in(props):
+    path = str(props.get("api.alsa.path", ""))
+    return props.get("node.name") == OPTICAL_IN or (path.startswith("hw:AE9,") and path.endswith(",1"))
+
+
 class Nodes:
     """Snapshot of the AE-9's PipeWire nodes and the current defaults."""
 
     def __init__(self, objs=None):
         objs = dump() if objs is None else objs
-        self.sink = self.source = self.device = None
+        self.sink = self.source = self.device = self.optical_in = None
         self.default_sink = self.default_source = None
         for o in objs:
             info = o.get("info") or {}
@@ -69,12 +79,15 @@ class Nodes:
                         self.default_sink = name
                     elif m.get("key") == "default.audio.source":
                         self.default_source = name
-            if not _is_ae9(props):
+            optical = mc == "Audio/Source" and _is_optical_in(props)
+            if not (optical or _is_ae9(props)):
                 continue
             node = {"id": o["id"], "name": props.get("node.name"), "state": info.get("state"),
                     "description": props.get("node.description"), "props": props,
                     "params": info.get("params") or {}}
-            if mc == "Audio/Sink" and not self.sink:
+            if optical:
+                self.optical_in = self.optical_in or node
+            elif mc == "Audio/Sink" and not self.sink:
                 self.sink = node
             elif mc == "Audio/Source" and not self.source:
                 self.source = node
@@ -88,6 +101,10 @@ class Nodes:
     @property
     def source_is_default(self):
         return bool(self.source and self.source["name"] == self.default_source)
+
+    @property
+    def optical_in_is_default(self):
+        return bool(self.optical_in and self.optical_in["name"] == self.default_source)
 
     def sink_format(self):
         """(rate, format) the sink is running at, or None when idle."""
