@@ -37,6 +37,29 @@ class ScaleTest(S.AppTestCase):
         M.set_scale(100, env)
         self.assertEqual(env["QT_SCALE_FACTOR"], "2")
 
+    def test_scaled_ui_runs_through_xwayland_on_wayland(self):
+        old = M.xcb_available
+        M.xcb_available = lambda: True
+        try:
+            env = {"WAYLAND_DISPLAY": "wayland-1", "DISPLAY": ":0"}
+            M.set_scale(80, env)
+            self.assertEqual(env["QT_QPA_PLATFORM"], "xcb")
+            M.set_scale(80, env)                    # relaunch keeps it
+            self.assertEqual(env["QT_QPA_PLATFORM"], "xcb")
+            M.set_scale(100, env)                   # back to native Wayland
+            self.assertNotIn("QT_QPA_PLATFORM", env)
+            env = {"WAYLAND_DISPLAY": "wayland-1", "DISPLAY": ":0", "QT_QPA_PLATFORM": "wayland"}
+            M.set_scale(80, env)                    # the user's own choice wins
+            self.assertEqual(env["QT_QPA_PLATFORM"], "wayland")
+            env = {"WAYLAND_DISPLAY": "wayland-1"}  # no XWayland
+            M.set_scale(80, env)
+            self.assertNotIn("QT_QPA_PLATFORM", env)
+            env = {"DISPLAY": ":0"}                 # an X11 session
+            M.set_scale(80, env)
+            self.assertNotIn("QT_QPA_PLATFORM", env)
+        finally:
+            M.xcb_available = old
+
     def test_scale_is_snapped_and_clamped(self):
         self.assertEqual(theme.clamp_scale(83), 85)
         self.assertEqual(theme.clamp_scale(10), 70)

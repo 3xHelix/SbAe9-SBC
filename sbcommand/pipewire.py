@@ -21,6 +21,10 @@ from . import config
 
 RATES = [48000, 96000, 192000, 384000]  # what the AE-9 driver plays (pcm_rates=1)
 RATES_CONF = os.path.expanduser("~/.config/pipewire/pipewire.conf.d/90-sbae9-sbc-rates.conf")
+# The mic / line-in's own sample rate: a WirePlumber rule on that one source
+# (written only when you pick a rate; Automatic removes it).
+MIC_CONF = os.path.expanduser("~/.config/wireplumber/wireplumber.conf.d/91-sbae9-sbc-mic.conf")
+MIC_RATES = (48000, 96000)
 
 
 def _run(*args, timeout=3):
@@ -49,14 +53,22 @@ def _is_ae9(props):
     return "AE9" in text or "AE-9" in text or "creative_ae9" in text
 
 
-# The optical (S/PDIF) input: its own capture PCM (hw:AE9,1), made a PipeWire
-# source by the driver's optional config/ae9-optical-in.conf. Never the mic.
-OPTICAL_IN = "alsa_input.ae9_optical"
+# The AE-9's extra capture devices, each its own PipeWire source made by an
+# optional drop-in from the driver (config/ae9-optical-in.conf,
+# config/ae9-what-u-hear.conf). Never taken for the XLR mic.
+EXTRA_INPUTS = {
+    "optical_in": ("alsa_input.ae9_optical", 1),       # optical (S/PDIF) in, hw:AE9,1
+    "what_u_hear": ("alsa_input.ae9_what_u_hear", 2),  # what the card plays, hw:AE9,2
+}
+OPTICAL_IN = EXTRA_INPUTS["optical_in"][0]
 
 
-def _is_optical_in(props):
+def _extra_input(props):
     path = str(props.get("api.alsa.path", ""))
-    return props.get("node.name") == OPTICAL_IN or (path.startswith("hw:AE9,") and path.endswith(",1"))
+    for key, (name, dev) in EXTRA_INPUTS.items():
+        if props.get("node.name") == name or (path.startswith("hw:AE9,") and path.endswith(f",{dev}")):
+            return key
+    return None
 
 
 class Nodes:
@@ -64,7 +76,8 @@ class Nodes:
 
     def __init__(self, objs=None):
         objs = dump() if objs is None else objs
-        self.sink = self.source = self.device = self.optical_in = None
+        self.sink = self.source = self.device = None
+        self.optical_in = self.what_u_hear = None
         self.default_sink = self.default_source = None
         for o in objs:
             info = o.get("info") or {}
@@ -79,14 +92,14 @@ class Nodes:
                         self.default_sink = name
                     elif m.get("key") == "default.audio.source":
                         self.default_source = name
-            optical = mc == "Audio/Source" and _is_optical_in(props)
-            if not (optical or _is_ae9(props)):
+            extra = _extra_input(props) if mc == "Audio/Source" else None
+            if not (extra or _is_ae9(props)):
                 continue
             node = {"id": o["id"], "name": props.get("node.name"), "state": info.get("state"),
                     "description": props.get("node.description"), "props": props,
                     "params": info.get("params") or {}}
-            if optical:
-                self.optical_in = self.optical_in or node
+            if extra:
+                setattr(self, extra, getattr(self, extra) or node)
             elif mc == "Audio/Sink" and not self.sink:
                 self.sink = node
             elif mc == "Audio/Source" and not self.source:
@@ -104,7 +117,10 @@ class Nodes:
 
     @property
     def optical_in_is_default(self):
-        return bool(self.optical_in and self.optical_in["name"] == self.default_source)
+        return self.is_default_source(self.optical_in)
+
+    def is_default_source(self, node):
+        return bool(node and node["name"] == self.default_source)
 
     def sink_format(self):
         """(rate, format) the sink is running at, or None when idle."""
@@ -345,6 +361,16 @@ def reopen_sink(nodes):
             and _run("pactl", "suspend-sink", name, "0") is not None)
 
 
+def reopen_source(nodes):
+    """Suspend and resume the mic / line-in source so the capture reopens
+    (a new capture bit depth takes effect on the next open)."""
+    if not nodes.source:
+        return False
+    name = nodes.source["name"]
+    return (_run("pactl", "suspend-source", name, "1") is not None
+            and _run("pactl", "suspend-source", name, "0") is not None)
+
+
 def card_stream(card_id="AE9"):
     """(rate, channels) the card's playback PCM is open at, or None when closed."""
     try:
@@ -357,6 +383,65 @@ def card_stream(card_id="AE9"):
     if not rate:
         return None
     return int(rate.group(1)), int(ch.group(1)) if ch else 2
+
+
+def capture_stream(card_id="AE9"):
+    """(rate, channels) the mic / line-in capture is open at, or None."""
+    try:
+        with open(f"/proc/asound/{card_id}/pcm0c/sub0/hw_params") as f:
+            text = f.read()
+    except OSError:
+        return None
+    rate = re.search(r"^rate:\s*(\d+)", text, re.M)
+    ch = re.search(r"^channels:\s*(\d+)", text, re.M)
+    return (int(rate.group(1)), int(ch.group(1)) if ch else 2) if rate else None
+
+
+def mic_rates(nodes):
+    """Rates the mic / line-in can record at, from what the driver offers
+    (48 kHz only before driver 0.9.1, 48 and 96 kHz after)."""
+    src = nodes.source
+    for f in ((src or {}).get("params") or {}).get("EnumFormat", []):
+        r = f.get("rate")
+        if isinstance(r, dict) and "max" in r:
+            return [x for x in MIC_RATES if r.get("min", 0) <= x <= r["max"]]
+        if isinstance(r, int):
+            return [x for x in MIC_RATES if x == r]
+    return [48000]
+
+
+def mic_rate_setting():
+    """The rate the app set for the mic (None = PipeWire decides)."""
+    try:
+        with open(MIC_CONF) as f:
+            m = re.search(r"audio\.rate\s*=\s*(\d+)", f.read())
+    except OSError:
+        return None
+    return int(m.group(1)) if m else None
+
+
+def set_mic_rate(source_name, rate):
+    """Record the mic / line-in at `rate` (None = follow PipeWire): a
+    WirePlumber rule for that source. Rule props only apply when a node is
+    created, so WirePlumber is restarted: audio on every device drops for a
+    moment."""
+    if rate:
+        os.makedirs(os.path.dirname(MIC_CONF), exist_ok=True)
+        with open(MIC_CONF, "w") as f:
+            f.write("# Written by Sound Blaster Command (sbae9-sbc): the AE-9 mic / line-in's\n"
+                    "# sample rate. Pick Automatic in the app, or delete this file, to undo.\n"
+                    "monitor.alsa.rules = [\n"
+                    "  {\n"
+                    f'    matches = [ {{ node.name = "{source_name}" }} ]\n'
+                    f"    actions = {{ update-props = {{ audio.rate = {int(rate)} }} }}\n"
+                    "  }\n"
+                    "]\n")
+    else:
+        try:
+            os.remove(MIC_CONF)
+        except FileNotFoundError:
+            return
+    _run("systemctl", "--user", "restart", "wireplumber", timeout=10)
 
 
 # --- test tone ----------------------------------------------------------------

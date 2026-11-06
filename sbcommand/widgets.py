@@ -7,7 +7,7 @@ from PySide6.QtCore import (Property, QEasingCurve, QEvent, QPointF, QPropertyAn
                             QTimer, Signal)
 from PySide6.QtGui import (QBrush, QColor, QFont, QLinearGradient, QPainter, QPainterPath, QPen,
                            QRadialGradient)
-from PySide6.QtWidgets import (QAbstractButton, QHBoxLayout, QLabel, QPushButton, QSizePolicy,
+from PySide6.QtWidgets import (QAbstractButton, QButtonGroup, QHBoxLayout, QLabel, QPushButton, QSizePolicy,
                                QSlider, QToolButton, QVBoxLayout, QWidget)
 
 from . import icons
@@ -52,6 +52,38 @@ class Throttle:
 
 
 # --------------------------------------------------------------------------------
+class TabBar(QWidget):
+    """Text tabs under a page title (accent + underline on the active one)."""
+    changed = Signal(int)
+
+    def __init__(self, names, parent=None):
+        super().__init__(parent)
+        self.setObjectName("tabBar")
+        self.setAttribute(Qt.WA_StyledBackground, True)
+        row = QHBoxLayout(self)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(28)
+        self.group = QButtonGroup(self)
+        self.buttons = []
+        for i, name in enumerate(names):
+            b = QPushButton(name)
+            b.setObjectName("pageTab")
+            b.setCheckable(True)
+            b.setCursor(Qt.PointingHandCursor)
+            b.setFocusPolicy(Qt.TabFocus)
+            self.group.addButton(b, i)
+            row.addWidget(b)
+            self.buttons.append(b)
+        row.addStretch()
+        self.group.idClicked.connect(self.changed)
+
+    def set_current(self, i):
+        self.buttons[i].setChecked(True)
+
+    def current(self):
+        return self.group.checkedId()
+
+
 class ToggleSwitch(QAbstractButton):
     """Pill switch like the Creative app's (teal when on)."""
 

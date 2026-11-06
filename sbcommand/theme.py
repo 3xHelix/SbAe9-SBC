@@ -150,7 +150,13 @@ QMainWindow, #root {{ background: {MAIN_TOP}; }}
 #pageTitle {{ font-size: 23px; font-weight: 700; }}
 #sectionTitle {{ font-size: 15px; font-weight: 700; }}
 #subTitle {{ font-size: 16px; font-weight: 700; }}
-#tabActive {{ font-size: 16px; font-weight: 700; color: {ACCENT}; }}
+#tabBar {{ border-bottom: 1px solid {rgba(OVERLAY, 0.10)}; }}
+#pageTab {{
+    background: transparent; border: none; border-bottom: 2px solid transparent; border-radius: 0;
+    padding: 4px 0 6px 0; font-size: 16px; font-weight: 700; color: {MUTED};
+}}
+#pageTab:hover {{ color: {TEXT}; }}
+#pageTab:checked {{ color: {ACCENT}; border-bottom: 2px solid {ACCENT}; }}
 #muted, .muted {{ color: {MUTED}; font-size: 13px; }}
 #hint {{ color: {MUTED}; font-size: 13px; }}
 #bigValue {{ font-size: 15px; font-weight: 700; }}

@@ -23,7 +23,8 @@ DAC_FILTER = "DAC Filter"              # Default / Fast / Slow
 DIRECT = "Direct Mode Switch"
 SBX = "SBX Switch"
 OPTICAL_OUT = "Optical Out Playback Switch"   # newer drivers: optical plays what the main output plays
-BIT_DEPTH = "PCM Bit Depth"             # 24-bit / 32-bit (newer drivers), next stream open
+BIT_DEPTH = "PCM Bit Depth"
+CAP_BIT_DEPTH = "Capture Bit Depth"       # 24-bit / 32-bit recording (newer drivers), next open             # 24-bit / 32-bit (newer drivers), next stream open
 SPEAKER_CFG = "Speaker Config"         # 2.0 / 2.1
 SV_MODE = "FX Smart Volume Mode"       # Normal / Loud / Night
 EQ_ON = "EQ Switch"
@@ -252,6 +253,11 @@ def module_param(name):
             return f.read().strip()
     except OSError:
         return None
+
+
+def has_capture_pcm(device, card_id="AE9"):
+    """The driver offers capture device `device` (1 = optical in, 2 = What U Hear)."""
+    return os.path.exists(f"/proc/asound/{card_id}/pcm{device}c")
 
 
 def module_version():

@@ -3,6 +3,54 @@
 Sound Blaster Command for Linux: the UI for the Creative Sound Blaster AE-9
 driver ([SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv)).
 
+## 0.7.0 (2026-11-06)
+
+More stuff, more tabs. Playback, Recording and Settings now have tabs across
+the top like on Windows, so new things have somewhere to live instead of
+piling up on one page. The app remembers which tab you were on. Goes with
+[SbAe9-Drv v0.9.1](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.9.1):
+What U Hear needs v0.9.0 or newer, recording at 96 kHz / 32-bit v0.9.1.
+Older drivers still work; the new bits just stay hidden or greyed out.
+
+### Added
+
+- **Playback → Digital**: Optical Out moved here, with what the optical jack
+  is getting right now (e.g. "96 kHz · 24-bit · stereo").
+- **Recording → Other Input**: Optical In and **What U Hear** (records
+  whatever the card plays, for streaming or capturing; needs driver v0.9.0
+  or newer and its `ae9-what-u-hear.conf`). Each has its own Set Default,
+  or tells you how to set it up.
+- **Settings → Application / Device**: looks and start-up on one tab, the
+  card's info, reset and every hardware control on the other.
+- **Start Sound Blaster Command when you log in** (Settings → Application).
+- **Mic sample rate and bit depth** (Recording → Microphone → Quality):
+  Automatic, 48 or 96 kHz, plus what it's recording at right now. 96 kHz
+  needs driver v0.9.1 or newer; older drivers offer 48 only.
+  Changing the rate restarts WirePlumber, so audio on every device drops for
+  a moment; the app asks first. Bit depth is 24-bit, or 24 / 32-bit (as
+  Windows) with driver 0.9.1 or newer, from the next recording. 32-bit is
+  full 32-bit samples from the card's DSP; it sounds the same as 24-bit,
+  but it's there if your workflow wants it.
+- The Recording page uses the input's desktop name ("AE-9 Mic / Line In"
+  with the driver's naming rule), and says the XLR / TRS jack and the head
+  unit's 3.5 mm line-in share it.
+
+### Changed
+
+- All three start-up options (start at login, re-apply the SBX profile,
+  reload the last sample rate) are off until you turn them on. Out of the
+  box the app changes nothing at start; it just shows what's running.
+  Already turned one on? It stays on.
+
+### Fixed
+
+- **Dropdowns at a UI scale other than 100%** opened way off to the side of
+  their box on Wayland (a Qt bug with scaled popups). A scaled app now runs
+  through XWayland, where the lists drop right where they should; at 100%
+  it stays native Wayland. A `QT_QPA_PLATFORM` you set yourself still wins.
+- The mic level meter kept running while you weren't looking at it; it now
+  only runs on the Microphone tab.
+
 ## 0.6.0 (2026-11-05)
 
 Optical has entered the chat. Needs

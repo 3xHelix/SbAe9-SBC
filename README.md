@@ -17,11 +17,11 @@ switches and adjusts them.
 |---|---|---|
 | **SBX Profile** | SBX on/off; Surround, Crystalizer, Bass, Smart Volume (Night/Normal/Loud), Dialog+; built-in and personal profiles | card DSP (ALSA `SBX Switch`, `FX …`) |
 | **Equalizer** | 10-band EQ + pre-gain, Creative's 20 presets, your own saved curves | card DSP (`EQ …`) |
-| **Playback** | Speakers / headphones, speaker config (2.0 – 5.1) with matching stereo / 5.1 stream, Direct Mode, DAC filter, sample rate and bit depth, optical out, default device, spoken speaker test | ALSA + PipeWire |
-| **Recording** | XLR mic level, XLR gain (0/+10/+20 dB), live input meter, mute, "listen to mic", default device, optical in | ALSA + PipeWire |
+| **Playback** | Speakers / headphones, speaker config (2.0 – 5.1) with matching stereo / 5.1 stream, Direct Mode, DAC filter, sample rate and bit depth, default device, spoken speaker test; **Digital** tab: optical out | ALSA + PipeWire |
+| **Recording** | XLR mic level, XLR gain (0/+10/+20 dB), live input meter, mute, "listen to mic", sample rate (48 / 96 kHz), default device; **Other Input** tab: optical in, What U Hear | ALSA + PipeWire |
 | **Scout Mode** | Creative's Scout Mode (footstep EQ + Smart Volume) | card DSP |
 | **Mixer** | Output volume (same as the head-unit knob), mute, per-channel levels (Front Left / Right, …), mic level | ALSA + PipeWire |
-| **Settings** | Colour palette (Command, Helix, Albino or Wololo), UI scale (70–150%), own title bar or the desktop frame, driver/device info, every ALSA control (including inactive ones), reset | ALSA |
+| **Settings** | **Application** tab: colour palette (Command, Helix, Albino or Wololo), UI scale (70–150%), own title bar or the desktop frame, start at login; **Device** tab: driver/device info, every ALSA control (including inactive ones), reset | ALSA |
 
 ## Screenshots
 
@@ -74,10 +74,15 @@ doesn't support these yet.
   [v0.7.0](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.7.0) or newer
   (with its `surround_96k` option on, the default). Older drivers play 5.1 at
   48 kHz.
+- For recording at 96 kHz and 32-bit: driver
+  [v0.9.1](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.9.1) or newer.
 - For optical (S/PDIF) out and in: driver
   [v0.8.0](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.8.0) or newer.
   Optical in also needs the driver's
   `config/ae9-optical-in.conf` in `~/.config/pipewire/pipewire.conf.d/`.
+- For What U Hear: driver
+  [v0.9.0](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.9.0) or newer, with its
+  `config/ae9-what-u-hear.conf` in the same folder.
 - `alsa-utils` for the spoken speaker test (it brings the "Front Left…"
   voice files); without it the test plays a tone.
 - Python 3, PySide6 (`sudo dnf install python3-pyside6`), PipeWire tools
@@ -99,7 +104,7 @@ doesn't support these yet.
 python3 -m unittest discover -s tests
 ```
 
-About 70 tests, a few seconds, no card needed. They run against a fake AE-9
+About 90 tests, a few seconds, no card needed. They run against a fake AE-9
 (control shapes copied from a real card on driver 0.6.8) and a fake
 PipeWire, with settings in a temp folder: nothing touches your card, your
 PipeWire or `~/.config`. They cover the rate rules (caps, quantum, hands off
@@ -112,6 +117,11 @@ EQ preset list, per-channel volume and the speaker test.
 - `~/.config/pipewire/pipewire.conf.d/90-sbae9-sbc-rates.conf` — only if you
   pick an *Audio Quality* setting (PipeWire's allowed/forced sample rate).
   Delete it to go back to PipeWire's defaults.
+- `~/.config/wireplumber/wireplumber.conf.d/91-sbae9-sbc-mic.conf` — only
+  if you pick a mic sample rate (Recording → Microphone). Automatic removes
+  it.
+- `~/.config/autostart/sbae9-sbc.desktop` — only while "Start Sound Blaster
+  Command when you log in" is on.
 
 ## Layout
 

@@ -176,6 +176,33 @@ class Context(QObject):
         self.applier.submit(Change("depth", f"Bit depth: {name}", run, 4000, self._sink_ok,
                                    lambda: self.card.get(C.BIT_DEPTH) != k))
 
+    def set_mic_rate(self, rate):
+        """Record the mic / line-in at `rate` (None = PipeWire decides). Goes
+        through a WirePlumber restart, which re-creates the card's nodes."""
+        src = self.pw.nodes.source
+        if not src:
+            return
+
+        def settled():
+            n = self.pw.nodes
+            return n.source is not None and self._sink_ok()
+
+        text = f"Mic sample rate: {rate / 1000:g} kHz" if rate else "Mic sample rate: automatic"
+        self.applier.submit(Change(
+            "mic_rate", text, lambda: pipewire.set_mic_rate(src["name"], rate), 5000, settled,
+            lambda: pipewire.mic_rate_setting() != rate))
+
+    def set_capture_depth(self, k):
+        items = self.card.items(C.CAP_BIT_DEPTH)
+        name = items[k] if 0 <= k < len(items) else str(k)
+
+        def run():
+            self.card.set(C.CAP_BIT_DEPTH, k)
+            pipewire.reopen_source(self.pw.nodes)   # taken when the capture opens
+
+        self.applier.submit(Change("cap_depth", f"Mic bit depth: {name}", run, 4000, self._sink_ok,
+                                   lambda: self.card.get(C.CAP_BIT_DEPTH) != k))
+
     def restore_rate(self):
         """Restore the saved pick at start, once the first PipeWire snapshot
         is in: before it, a 5.1 profile isn't known yet and the cap would be

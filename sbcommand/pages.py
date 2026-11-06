@@ -13,9 +13,9 @@ from PySide6.QtWidgets import (QButtonGroup, QCheckBox, QComboBox, QFrame, QGrid
 
 from . import __version__
 from . import card as C
-from . import icons, pipewire, profiles
+from . import config, icons, pipewire, profiles
 from . import theme as T
-from .widgets import (Dial, EffectControl, EqGraph, LevelBar, PaletteCard, ProfileCarousel, Segmented,
+from .widgets import (TabBar, Dial, EffectControl, EqGraph, LevelBar, PaletteCard, ProfileCarousel, Segmented,
                       SpeakerDiagram, Throttle, ToggleSwitch, VolumeRow, label)
 
 
@@ -61,6 +61,41 @@ class Banner(QFrame):
             lay.addWidget(self.button)
 
 
+class TabPages(QWidget):
+    """The pages behind a TabBar. Only the shown one is visible, so only it
+    counts toward the height (a short tab doesn't scroll because a long one
+    is behind it, as it would in a QStackedWidget)."""
+
+    def __init__(self):
+        super().__init__()
+        self._lay = QVBoxLayout(self)
+        self._lay.setContentsMargins(0, 0, 0, 0)
+        self._pages, self._current = [], -1
+
+    def addWidget(self, w):
+        self._pages.append(w)
+        self._lay.addWidget(w)
+        w.setVisible(False)
+        return len(self._pages) - 1
+
+    def count(self):
+        return len(self._pages)
+
+    def widget(self, i):
+        return self._pages[i]
+
+    def currentIndex(self):
+        return self._current
+
+    def currentWidget(self):
+        return self._pages[self._current] if 0 <= self._current < len(self._pages) else None
+
+    def setCurrentIndex(self, i):
+        self._current = i
+        for k, w in enumerate(self._pages):
+            w.setVisible(k == i)
+
+
 class Page(QWidget):
     title = ""
 
@@ -104,6 +139,36 @@ class Page(QWidget):
         row.addStretch()
         self.lay.addLayout(row)
         return row
+
+    def add_tabs(self, names):
+        """Tabs under the page title. Returns one layout per tab; the last
+        tab picked on this page comes back next time."""
+        self.tab_bar = TabBar(names)
+        self.tab_stack = TabPages()
+        lays = []
+        for _ in names:
+            w = QWidget()
+            lay = QVBoxLayout(w)
+            lay.setContentsMargins(0, 6, 0, 0)
+            lay.setSpacing(12)
+            self.tab_stack.addWidget(w)
+            lays.append(lay)
+        self.lay.addWidget(self.tab_bar)
+        self.lay.addWidget(self.tab_stack, 1)
+        saved = (self.ctx.settings["tabs"] or {}).get(self.title, 0)
+        self.show_tab(saved if isinstance(saved, int) and 0 <= saved < len(names) else 0, save=False)
+        self.tab_bar.changed.connect(self.show_tab)
+        return lays
+
+    def show_tab(self, i, save=True):
+        self.tab_bar.set_current(i)
+        self.tab_stack.setCurrentIndex(i)
+        if save:
+            tabs = dict(self.ctx.settings["tabs"] or {})
+            tabs[self.title] = i
+            self.ctx.settings["tabs"] = tabs
+            if self.isVisible():
+                self.refresh()
 
     def _changed(self, name):
         if self.isVisible():
@@ -471,10 +536,7 @@ class PlaybackPage(Page):
     def __init__(self, ctx):
         super().__init__(ctx)
         self.header("Playback")
-        tabs = QHBoxLayout()
-        tabs.addWidget(label("Speakers/Headphones", "tabActive"))
-        tabs.addStretch()
-        self.lay.addLayout(tabs)
+        self.lay, digital = self.add_tabs(["Speakers/Headphones", "Digital"])
 
         grid = QGridLayout()
         grid.setHorizontalSpacing(30)
@@ -565,13 +627,13 @@ class PlaybackPage(Page):
         dmr.addStretch()
         left.addLayout(dmr)
 
-        # optical (S/PDIF) out, on drivers that have it
+        # optical (S/PDIF) out, on drivers that have it (Digital tab)
         self.optical_box = QWidget()
         ob = QVBoxLayout(self.optical_box)
-        ob.setContentsMargins(0, 6, 0, 0)
-        ob.setSpacing(6)
+        ob.setContentsMargins(0, 0, 0, 0)
+        ob.setSpacing(8)
         oh = QHBoxLayout()
-        oh.addWidget(label("Optical Out", "sectionTitle"))
+        oh.addWidget(label("Optical Out (S/PDIF)", "sectionTitle"))
         oh.addWidget(info_button(OPTICAL_TIP))
         oh.addStretch()
         ob.addLayout(oh)
@@ -585,8 +647,20 @@ class PlaybackPage(Page):
         ob.addLayout(orow)
         self.optical_note = label("", "hint", wrap=True)
         ob.addWidget(self.optical_note)
+        ob.addSpacing(6)
+        ob.addWidget(label("Audio Quality", "sectionTitle"))
+        self.optical_quality = label("", "bigValue")
+        ob.addWidget(self.optical_quality)
+        ob.addWidget(label(
+            "Optical plays the same audio as the main output, so its quality is set on the "
+            "Speakers/Headphones tab: stereo, 24-bit, 48–192 kHz reaches the optical jack "
+            "bit for bit. It's taken before the DSP, so SBX and the EQ aren't on it, and the "
+            "volume knob doesn't change it: set the level on your receiver.", "hint", wrap=True))
         self.optical_box.setVisible(False)
-        left.addWidget(self.optical_box)
+        digital.addWidget(self.optical_box)
+        self.optical_missing = label("Optical out and in need driver v0.8.0 or newer.", "muted", wrap=True)
+        digital.addWidget(self.optical_missing)
+        digital.addStretch()
 
         right = QVBoxLayout()
         right.setAlignment(Qt.AlignTop | Qt.AlignHCenter)
@@ -756,7 +830,7 @@ class PlaybackPage(Page):
         direct = bool(self.card.get(C.DIRECT, True)) if self.card.present else True
         note = ""
         if C.module_param("pcm_rates") == "0":
-            note = "High rates are off in the driver (pcm_rates=0; see Settings)."
+            note = "High rates are off in the driver (pcm_rates=0; see Settings → Device)."
         elif not direct:
             note = "DSP mode runs at 48 kHz."
         elif n.stream_layout() == "surround":
@@ -875,8 +949,16 @@ class PlaybackPage(Page):
     def _refresh_optical(self, layout):
         has = self.card.has(C.OPTICAL_OUT)
         self.optical_box.setVisible(has)
+        self.optical_missing.setVisible(not has)
         if not has:
             return
+        live = pipewire.card_stream()
+        bits = (self.card.get_item(C.BIT_DEPTH) or "") if self.card.has(C.BIT_DEPTH) else ""
+        if live:
+            ch = {1: "mono", 2: "stereo", 6: "5.1"}.get(live[1], f"{live[1]} ch")
+            self.optical_quality.setText(" · ".join(x for x in (f"{live[0] / 1000:g} kHz", bits, ch) if x))
+        else:
+            self.optical_quality.setText("Nothing playing")
         on = bool(self.card.get(C.OPTICAL_OUT))
         self.optical.setCheckedSilently(on)
         why = self.optical_silent_because(layout) if on else []
@@ -914,6 +996,70 @@ SPEAKER_TEXT = {
 }
 
 
+class InputSection(QWidget):
+    """One of the AE-9's extra recording devices (Recording → Other Input):
+    its PipeWire source with Set Default, or how to set it up."""
+
+    def __init__(self, key, title, default_name, device, about, conf):
+        super().__init__()
+        self.key, self.default_name, self.device = key, default_name, device
+        self.about, self.conf = about, conf
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(0, 0, 0, 10)
+        lay.setSpacing(6)
+        lay.addWidget(label(title, "subTitle"))
+        row = QHBoxLayout()
+        self.name = label("", "sectionTitle")
+        row.addWidget(self.name)
+        row.addStretch()
+        self.set_default = QPushButton("Set Default")
+        self.set_default.setMinimumWidth(150)
+        self.set_default.clicked.connect(self._make_default)
+        self.ok = QLabel()
+        row.addWidget(self.set_default)
+        row.addWidget(self.ok)
+        lay.addLayout(row)
+        self.note = label("", "hint", wrap=True)
+        lay.addWidget(self.note)
+        self.node = None
+        self.setVisible(False)
+
+    def _make_default(self):
+        if self.node:
+            pipewire.set_default(self.node["id"])
+            w = self.window()
+            ctx = getattr(w, "ctx", None)
+            if ctx:
+                ctx.pw.refresh()
+
+    def refresh(self, n, card):
+        """Show this input if PipeWire lists it or the driver has it. Returns
+        whether it's shown."""
+        self.node = getattr(n, self.key)
+        has = bool(self.node) or C.has_capture_pcm(self.device) or (
+            self.key == "optical_in" and card.has(C.OPTICAL_OUT))
+        self.setVisible(has)
+        if not has:
+            return False
+        found = bool(self.node)
+        self.name.setText((self.node.get("description") or self.default_name) if found
+                          else "Not set up in PipeWire")
+        self.set_default.setVisible(found)
+        self.ok.setVisible(found)
+        if found:
+            default = n.is_default_source(self.node)
+            self.set_default.setEnabled(not default)
+            self.set_default.setText("Default device" if default else "Set Default")
+            self.ok.setPixmap(icons.pixmap("check", T.ACCENT_HI if default else T.DIM, 22))
+            self.note.setText(self.about)
+        else:
+            self.note.setText(
+                f"The driver has it, but PipeWire doesn't list it yet. Copy config/{self.conf} "
+                "from the driver to ~/.config/pipewire/pipewire.conf.d/ and restart PipeWire "
+                "(systemctl --user restart pipewire).")
+        return True
+
+
 # =====================================================================================
 class RecordingPage(Page):
     title = "Recording"
@@ -921,6 +1067,7 @@ class RecordingPage(Page):
     def __init__(self, ctx):
         super().__init__(ctx)
         self.header("Recording")
+        self.lay, other = self.add_tabs(["Microphone", "Other Input"])
         dev = QHBoxLayout()
         dcol = QVBoxLayout()
         dcol.setSpacing(0)
@@ -975,35 +1122,60 @@ class RecordingPage(Page):
                            "(use headphones to avoid feedback)", "muted"))
         lr.addStretch()
         g.addLayout(lr, 4, 1, 1, 2)
+        g.addWidget(label("Quality"), 5, 0)
+        qr = QHBoxLayout()
+        qr.setSpacing(10)
+        self.mic_rate = QComboBox()
+        self.mic_rate.setMinimumWidth(180)
+        self.mic_rate.activated.connect(self._mic_rate)
+        qr.addWidget(self.mic_rate)
+        self.mic_depth = QComboBox()
+        self.mic_depth.activated.connect(self._mic_depth)
+        self.mic_depth.setMinimumWidth(110)
+        qr.addWidget(self.mic_depth)
+        qr.addWidget(info_button(
+            "The sample rate the card records the mic / line-in at.\n\n"
+            "Automatic lets PipeWire pick (it follows the playback side, usually 48 kHz). "
+            "A fixed rate makes the input open at that rate whatever else plays.\n\n"
+            "96 kHz needs driver 0.9.1 or newer. Changing the rate restarts WirePlumber, so "
+            "audio on every device drops for a moment, and a recording already running keeps "
+            "its old rate until it starts again.\n\n"
+            "Bit depth: 24-bit, or with driver 0.9.1 or newer also 32-bit, as Windows offers. "
+            "32-bit gives full 32-bit samples from the card's DSP; it sounds the same as "
+            "24-bit in practice. It applies from the next recording."))
+        qr.addStretch()
+        g.addLayout(qr, 5, 1, 1, 2)
+        self.mic_now = label("", "muted")
+        g.addWidget(self.mic_now, 6, 1, 1, 2)
         g.setColumnStretch(1, 1)
         self.lay.addLayout(g)
         self.lay.addSpacing(8)
         self.lay.addWidget(label(
-            "Phantom power (48V) is the button on the head unit's front panel. "
-            "The driver records at 48 kHz, 2 channels.", "hint", wrap=True))
+            "Phantom power (48V) is the button on the head unit's front panel. The XLR / TRS "
+            "jack and the head unit's 3.5 mm line-in share this input.", "hint", wrap=True))
 
-        # optical (S/PDIF) in: its own device, records alongside the mic
-        self.optical_box = QWidget()
-        ob = QVBoxLayout(self.optical_box)
-        ob.setContentsMargins(0, 10, 0, 0)
-        ob.setSpacing(6)
-        ob.addWidget(label("Optical In (S/PDIF)", "subTitle"))
-        orow = QHBoxLayout()
-        self.optical_name = label("", "sectionTitle")
-        orow.addWidget(self.optical_name)
-        orow.addStretch()
-        self.optical_default = QPushButton("Set Default")
-        self.optical_default.setMinimumWidth(150)
-        self.optical_default.clicked.connect(self._optical_default)
-        self.optical_ok = QLabel()
-        orow.addWidget(self.optical_default)
-        orow.addWidget(self.optical_ok)
-        ob.addLayout(orow)
-        self.optical_note = label("", "hint", wrap=True)
-        ob.addWidget(self.optical_note)
-        self.optical_box.setVisible(False)
-        self.lay.addWidget(self.optical_box)
         self.lay.addStretch()
+
+        # extra inputs: each its own device, recording alongside the mic
+        self.inputs = [
+            InputSection("optical_in", "Optical In (S/PDIF)", "AE-9 Optical In", 1,
+                         "Records alongside the XLR mic, as its own device: pick it in your "
+                         "recording app. S/PDIF can't be resampled, so it opens at the sender's "
+                         "rate (44.1–192 kHz) and won't open at all without a signal.",
+                         "ae9-optical-in.conf"),
+            InputSection("what_u_hear", "What U Hear", "AE-9 What U Hear", 2,
+                         "Records what the card plays: games, music, calls, all of it, at "
+                         "48 kHz. Handy for streaming or capturing the card's own output. With "
+                         "SBX on you get the effects too; with SBX off it's the stream exactly "
+                         "as sent.",
+                         "ae9-what-u-hear.conf"),
+        ]
+        for sec in self.inputs:
+            other.addWidget(sec)
+        self.other_none = label("No other inputs on this driver yet: optical in needs v0.8.0 or "
+                                "newer, What U Hear v0.9.0 or newer.", "muted", wrap=True)
+        other.addWidget(self.other_none)
+        other.addStretch()
         ctx.meter.levels.connect(self._levels)
         ctx.monitor.state.connect(self.listen.setCheckedSilently)
         ctx.pw.updated.connect(self._on_pw)
@@ -1019,36 +1191,75 @@ class RecordingPage(Page):
         if n.source:
             pipewire.set_mute(n.source["id"], muted)
 
-    def _optical_default(self):
-        n = self.ctx.pw.nodes
-        if n.optical_in:
-            pipewire.set_default(n.optical_in["id"])
-            self.ctx.pw.refresh()
-
-    def _refresh_optical(self, n):
-        has = bool(n.optical_in) or self.card.has(C.OPTICAL_OUT)
-        self.optical_box.setVisible(has)
-        if not has:
+    def _mic_rate(self, i):
+        rate = self.mic_rate.itemData(i)
+        if rate == pipewire.mic_rate_setting():
             return
-        found = bool(n.optical_in)
-        self.optical_name.setText((n.optical_in.get("description") or "AE-9 Optical In") if found
-                                  else "Not set up in PipeWire")
-        self.optical_default.setVisible(found)
-        self.optical_ok.setVisible(found)
-        if found:
-            self.optical_default.setEnabled(not n.optical_in_is_default)
-            self.optical_default.setText("Default device" if n.optical_in_is_default else "Set Default")
-            self.optical_ok.setPixmap(icons.pixmap("check", T.ACCENT_HI if n.optical_in_is_default
-                                                   else T.DIM, 22))
-            self.optical_note.setText(
-                "Records alongside the XLR mic, as its own device: pick it in your recording app. "
-                "S/PDIF can't be resampled, so it opens at the sender's rate (44.1–192 kHz) and "
-                "won't open at all without a signal.")
+        if not self.confirm_wireplumber_restart():
+            self.refresh()
+            return
+        self.ctx.set_mic_rate(rate)
+
+    def confirm_wireplumber_restart(self):
+        return QMessageBox.question(
+            self, "Change the mic sample rate?",
+            "This restarts WirePlumber, so audio on every device drops for a moment "
+            "(music, calls, everything).\n\nChange it now?") == QMessageBox.Yes
+
+    def _mic_depth(self, i):
+        k = self.mic_depth.itemData(i)
+        if k is not None and self.card.has(C.CAP_BIT_DEPTH) and k != self.card.get(C.CAP_BIT_DEPTH):
+            self.ctx.set_capture_depth(k)
+
+    def _refresh_mic_quality(self, n):
+        rates = pipewire.mic_rates(n)
+        if self.mic_rate.count() == 0:
+            self.mic_rate.addItem("Automatic", None)
+            for r in pipewire.MIC_RATES:
+                self.mic_rate.addItem(f"{r / 1000:g} kHz", r)
+        model = self.mic_rate.model()
+        for k in range(1, self.mic_rate.count()):
+            model.item(k).setEnabled(self.mic_rate.itemData(k) in rates)
+        self.mic_rate.setEnabled(bool(n.source))
+        chosen = pipewire.mic_rate_setting()
+        i = self.mic_rate.findData(chosen)
+        self.mic_rate.setCurrentIndex(i if i >= 0 else 0)
+        # bit depth: a card control on newer drivers, else the fixed 24-bit
+        items = self.card.items(C.CAP_BIT_DEPTH) if self.card.has(C.CAP_BIT_DEPTH) else []
+        if items:
+            labels = [f"{it} (as Windows)" if it.startswith("32") else it for it in items]
+            if [self.mic_depth.itemText(k) for k in range(self.mic_depth.count())] != labels:
+                self.mic_depth.clear()
+                for k, text in enumerate(labels):
+                    self.mic_depth.addItem(text, k)
+                    if text.startswith("32"):
+                        self.mic_depth.setItemData(
+                            k, "Full 32-bit samples from the card's DSP; sounds the same as "
+                               "24-bit in practice.", Qt.ToolTipRole)
+            self.mic_depth.setCurrentIndex(self.card.get(C.CAP_BIT_DEPTH, 0) or 0)
+            self.mic_depth.setEnabled(True)
+            self.mic_depth.setToolTip("Bit depth the card records at; applies from the next recording")
+            bits = items[self.card.get(C.CAP_BIT_DEPTH, 0) or 0]
         else:
-            self.optical_note.setText(
-                "The driver has an optical input, but PipeWire doesn't list it yet. Copy "
-                "config/ae9-optical-in.conf from the driver to ~/.config/pipewire/pipewire.conf.d/ "
-                "and restart PipeWire (systemctl --user restart pipewire).")
+            if self.mic_depth.count() != 1 or self.mic_depth.itemData(0) is not None:
+                self.mic_depth.clear()
+                self.mic_depth.addItem("24-bit", None)
+            self.mic_depth.setEnabled(False)
+            self.mic_depth.setToolTip("The card records 24 bits (sent in 32-bit words). Apps asking "
+                                      "for 16-bit or float get PipeWire's conversion of that.")
+            bits = "24-bit"
+        live = pipewire.capture_stream()
+        if live:
+            ch = {1: "mono", 2: "stereo"}.get(live[1], f"{live[1]} ch")
+            self.mic_now.setText(f"Recording now: {live[0] / 1000:g} kHz · {bits} · {ch}")
+        elif max(rates) < 96000:
+            self.mic_now.setText("This driver records at 48 kHz (96 kHz needs driver 0.9.1 or newer).")
+        else:
+            self.mic_now.setText("Not recording right now.")
+
+    def _refresh_inputs(self, n):
+        shown = [sec.refresh(n, self.card) for sec in self.inputs]
+        self.other_none.setVisible(not any(shown))
 
     def _listen(self, on):
         n = self.ctx.pw.nodes
@@ -1063,25 +1274,43 @@ class RecordingPage(Page):
         top = max(l, r)
         self.peak.setText(f"{top:.0f} dBFS" if top > -89 else "—")
 
+    def _metering(self):
+        """The mic meter runs only while the Microphone tab is on screen."""
+        return self.isVisible() and self.tab_stack.currentIndex() == 0
+
+    def _update_meter(self):
+        n = self.ctx.pw.nodes
+        if n.source and self._metering():
+            if not self.ctx.meter._proc:
+                self.ctx.meter.start(n.source["name"])
+        else:
+            self.ctx.meter.stop()
+
+    def show_tab(self, i, save=True):
+        super().show_tab(i, save)
+        self._update_meter()
+
     def showEvent(self, e):
         super().showEvent(e)
-        n = self.ctx.pw.nodes
-        if n.source:
-            self.ctx.meter.start(n.source["name"])
+        self._update_meter()
 
     def hideEvent(self, e):
         super().hideEvent(e)
-        self.ctx.meter.stop()
+        try:
+            self.ctx.meter.stop()
+        except RuntimeError:     # the app is shutting down and the meter is gone
+            pass
 
     def refresh(self):
         n = self.ctx.pw.nodes
-        self.dev_name.setText("Sound Blaster AE-9 (XLR mic)" if n.source else "AE-9 input not found in PipeWire")
+        self.dev_name.setText((n.source.get("description") or "Sound Blaster AE-9 (XLR mic)") if n.source
+                              else "AE-9 input not found in PipeWire")
         self.set_default.setEnabled(bool(n.source) and not n.source_is_default)
         self.set_default.setText("Default device" if n.source_is_default else "Set Default")
         self.default_ok.setPixmap(icons.pixmap("check", T.ACCENT_HI if n.source_is_default else T.DIM, 22))
-        if n.source and not self.ctx.meter._proc and self.isVisible():
-            self.ctx.meter.start(n.source["name"])
-        self._refresh_optical(n)
+        self._update_meter()
+        self._refresh_inputs(n)
+        self._refresh_mic_quality(n)
         muted = False
         if n.source:
             _, muted = pipewire.get_volume(n.source["id"])
@@ -1323,17 +1552,8 @@ class SettingsPage(Page):
     def __init__(self, ctx):
         super().__init__(ctx)
         self.header("Settings")
-        self.lay.addWidget(label("Device", "sectionTitle"))
-        self.info = label("", "muted", wrap=True)
-        self.info.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        self.lay.addWidget(self.info)
-
-        self.rates_banner = Banner("High sample rates (96–384 kHz) are off in the driver "
-                                   "(pcm_rates=0). Turn them on until the next reboot?",
-                                   "Enable (asks for password)")
-        self.rates_banner.button.clicked.connect(self._enable_rates)
-        self.lay.addWidget(self.rates_banner)
-
+        app, device = self.add_tabs(["Application", "Device"])
+        self.lay = app
         self.lay.addWidget(label("Appearance", "sectionTitle"))
         pal = QHBoxLayout()
         pal.setSpacing(12)
@@ -1372,7 +1592,9 @@ class SettingsPage(Page):
         row.addStretch()
         self.lay.addLayout(row)
         self.lay.addWidget(label("Shrinks or enlarges everything, so the app fits a smaller window. "
-                                 "The window reopens to apply it (about a second).", "hint", wrap=True))
+                                 "The window reopens to apply it (about a second). On a Wayland "
+                                 "desktop, sizes other than 100% run through XWayland, where Qt "
+                                 "puts dropdown lists in the right place.", "hint", wrap=True))
         self._scale_moved(T.SCALE)
 
         self.frameless = QCheckBox("Use the app's own title bar (drag the AE-9 header to move the window)")
@@ -1381,7 +1603,13 @@ class SettingsPage(Page):
         self.frameless.toggled.connect(self._frameless)
         self.lay.addWidget(self.frameless)
 
-        self.lay.addWidget(label("App", "sectionTitle"))
+        self.lay.addWidget(label("Start-up", "sectionTitle"))
+        self.autostart = QCheckBox("Start Sound Blaster Command when you log in")
+        self.autostart.setToolTip("Adds the app to your desktop's autostart "
+                                  "(~/.config/autostart/sbae9-sbc.desktop)")
+        self.autostart.setChecked(config.autostart_enabled())
+        self.autostart.toggled.connect(config.set_autostart)
+        self.lay.addWidget(self.autostart)
         self.restore = QCheckBox("Re-apply the active SBX profile when the app starts")
         self.restore.setToolTip("Usually not needed: the driver and alsa-state keep the card's "
                                 "settings across reboots.")
@@ -1394,6 +1622,24 @@ class SettingsPage(Page):
         self.restore_rate.setChecked(bool(ctx.settings["restore_rate_on_start"]))
         self.restore_rate.toggled.connect(lambda on: ctx.settings.__setitem__("restore_rate_on_start", on))
         self.lay.addWidget(self.restore_rate)
+        self.lay.addStretch()
+
+        # --- Device tab ---
+        self.lay = device
+        self.lay.addWidget(label("Device", "sectionTitle"))
+        self.info = label("", "muted", wrap=True)
+        self.info.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        self.lay.addWidget(self.info)
+
+        self.rates_banner = Banner("High sample rates (96–384 kHz) are off in the driver "
+                                   "(pcm_rates=0). Turn them on until the next reboot?",
+                                   "Enable (asks for password)")
+        self.rates_banner.button.clicked.connect(self._enable_rates)
+        self.lay.addWidget(self.rates_banner)
+
+        self.lay.addWidget(label("Reset to defaults", "sectionTitle"))
+        self.lay.addWidget(label("Puts SBX and the EQ back to the driver's defaults. Your saved "
+                                 "profiles and EQ presets stay.", "hint", wrap=True))
         row = QHBoxLayout()
         reset = QPushButton("Reset SBX and EQ to defaults")
         reset.clicked.connect(self._reset)

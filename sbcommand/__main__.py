@@ -46,6 +46,30 @@ def set_scale(pct, env=os.environ):
         env.pop("QT_SCALE_FACTOR", None)
     else:
         env["QT_SCALE_FACTOR"] = f"{factor:g}"
+    use_xwayland(theme.SCALE != 100, env)
+
+
+# Qt on Wayland puts popups (dropdown lists, menus) in the wrong place when
+# QT_SCALE_FACTOR isn't 1. Through XWayland they line up, so a scaled UI runs
+# there; at 100% the app stays native Wayland. A QT_QPA_PLATFORM the user set
+# is left alone.
+QPA_MARK = "SBAE9_SBC_SET_QPA"
+
+
+def xcb_available():
+    from PySide6.QtCore import QLibraryInfo
+    plugins = QLibraryInfo.path(QLibraryInfo.LibraryPath.PluginsPath)
+    return os.path.exists(os.path.join(plugins, "platforms", "libqxcb.so"))
+
+
+def use_xwayland(scaled, env=os.environ):
+    if env.pop(QPA_MARK, None):              # set by us on an earlier launch
+        env.pop("QT_QPA_PLATFORM", None)
+    wayland = env.get("WAYLAND_DISPLAY") or env.get("XDG_SESSION_TYPE") == "wayland"
+    if (scaled and wayland and env.get("DISPLAY") and "QT_QPA_PLATFORM" not in env
+            and xcb_available()):
+        env["QT_QPA_PLATFORM"] = "xcb"
+        env[QPA_MARK] = "1"
 
 
 def relaunch_args(argv):

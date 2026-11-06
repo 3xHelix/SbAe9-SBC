@@ -90,8 +90,17 @@ class RateTest(RateBase):
         self.assertIn(f"default.clock.allowed-rates = {full}", conf)
 
     # start-up
+    def test_startup_reload_is_off_by_default(self):
+        self.assertFalse(self.ctx.settings["restore_rate_on_start"])
+        self.ctx.settings["rate_mode"] = 96000
+        self.ctx.restore_rate()
+        self.settle()
+        self.assertEqual(self.rate(), (0, 0))
+        self.assertEqual([c for c in S.PW.calls if c[0] == "pw-metadata"], [])
+
     def test_startup_waits_for_pipewire_then_respects_5_1(self):
         S.PW.set_profile(S.SURROUND)
+        self.ctx.settings["restore_rate_on_start"] = True
         self.ctx.settings["rate_mode"] = 96000
         self.ctx.pw.nodes = pipewire.Nodes([])     # nothing known yet
         self.ctx.restore_rate()
@@ -101,6 +110,7 @@ class RateTest(RateBase):
         self.assertEqual(self.rate(), (48000, 0))
 
     def test_startup_does_not_override_a_forced_rate(self):
+        self.ctx.settings["restore_rate_on_start"] = True
         S.PW.settings["clock.force-rate"] = "192000"
         self.ctx.settings["rate_mode"] = 96000
         self.ctx.restore_rate()
@@ -122,9 +132,11 @@ class RateTest(RateBase):
 
     def test_settings_checkbox(self):
         pg = self.page(pages.SettingsPage)
-        self.assertTrue(pg.restore_rate.isChecked())
-        pg.restore_rate.setChecked(False)
-        self.assertFalse(self.ctx.settings["restore_rate_on_start"])
+        self.assertFalse(pg.restore_rate.isChecked())       # off until you want it
+        self.assertFalse(pg.restore.isChecked())
+        self.assertFalse(pg.autostart.isChecked())
+        pg.restore_rate.setChecked(True)
+        self.assertTrue(self.ctx.settings["restore_rate_on_start"])
 
     # experimental 5.1 at 96 kHz
     def test_dragons_only_by_explicit_pick(self):
@@ -167,6 +179,7 @@ class Driver070Test(RateBase):
     def test_5_1_at_96_comes_back_at_start(self):
         S.PW.set_profile(S.SURROUND)
         self.snapshot()
+        self.ctx.settings["restore_rate_on_start"] = True
         self.ctx.settings["rate_mode"] = 96000
         self.ctx.restore_rate()
         self.settle()

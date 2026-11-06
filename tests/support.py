@@ -149,6 +149,15 @@ class FakeMixer:
         self.by_numid[numid] = c
         self.values[name] = value
 
+    def add_enum(self, name, items, value=0):
+        """An enum control the 0.6.8 snapshot doesn't have (e.g. Capture Bit Depth)."""
+        numid = max(self.by_numid) + 1
+        c = alsa.Control(numid=numid, name=name, type=alsa.TYPE_ENUMERATED, count=1,
+                         min=0, max=len(items) - 1, items=list(items), writable=True)
+        self.controls[name] = c
+        self.by_numid[numid] = c
+        self.values[name] = value
+
     def remove(self, name):
         c = self.controls.pop(name)
         self.by_numid.pop(c.numid, None)
@@ -166,6 +175,7 @@ class FakePipeWire:
         self.calls = []          # every command that changes something
         self.processes = []      # QProcess starts: (program, args)
         self.stream = None       # (rate, channels) in /proc hw_params, None = closed
+        self.capture = None      # same, for the mic / line-in capture
 
     # object lookup
     def _obj(self, cls):
@@ -218,14 +228,29 @@ class FakePipeWire:
     def add_optical_in(self, first=True, alsa_props=False):
         """The source node from the driver's ae9-optical-in.conf. alsa_props:
         the card props an opened node carries (they'd match the mic's)."""
-        props = {"node.name": "alsa_input.ae9_optical", "node.description": "AE-9 Optical In",
-                 "media.class": "Audio/Source", "api.alsa.path": "hw:AE9,1", "priority.session": 100}
+        return self.add_input("alsa_input.ae9_optical", "AE-9 Optical In", 1, 999, first, alsa_props)
+
+    def add_what_u_hear(self, first=False, alsa_props=False):
+        return self.add_input("alsa_input.ae9_what_u_hear", "AE-9 What U Hear", 2, 998, first, alsa_props)
+
+    def add_input(self, name, desc, dev, node_id, first, alsa_props):
+        props = {"node.name": name, "node.description": desc, "media.class": "Audio/Source",
+                 "api.alsa.path": f"hw:AE9,{dev}", "priority.session": 100}
         if alsa_props:
             props.update({"alsa.id": "AE9", "alsa.card_name": "Sound Blaster AE-9"})
-        o = {"id": 999, "type": "PipeWire:Interface:Node", "info": {"state": "suspended",
+        o = {"id": node_id, "type": "PipeWire:Interface:Node", "info": {"state": "suspended",
                                                                   "props": props, "params": {}}}
         self.objects.insert(0 if first else len(self.objects), o)
         return o
+
+    @property
+    def source(self):
+        return self._obj("Audio/Source")
+
+    def set_mic_range(self, top):
+        """The rates the driver's capture offers (48 kHz only before 0.9.1)."""
+        self.source["info"]["params"]["EnumFormat"] = [
+            {"format": "S32LE", "rate": {"default": 48000, "min": 48000, "max": top}, "channels": 2}]
 
     def channel_volumes(self):
         for p in self.sink["info"]["params"].get("Props", []):
@@ -282,9 +307,13 @@ alsa.card_longname = lambda idx: "Creative Labs Sound Blaster AE-9 (fake)"
 alsa.Mixer = FakeMixer
 pipewire._run = lambda *a, **k: PW.run(*a, **k)
 pipewire.card_stream = lambda card_id="AE9": PW.stream
+pipewire.capture_stream = lambda card_id="AE9": PW.capture
 pipewire.RATES_CONF = os.path.join(_TMP, "pipewire", "90-sbae9-sbc-rates.conf")
+pipewire.MIC_CONF = os.path.join(_TMP, "wireplumber", "91-sbae9-sbc-mic.conf")
 C.module_param = lambda name: PARAMS.get(name)
 C.module_version = lambda: PARAMS.get("version")
+PCMS = set()   # extra capture devices the fake driver has (1 = optical in, 2 = What U Hear)
+C.has_capture_pcm = lambda device, card_id="AE9": device in PCMS
 import subprocess  # noqa: E402
 subprocess.run = _no_subprocess
 subprocess.Popen = _no_subprocess
@@ -305,11 +334,13 @@ def reset():
     global PW
     PW.__init__()
     PARAMS.clear()
+    PCMS.clear()
     PARAMS.update({"pcm_rates": "1", "pcm_bits": "24", "surround": "1", "surround_96k": "0",
                    "version": "0.6.8"})
     shutil.rmtree(os.environ["XDG_CONFIG_HOME"], ignore_errors=True)
-    if os.path.exists(pipewire.RATES_CONF):
-        os.remove(pipewire.RATES_CONF)
+    for f in (pipewire.RATES_CONF, pipewire.MIC_CONF):
+        if os.path.exists(f):
+            os.remove(f)
 
 
 def process(ms=0):
