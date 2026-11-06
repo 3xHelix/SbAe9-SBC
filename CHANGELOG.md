@@ -3,7 +3,14 @@
 Sound Blaster Command for Linux: the UI for the Creative Sound Blaster AE-9
 driver ([SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv)).
 
-## Unreleased
+## 0.9.0 (2026-11-06)
+
+Under the hood and on the labels. Sound Blaster Command and SbAe9-AudioMon
+now stand on one shared base, every jack is called by where it actually is,
+and the mic gain gets its real name. Works with
+[SbAe9-Drv v0.9.2](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.9.2)
+and older; the head unit's plug detection and the "Mic Gain" control name
+arrive with the next driver, and until then the app uses what's there.
 
 ### Changed
 
@@ -17,7 +24,6 @@ driver ([SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv)).
   into `sbae9kit/`. Nothing you'd notice: the screenshots come out
   pixel-identical. The icon tool moved to SbAe9-Kit, and the tests use the
   kit's shared fake AE-9 mixer and snapshots.
-
 - Jacks are named the same way everywhere, after where they are. On the
   head unit: the XLR/TRS jack, the 3.5 mm mic jack, and the 3.5 mm and 1/4"
   headphone jacks. On the card: the RCA out, the 3.5 mm Rear out, the
