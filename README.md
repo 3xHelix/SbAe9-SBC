@@ -95,6 +95,10 @@ doesn't support these yet.
 - For What U Hear: driver
   [v0.9.0](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.9.0) or newer, with its
   `config/ae9-what-u-hear.conf` in the same folder.
+- For the head unit's plug indicators (3.5 mm headphone and mic jacks), the
+  auto switch on headphone plug and the "Mic Gain" control name: driver
+  [v0.9.3](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.9.3) or newer.
+  Older drivers hide the plug features and use their "XLR Gain" control.
 - `alsa-utils` for the spoken speaker test (it brings the "Front Left…"
   voice files); without it the test plays a tone.
 - Python 3, PySide6 (`sudo dnf install python3-pyside6`), PipeWire tools

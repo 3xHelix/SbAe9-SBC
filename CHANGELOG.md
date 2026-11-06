@@ -3,6 +3,15 @@
 Sound Blaster Command for Linux: the UI for the Creative Sound Blaster AE-9
 driver ([SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv)).
 
+## Unreleased
+
+### Changed
+
+- README: the head unit's plug indicators, the auto switch and the "Mic
+  Gain" name now name their driver,
+  [SbAe9-Drv v0.9.3](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.9.3),
+  which shipped them with the exact names the app already uses.
+
 ## 0.9.1 (2026-11-06)
 
 Easier on the eyes. Captions say what's happening, not where every jack is:
