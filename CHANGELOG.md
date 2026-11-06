@@ -3,7 +3,10 @@
 Sound Blaster Command for Linux: the UI for the Creative Sound Blaster AE-9
 driver ([SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv)).
 
-## Unreleased
+## 0.9.1 (2026-11-06)
+
+Easier on the eyes. Captions say what's happening, not where every jack is:
+hover for the details. Same drivers as 0.9.0.
 
 ### Changed
 
