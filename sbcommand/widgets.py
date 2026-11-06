@@ -472,9 +472,11 @@ class EqGraph(QWidget):
         p.drawPath(path)
         p.restore()
 
+        # white rings on dark graphs; on a light one (Albino) white would vanish
+        ring = QColor("#ffffff") if QColor(T.GRAPH_BG).lightness() < 128 else QColor(T.HANDLE_BORDER)
         for i, pt in enumerate(pts):
             hot = i == self._drag or i == self._hover
-            p.setPen(QPen(QColor("#ffffff"), 2.6))
+            p.setPen(QPen(ring, 2.6))
             p.setBrush(line)
             rad = 8.5 if hot else 7
             p.drawEllipse(pt, rad, rad)

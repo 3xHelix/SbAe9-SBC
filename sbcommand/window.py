@@ -8,6 +8,8 @@ from PySide6.QtGui import QColor, QIcon, QPainter
 from PySide6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QMainWindow, QPushButton, QStackedWidget,
                                QToolButton, QVBoxLayout, QWidget)
 
+from sbae9kit import desktop, frame, glass
+
 from . import card as C
 from . import config, icons, pages, pipewire, profiles
 from .applier import Applier, Change
@@ -308,94 +310,17 @@ APPICON_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__fil
 def app_icon():
     """The app icon (appicon/sbae9-sbc-<size>.png, every size), or the wave
     symbol if the PNGs are missing."""
-    ic = QIcon()
-    try:
-        names = os.listdir(APPICON_DIR)
-    except OSError:
-        names = []
-    for name in sorted(names):
-        if name.startswith("sbae9-sbc-") and name.endswith(".png"):
-            ic.addFile(os.path.join(APPICON_DIR, name))
-    return ic if not ic.isNull() else QIcon(icons.pixmap("wave", T.ACCENT_HI, 64))
+    return desktop.app_icon(APPICON_DIR, config.APP_ID,
+                            fallback=QIcon(icons.pixmap("wave", T.ACCENT_HI, 64)))
 
 
 def blur_behind(win):
-    """Ask KDE to blur what's behind a glass window. Works for X11 windows
-    (the app runs through XWayland with Glass on); elsewhere it's a no-op
-    and the glass is just clear."""
-    from PySide6.QtCore import QProcess
-    from PySide6.QtGui import QGuiApplication
-    import shutil
-    if QGuiApplication.platformName() != "xcb" or not shutil.which("xprop"):
-        return False
-    # an empty region (a single 0) means "the whole window" to KWin
-    prop = "_KDE_NET_WM_BLUR_BEHIND_REGION"
-    return QProcess.startDetached("xprop", ["-id", str(int(win.winId())),
-                                           "-f", prop, "32c", "-set", prop, "0"])[0]
+    """KDE's frost behind the glass window (shared with SbAe9-AudioMon)."""
+    return glass.blur_behind(win)
 
 
-class TitleBar(QFrame):
-    """The AE-9 header. Without the desktop's frame it is the window's
-    handle: drag to move, double-click to maximize."""
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setObjectName("titleBar")
-
-    def _frameless(self):
-        return bool(self.window().windowFlags() & Qt.FramelessWindowHint)
-
-    def mousePressEvent(self, e):
-        if e.button() == Qt.LeftButton and self._frameless() and self.window().windowHandle():
-            self.window().windowHandle().startSystemMove()   # the desktop moves it (works on Wayland)
-            e.accept()
-            return
-        super().mousePressEvent(e)
-
-    def mouseDoubleClickEvent(self, e):
-        if e.button() == Qt.LeftButton and self._frameless():
-            w = self.window()
-            w.showNormal() if w.isMaximized() else w.showMaximized()
-            e.accept()
-            return
-        super().mouseDoubleClickEvent(e)
-
-
-class EdgeGrip(QWidget):
-    """An invisible strip along a window edge (or corner) that resizes the
-    frameless window."""
-    CURSORS = {
-        Qt.LeftEdge: Qt.SizeHorCursor, Qt.RightEdge: Qt.SizeHorCursor,
-        Qt.TopEdge: Qt.SizeVerCursor, Qt.BottomEdge: Qt.SizeVerCursor,
-        Qt.TopEdge | Qt.LeftEdge: Qt.SizeFDiagCursor, Qt.BottomEdge | Qt.RightEdge: Qt.SizeFDiagCursor,
-        Qt.TopEdge | Qt.RightEdge: Qt.SizeBDiagCursor, Qt.BottomEdge | Qt.LeftEdge: Qt.SizeBDiagCursor,
-    }
-    SIZE = 6
-
-    def __init__(self, edges, parent):
-        super().__init__(parent)
-        self.edges = edges
-        self.setCursor(self.CURSORS[edges])
-
-    def mousePressEvent(self, e):
-        if e.button() == Qt.LeftButton and self.window().windowHandle():
-            self.window().windowHandle().startSystemResize(self.edges)
-            e.accept()
-
-    def place(self, w, h):
-        s, c, ed = self.SIZE, self.SIZE * 2, self.edges
-        horiz = bool(ed & (Qt.LeftEdge | Qt.RightEdge))
-        vert = bool(ed & (Qt.TopEdge | Qt.BottomEdge))
-        if horiz and vert:
-            gw, gh = c, c                 # corner
-        elif horiz:
-            gw, gh = s, h - 2 * c         # left / right side
-        else:
-            gw, gh = w - 2 * c, s         # top / bottom side
-        x = 0 if ed & Qt.LeftEdge else w - gw if ed & Qt.RightEdge else c
-        y = 0 if ed & Qt.TopEdge else h - gh if ed & Qt.BottomEdge else c
-        self.setGeometry(x, y, gw, gh)
-        self.raise_()
+# the frameless window's title bar and edge grips (shared with SbAe9-AudioMon)
+TitleBar, EdgeGrip = frame.TitleBar, frame.EdgeGrip
 
 
 class MainWindow(QMainWindow):

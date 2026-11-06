@@ -5,10 +5,10 @@ touch the real card, the real PipeWire or the user's settings.
 Importing this module:
   - points XDG_CONFIG_HOME / XDG_CACHE_HOME at a temp folder,
   - runs Qt offscreen,
-  - replaces the ALSA card with FakeMixer (built from fixtures/ae9_controls.json,
-    a snapshot of a real AE-9 on driver 0.6.8),
-  - replaces every PipeWire command with FakePipeWire (built from
-    fixtures/pw_ae9_stereo.json, a trimmed pw-dump of the same machine),
+  - replaces the ALSA card with the shared FakeMixer (sbae9kit.testing.mixer,
+    built from a snapshot of a real AE-9's controls on driver 0.6.8),
+  - replaces every PipeWire command with FakePipeWire below (built from the
+    shared pw_ae9_stereo.json, a trimmed pw-dump of the same machine),
   - makes any real subprocess or QProcess start fail the test.
 """
 
@@ -24,7 +24,7 @@ import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
-FIXTURES = os.path.join(HERE, "fixtures")
+FIXTURES = os.path.join(ROOT, "sbae9kit", "testing", "fixtures")   # shared with SbAe9-AudioMon
 
 _TMP = tempfile.mkdtemp(prefix="sbae9-sbc-tests-")
 import atexit  # noqa: E402
@@ -60,108 +60,8 @@ def fixture(name):
 
 
 # --- fake ALSA mixer ---------------------------------------------------------------
-class FakeMixer:
-    """Stands in for alsa.Mixer. Writes are logged in .writes and come back as
-    change events through a pipe, the way ALSA's own events do."""
-    last = None
-
-    def __init__(self, idx, spec=None):
-        self.controls, self.by_numid, self.values = {}, {}, {}
-        for i, s in enumerate(spec or fixture("ae9_controls.json")):
-            c = alsa.Control(numid=i + 1, name=s["name"], type=s["type"], count=s["count"],
-                             min=s["min"], max=s["max"], items=list(s["items"]),
-                             writable=s.get("writable", True))
-            self.controls[c.name] = c
-            self.by_numid[c.numid] = c
-            self.values[c.name] = s["value"]
-        self.writes = []
-        self._events = []
-        self._r, self._w = os.pipe()
-        os.set_blocking(self._r, False)
-        FakeMixer.last = self
-
-    # alsa.Mixer API
-    def has(self, name):
-        return name in self.controls
-
-    def get(self, name):
-        return self.values[name]
-
-    def set(self, name, value):
-        c = self.controls[name]
-        if c.type == alsa.TYPE_ENUMERATED and isinstance(value, str):
-            value = c.items.index(value)
-        if c.type == alsa.TYPE_BOOLEAN:
-            value = bool(value)
-        self.writes.append((name, value))
-        self._store(name, value)
-
-    def subscribe(self):
-        return self._r
-
-    def read_events(self):
-        try:
-            while os.read(self._r, 4096):
-                pass
-        except BlockingIOError:
-            pass
-        ev, self._events = self._events, []
-        return ev
-
-    def rescan(self):
-        pass
-
-    def refresh_info(self, numid):
-        return self.by_numid.get(numid)
-
-    def close(self):
-        for fd in (self._r, self._w):
-            try:
-                os.close(fd)
-            except OSError:
-                pass
-
-    # test helpers
-    def _store(self, name, value):
-        self.values[name] = value
-        self._events.append((self.controls[name].numid, alsa.EVENT_MASK_VALUE))
-        os.write(self._w, b"x")
-
-    def external(self, name, value):
-        """A change made outside the app (head-unit knob, alsamixer, the driver)."""
-        c = self.controls[name]
-        if c.type == alsa.TYPE_ENUMERATED and isinstance(value, str):
-            value = c.items.index(value)
-        self._store(name, value)
-
-    def set_items(self, name, items):
-        """Swap an enum's items (e.g. the old driver's EQ preset order)."""
-        cur = self.controls[name].items[self.values[name]]
-        self.controls[name].items = list(items)
-        self.values[name] = items.index(cur) if cur in items else 0
-
-    def add_bool(self, name, value=True):
-        """A boolean control the 0.6.8 snapshot doesn't have (e.g. Optical Out)."""
-        numid = max(self.by_numid) + 1
-        c = alsa.Control(numid=numid, name=name, type=alsa.TYPE_BOOLEAN, count=1,
-                         min=0, max=1, items=[], writable=True)
-        self.controls[name] = c
-        self.by_numid[numid] = c
-        self.values[name] = value
-
-    def add_enum(self, name, items, value=0):
-        """An enum control the 0.6.8 snapshot doesn't have (e.g. Capture Bit Depth)."""
-        numid = max(self.by_numid) + 1
-        c = alsa.Control(numid=numid, name=name, type=alsa.TYPE_ENUMERATED, count=1,
-                         min=0, max=len(items) - 1, items=list(items), writable=True)
-        self.controls[name] = c
-        self.by_numid[numid] = c
-        self.values[name] = value
-
-    def remove(self, name):
-        c = self.controls.pop(name)
-        self.by_numid.pop(c.numid, None)
-        self.values.pop(name, None)
+# The shared one, from sbae9kit.testing (starts from the real card's controls).
+from sbae9kit.testing.mixer import FakeMixer  # noqa: E402
 
 
 # --- fake PipeWire ---------------------------------------------------------------------

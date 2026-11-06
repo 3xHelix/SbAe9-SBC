@@ -6,8 +6,10 @@ import os
 import signal
 import sys
 
-from PySide6.QtCore import QProcess, QTimer
+from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QApplication, QWidget
+
+from sbae9kit import desktop
 
 from . import __version__, config, pipewire, profiles, theme
 from .window import Context, MainWindow
@@ -30,68 +32,36 @@ def parse_args(argv):
 # QT_SCALE_FACTOR as the user's environment had it, before this app changed
 # it. Kept in the environment so a relaunched copy (which inherits our
 # QT_SCALE_FACTOR) still scales from the original, not from ours.
-BASE_ENV = "SBAE9_SBC_BASE_SCALE_FACTOR"
+# UI scale, the XWayland choice, the window's X11 name and relaunching are
+# shared with SbAe9-AudioMon (sbae9kit.desktop). XWayland is used for a UI
+# scale other than 100% (Qt on Wayland misplaces popups then) and for Glass
+# (KDE only blurs behind X11 windows); a QT_QPA_PLATFORM you set wins.
+BASE_ENV = desktop.env_prefix(config.APP_ID) + "_BASE_SCALE_FACTOR"
+QPA_MARK = desktop.env_prefix(config.APP_ID) + "_SET_QPA"
+xcb_available = desktop.xcb_available
 
 
 def set_scale(pct, env=os.environ, glass=False):
-    """Ask Qt to draw everything at pct percent (on top of any factor the
-    user's environment set). Must run before QApplication exists."""
-    theme.SCALE = theme.clamp_scale(pct)
-    base = env.setdefault(BASE_ENV, env.get("QT_SCALE_FACTOR", ""))
-    try:
-        factor = float(base or 1) * theme.SCALE / 100
-    except ValueError:
-        factor = theme.SCALE / 100
-    if factor == 1 and not base:
-        env.pop("QT_SCALE_FACTOR", None)
-    else:
-        env["QT_SCALE_FACTOR"] = f"{factor:g}"
+    """Draw everything at pct percent, and pick XWayland if that or Glass
+    needs it. Must run before QApplication exists."""
+    theme.SCALE = desktop.set_scale(config.APP_ID, pct, env)
     use_xwayland(theme.SCALE != 100 or glass, env)
 
 
-# Qt on Wayland puts popups (dropdown lists, menus) in the wrong place when
-# QT_SCALE_FACTOR isn't 1. Through XWayland they line up, so a scaled UI runs
-# there. Glass runs there too: KDE only blurs behind X11 windows for apps
-# without KDE's own libraries. Otherwise the app stays native Wayland. A
-# QT_QPA_PLATFORM the user set is left alone.
-QPA_MARK = "SBAE9_SBC_SET_QPA"
-
-
-def xcb_available():
-    from PySide6.QtCore import QLibraryInfo
-    plugins = QLibraryInfo.path(QLibraryInfo.LibraryPath.PluginsPath)
-    return os.path.exists(os.path.join(plugins, "platforms", "libqxcb.so"))
-
-
-def use_xwayland(scaled, env=os.environ):
-    if env.pop(QPA_MARK, None):              # set by us on an earlier launch
-        env.pop("QT_QPA_PLATFORM", None)
-    wayland = env.get("WAYLAND_DISPLAY") or env.get("XDG_SESSION_TYPE") == "wayland"
-    if (scaled and wayland and env.get("DISPLAY") and "QT_QPA_PLATFORM" not in env
-            and xcb_available()):
-        env["QT_QPA_PLATFORM"] = "xcb"
-        env[QPA_MARK] = "1"
+def use_xwayland(wanted, env=os.environ):
+    return desktop.use_xwayland(config.APP_ID, wanted, env, xcb_ok=xcb_available())
 
 
 def qt_argv(qt_args):
-    """Qt's argv. Its first entry names the window to X11 (WM_CLASS), which
-    is how docks match a window to its menu entry when the app runs through
-    XWayland; the launcher's own argv[0] is "-c", so use the app's id."""
-    return [config.APP_ID] + list(qt_args)
+    """Qt's argv, named after the app so docks match the window (WM_CLASS)."""
+    return desktop.qt_argv(config.APP_ID, qt_args)
+
+
+RELAUNCH_DROP = ("--scale",)      # one-off options a reopened window doesn't repeat
 
 
 def relaunch_args(argv):
-    """The command line this launch was started with, minus a one-off
-    --scale, so the reopened window uses the saved scale."""
-    out, skip = [], False
-    for a in argv:
-        if skip:
-            skip = False
-        elif a == "--scale":
-            skip = True
-        elif not a.startswith("--scale="):
-            out.append(a)
-    return out
+    return desktop.relaunch_args(argv, RELAUNCH_DROP)
 
 
 def main():
@@ -136,8 +106,8 @@ def main():
     ctx.palette_requested.connect(switch_palette)
 
     def restart():
-        """Reopen the app (for a new UI scale): start a fresh copy, then quit."""
-        if QProcess.startDetached(sys.executable, relaunch_args(sys.orig_argv[1:])):
+        """Reopen the app (new UI scale, Glass on/off): start a fresh copy, then quit."""
+        if desktop.relaunch(RELAUNCH_DROP):
             win.close()
             app.quit()
 

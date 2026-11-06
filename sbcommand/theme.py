@@ -1,111 +1,29 @@
 # SPDX-License-Identifier: GPL-2.0-only
-"""Colour palettes and the Qt style sheet.
+"""The active palette and the Qt style sheet.
 
 Every colour the app draws comes from the active palette. `apply(name)`
 switches palettes; widgets read the module attributes (T.ACCENT, ...) when
 they paint, and `stylesheet()` builds the QSS from them.
 """
 
-PALETTES = {
-    # Navy and purple with teal, like Creative's app.
-    "command": {
-        "label": "Command",
-        "ACCENT": "#1fa6b8", "ACCENT_HI": "#35c3d6", "ACCENT_TEXT": "#ffffff",
-        "TEXT": "#e8eaf3", "MUTED": "#a4a8bf", "DIM": "#6b6f86",
-        "TRACK": "#4a4b5c", "PANEL": "#4b4c58", "PANEL_HI": "#585a68", "PANEL_LO": "#3d3e4b",
-        "TITLE_BG": "#1b2034", "BOTTOM_BG": "#191d30",
-        "SIDEBAR_TOP": "#272c5c", "SIDEBAR_BOTTOM": "#2d2a63",
-        "MAIN_TOP": "#2b2b55", "MAIN_BOTTOM": "#33294f",
-        "POPUP": "#1e2238", "POPUP_BORDER": "#343957", "LIST_BG": "#2d2f45",
-        "DIALOG": "#24284a", "TOOLTIP": "#303247",
-        "SWITCH_OFF": "#5a5c6c", "DIAL_TRACK": "#4a4b58", "IDLE": "#7d8296",
-        "GRAPH_BG": "#45454f", "GRAPH_TEXT": "#d5d6de", "EQ_LINE": "#7f9cf5",
-        "SEG": "#3d3e4c", "SEG_HOVER": "#4c4e5e", "CARD_CAP": "#3f3f4a", "SPEAKER_BOX": "#33355a",
-        "OK": "#33d14f", "WARN": "#e9c64a",
-        "METER": ["#1fa6b8", "#7fd16a", "#e9c64a", "#e2505c"],
-        "OVERLAY": "#ffffff", "SHADE": "#000000", "DOT_IDLE": "#f2f2f2",
-        "HANDLE": "#f2f2f6", "HANDLE_BORDER": "#f2f2f6", "HANDLE_HOVER": "#ffffff",
-    },
-    # From the 3xHelix avatar: blue-black, violet, coral-orange to amber, mint.
-    "helix": {
-        "label": "Helix",
-        "ACCENT": "#f57a45", "ACCENT_HI": "#ffb63a", "ACCENT_TEXT": "#1b1230",
-        "TEXT": "#f2edff", "MUTED": "#ab9fcb", "DIM": "#6d6190",
-        "TRACK": "#3a2f5a", "PANEL": "#3b2e5e", "PANEL_HI": "#4b3b74", "PANEL_LO": "#2e2449",
-        "TITLE_BG": "#120f21", "BOTTOM_BG": "#110e1f",
-        "SIDEBAR_TOP": "#2a1850", "SIDEBAR_BOTTOM": "#3a1452",
-        "MAIN_TOP": "#1d1832", "MAIN_BOTTOM": "#26183f",
-        "POPUP": "#16122a", "POPUP_BORDER": "#3b2f5c", "LIST_BG": "#211b38",
-        "DIALOG": "#1d1832", "TOOLTIP": "#2a2145",
-        "SWITCH_OFF": "#4a3d6e", "DIAL_TRACK": "#3a2f5a", "IDLE": "#7a6c9e",
-        "GRAPH_BG": "#241d3d", "GRAPH_TEXT": "#d9d0f0", "EQ_LINE": "#5dcaa8",
-        "SEG": "#2e2449", "SEG_HOVER": "#3b2e5e", "CARD_CAP": "#2a2145", "SPEAKER_BOX": "#3b2e5e",
-        "OK": "#5dcaa8", "WARN": "#ffb63a",
-        "METER": ["#5dcaa8", "#5dcaa8", "#ffb63a", "#e31b49"],
-        "OVERLAY": "#ffffff", "SHADE": "#000000", "DOT_IDLE": "#f2f2f2",
-        "HANDLE": "#f2f2f6", "HANDLE_BORDER": "#f2f2f6", "HANDLE_HOVER": "#ffffff",
-    },
-    # Light: off-white and cream with blush and peach, coral accent.
-    "albino": {
-        "label": "Albino",
-        "ACCENT": "#cf7166", "ACCENT_HI": "#b4554b", "ACCENT_TEXT": "#ffffff",
-        "TEXT": "#4a3a38", "MUTED": "#8c7a76", "DIM": "#b9aaa5",
-        "TRACK": "#e6d9d2", "PANEL": "#efe6df", "PANEL_HI": "#e8d9d1", "PANEL_LO": "#e2d4cc",
-        "TITLE_BG": "#f7faf3", "BOTTOM_BG": "#f3efe6",
-        "SIDEBAR_TOP": "#f4e7e3", "SIDEBAR_BOTTOM": "#eed3d2",
-        "MAIN_TOP": "#f8f7f1", "MAIN_BOTTOM": "#eeecdf",
-        "POPUP": "#fbfaf6", "POPUP_BORDER": "#e2d4cc", "LIST_BG": "#fbfaf6",
-        "DIALOG": "#f8f7f1", "TOOLTIP": "#fbfaf6",
-        "SWITCH_OFF": "#dccdc6", "DIAL_TRACK": "#ebe0d9", "IDLE": "#c9b8b2",
-        "GRAPH_BG": "#fbfaf6", "GRAPH_TEXT": "#7a6864", "EQ_LINE": "#d0838c",
-        "SEG": "#ebe1da", "SEG_HOVER": "#e3d4cc", "CARD_CAP": "#f5eee8", "SPEAKER_BOX": "#efe3dd",
-        "OK": "#7fae8c", "WARN": "#d9a441",
-        "METER": ["#dda394", "#db8176", "#cf6a5e", "#b8433a"],
-        "OVERLAY": "#5a3a36", "SHADE": "#8a5a50", "DOT_IDLE": "#b9aaa5",
-        "HANDLE": "#ffffff", "HANDLE_BORDER": "#cf7166", "HANDLE_HOVER": "#fff4f1",
-    },
-    # Wololo: the monk's royal-blue robe and white cloth, sun gold, grass
-    # green, sky blue, and his staff's brown.
-    "wololo": {
-        "label": "Wololo",
-        "ACCENT": "#f0d050", "ACCENT_HI": "#fdf2a0", "ACCENT_TEXT": "#1a2350",
-        "TEXT": "#eef3e6", "MUTED": "#a9c6d6", "DIM": "#6a7eaa",
-        "TRACK": "#33448a", "PANEL": "#2e3f86", "PANEL_HI": "#3a4d9c", "PANEL_LO": "#26356f",
-        "TITLE_BG": "#121a3f", "BOTTOM_BG": "#101735",
-        "SIDEBAR_TOP": "#2a3d9a", "SIDEBAR_BOTTOM": "#1f2f7a",
-        "MAIN_TOP": "#1a2558", "MAIN_BOTTOM": "#1b2f52",
-        "POPUP": "#141d48", "POPUP_BORDER": "#33458f", "LIST_BG": "#1a2558",
-        "DIALOG": "#1a2558", "TOOLTIP": "#22306a",
-        "SWITCH_OFF": "#44558f", "DIAL_TRACK": "#2e3f80", "IDLE": "#7183b3",
-        "GRAPH_BG": "#17214f", "GRAPH_TEXT": "#c9dbe3", "EQ_LINE": "#8fce6f",
-        "SEG": "#26356f", "SEG_HOVER": "#33458f", "CARD_CAP": "#3d3527", "SPEAKER_BOX": "#2e3f86",
-        "OK": "#8fce6f", "WARN": "#f0d050",
-        "METER": ["#6fb660", "#94ce7b", "#f0d050", "#e05a4f"],
-        "OVERLAY": "#ffffff", "SHADE": "#000000", "DOT_IDLE": "#eef3e6",
-        "HANDLE": "#eef3e6", "HANDLE_BORDER": "#eef3e6", "HANDLE_HOVER": "#ffffff",
-    },
-}
+from sbae9kit import desktop as _desktop
+from sbae9kit import glass as _glass
+from sbae9kit import palettes as _palettes
+
+# The palettes are shared with SbAe9-AudioMon (sbae9kit.palettes).
+PALETTES = _palettes.PALETTES
 
 CURRENT = "command"
 
 # UI scale in percent. Qt scales the whole window (fonts, dials, spacing,
 # minimum size) from QT_SCALE_FACTOR, which it only reads at start-up, so a
 # new scale means reopening the window.
-SCALES = (70, 150)
+SCALES = _desktop.SCALES
 SCALE = 100          # what this launch runs at
+clamp_scale = _desktop.clamp_scale
 
 
-def clamp_scale(pct):
-    try:
-        pct = int(round(int(pct) / 5) * 5)
-    except (TypeError, ValueError):
-        return 100
-    return max(SCALES[0], min(SCALES[1], pct))
-
-
-def rgba(hex_color, alpha):
-    h = hex_color.lstrip("#")
-    return f"rgba({int(h[0:2], 16)},{int(h[2:4], 16)},{int(h[4:6], 16)},{alpha})"
+rgba = _palettes.rgba
 
 
 # Glass: the window's backgrounds (title and bottom bars, sidebar, pages, the
@@ -113,37 +31,24 @@ def rgba(hex_color, alpha):
 # and controls stay solid. KDE blurs what's behind when the app runs through
 # XWayland (see __main__.use_xwayland and MainWindow.showEvent).
 GLASS = False
-GLASS_OPACITY = 0.70          # how solid the glass is (0.3 - 0.95)
-GLASS_RANGE = (30, 95)        # percent, for the Settings slider
-
-
-def clamp_glass(pct):
-    try:
-        pct = int(round(int(pct) / 5) * 5)
-    except (TypeError, ValueError):
-        return 70
-    return max(GLASS_RANGE[0], min(GLASS_RANGE[1], pct))
+GLASS_OPACITY = _glass.DEFAULT / 100   # how solid the glass is (0.3 - 0.95)
+GLASS_RANGE = _glass.RANGE             # percent, for the Settings slider
+clamp_glass = _glass.clamp
 
 
 def surface(hex_color, depth=1.0):
     """A window background colour: as is, or see-through with Glass on.
     depth < 1 makes that surface a little clearer than the others."""
-    if not GLASS:
-        return hex_color
-    return rgba(hex_color, round(max(0.0, min(1.0, GLASS_OPACITY * depth)), 3))
+    return _glass.surface(hex_color, GLASS, GLASS_OPACITY, depth)
 
 
 def surface_q(hex_color, depth=1.0):
     """surface() as a QColor, for widgets that paint their own background."""
-    from PySide6.QtGui import QColor
-    c = QColor(hex_color)
-    if GLASS:
-        c.setAlphaF(max(0.0, min(1.0, GLASS_OPACITY * depth)))
-    return c
+    return _glass.surface_q(hex_color, GLASS, GLASS_OPACITY, depth)
 
 
 # Warnings use one red in every palette, so they always look the same.
-DANGER = "#e2505c"
+DANGER = _palettes.DANGER
 
 
 def apply(name):

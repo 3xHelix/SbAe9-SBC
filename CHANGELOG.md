@@ -3,6 +3,28 @@
 Sound Blaster Command for Linux: the UI for the Creative Sound Blaster AE-9
 driver ([SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv)).
 
+## Unreleased
+
+### Changed
+
+- `install.sh` installs a copy of the app (`~/.local/share/sbae9-sbc`)
+  instead of pointing the menu at the project folder, the same way
+  SbAe9-AudioMon installs. The menu app is the last build you installed,
+  never something half-edited; re-run `./install.sh` to update it.
+- Built on **SbAe9-Kit** now, the base it shares with SbAe9-AudioMon: the
+  palettes, Glass, UI scale / XWayland handling, frameless window parts,
+  AE-9 detection, the ALSA binding and the icon tool live there, vendored
+  into `sbae9kit/`. Nothing you'd notice: the screenshots come out
+  pixel-identical. The icon tool moved to SbAe9-Kit, and the tests use the
+  kit's shared fake AE-9 mixer and snapshots.
+
+### Fixed
+
+- Reopening the app (for a new UI scale or Glass) could close the window
+  even when the new copy failed to start; it now stays open in that case.
+- Albino: the EQ curve's points had white rings that disappeared on the
+  light graph; they're coral there now (dark palettes keep white).
+
 ## 0.8.1 (2026-11-06)
 
 GNOME polish. Two small things that only showed up off KDE. Same drivers

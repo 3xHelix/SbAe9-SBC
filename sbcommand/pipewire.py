@@ -17,6 +17,8 @@ import wave
 
 from PySide6.QtCore import QObject, QProcess, QTimer, Signal
 
+from sbae9kit import ae9
+
 from . import config
 
 RATES = [48000, 96000, 192000, 384000]  # what the AE-9 driver plays (pcm_rates=1)
@@ -48,27 +50,19 @@ def dump():
 
 
 def _is_ae9(props):
-    text = " ".join(str(props.get(k, "")) for k in
-                    ("alsa.id", "api.alsa.card.name", "alsa.card_name", "alsa.driver_name"))
-    return "AE9" in text or "AE-9" in text or "creative_ae9" in text
+    return ae9.is_ae9(props)
 
 
-# The AE-9's extra capture devices, each its own PipeWire source made by an
-# optional drop-in from the driver (config/ae9-optical-in.conf,
-# config/ae9-what-u-hear.conf). Never taken for the XLR mic.
-EXTRA_INPUTS = {
-    "optical_in": ("alsa_input.ae9_optical", 1),       # optical (S/PDIF) in, hw:AE9,1
-    "what_u_hear": ("alsa_input.ae9_what_u_hear", 2),  # what the card plays, hw:AE9,2
-}
+# The AE-9's extra capture devices (optical in, What U Hear): each its own
+# PipeWire source, never taken for the XLR mic.
+EXTRA_INPUTS = ae9.EXTRA_INPUTS
 OPTICAL_IN = EXTRA_INPUTS["optical_in"][0]
 
 
 def _extra_input(props):
-    path = str(props.get("api.alsa.path", ""))
-    for key, (name, dev) in EXTRA_INPUTS.items():
-        if props.get("node.name") == name or (path.startswith("hw:AE9,") and path.endswith(f",{dev}")):
-            return key
-    return None
+    """"optical_in" / "what_u_hear" for those AE-9 sources, None for the mic."""
+    kind = ae9.input_kind(props)
+    return None if kind == "mic" else kind
 
 
 class Nodes:
@@ -92,9 +86,9 @@ class Nodes:
                         self.default_sink = name
                     elif m.get("key") == "default.audio.source":
                         self.default_source = name
-            extra = _extra_input(props) if mc == "Audio/Source" else None
-            if not (extra or _is_ae9(props)):
+            if not _is_ae9(props):
                 continue
+            extra = _extra_input(props) if mc == "Audio/Source" else None
             node = {"id": o["id"], "name": props.get("node.name"), "state": info.get("state"),
                     "description": props.get("node.description"), "props": props,
                     "params": info.get("params") or {}}
@@ -373,28 +367,12 @@ def reopen_source(nodes):
 
 def card_stream(card_id="AE9"):
     """(rate, channels) the card's playback PCM is open at, or None when closed."""
-    try:
-        with open(f"/proc/asound/{card_id}/pcm0p/sub0/hw_params") as f:
-            text = f.read()
-    except OSError:
-        return None
-    rate = re.search(r"^rate:\s*(\d+)", text, re.M)
-    ch = re.search(r"^channels:\s*(\d+)", text, re.M)
-    if not rate:
-        return None
-    return int(rate.group(1)), int(ch.group(1)) if ch else 2
+    return ae9.pcm_open_at("pcm0p", card_id)
 
 
 def capture_stream(card_id="AE9"):
     """(rate, channels) the mic / line-in capture is open at, or None."""
-    try:
-        with open(f"/proc/asound/{card_id}/pcm0c/sub0/hw_params") as f:
-            text = f.read()
-    except OSError:
-        return None
-    rate = re.search(r"^rate:\s*(\d+)", text, re.M)
-    ch = re.search(r"^channels:\s*(\d+)", text, re.M)
-    return (int(rate.group(1)), int(ch.group(1)) if ch else 2) if rate else None
+    return ae9.pcm_open_at("pcm0c", card_id)
 
 
 def mic_rates(nodes):

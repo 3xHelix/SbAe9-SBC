@@ -11,6 +11,7 @@ import os
 
 from PySide6.QtCore import QObject, QSocketNotifier, QTimer, Signal
 
+from sbae9kit import ae9
 from . import alsa
 
 # Control names (from the snd-hda-codec-creative-ae9 driver)
@@ -56,7 +57,7 @@ def eq_band(band):
 
 EQ_CONTROLS = [EQ_PREGAIN] + [eq_band(b) for b in EQ_BANDS]
 
-MODULE_PARAMS = "/sys/module/snd_hda_codec_creative_ae9/parameters"
+MODULE_PARAMS = ae9.MODULE_PARAMS
 
 
 # --- volume curves ------------------------------------------------------------
@@ -251,33 +252,21 @@ class AE9(QObject):
 
 
 def module_param(name):
-    try:
-        with open(os.path.join(MODULE_PARAMS, name)) as f:
-            return f.read().strip()
-    except OSError:
-        return None
+    return ae9.module_param(name)
 
 
 def has_capture_pcm(device, card_id="AE9"):
     """The driver offers capture device `device` (1 = optical in, 2 = What U Hear)."""
-    return os.path.exists(f"/proc/asound/{card_id}/pcm{device}c")
+    return ae9.has_capture_pcm(device, card_id)
 
 
 def module_version():
-    try:
-        with open("/sys/module/snd_hda_codec_creative_ae9/version") as f:
-            return f.read().strip()
-    except OSError:
-        return None
+    return ae9.module_version()
 
 
 def driver_at_least(*want):
     """True if the loaded driver's version is want (e.g. 0, 7, 0) or newer."""
-    try:
-        have = tuple(int(x) for x in (module_version() or "").split("-")[0].split("."))
-    except ValueError:
-        return False
-    return bool(have) and have >= want
+    return ae9.driver_at_least(*want, version=module_version() or "")
 
 
 def surround_96k_stable():

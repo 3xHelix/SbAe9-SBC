@@ -105,10 +105,14 @@ doesn't support these yet.
 
 ```sh
 ./sbae9-sbc            # run from this folder
-./install.sh           # adds a menu entry, the app icon + ~/.local/bin/sbae9-sbc
+./install.sh           # installs a copy: menu entry, app icon, ~/.local/bin/sbae9-sbc
 ./sbae9-sbc --palette helix   # one launch in the Helix palette (saved choice unchanged)
 ./sbae9-sbc --scale 80        # one launch at 80% size (saved UI scale unchanged)
 ```
+
+`install.sh` copies the app to `~/.local/share/sbae9-sbc` (like SbAe9-AudioMon
+does), so the menu app is always the build you last installed, never a
+half-edited working tree. Re-run it after each tested change.
 
 ## Tests
 
@@ -139,15 +143,28 @@ EQ preset list, per-channel volume and the speaker test.
 
 ```
 sbcommand/
-  alsa.py       ctypes binding to alsa-lib's control API (incl. events)
+  alsa.py       the ALSA mixer binding (from sbae9kit.mixer)
   card.py       the AE-9 as a Qt object: named controls, volume curves, profiles
   pipewire.py   nodes, default device, rates, test tone, mic monitor, level meter
   profiles.py   built-in SBX profiles and the driver's EQ preset tables
   pages.py      one class per page
   widgets.py    dial, toggle switch, EQ graph, profile carousel, meters
   window.py     sidebar, page stack, bottom bar
-  theme.py      colors + Qt style sheet
+  theme.py      the active palette + Qt style sheet
+sbae9kit/       the shared kit (see below); don't edit here
+appicon/        the app icon, 16-512 px
+tools/          README screenshots (plain and Glass)
 ```
+
+### The shared kit
+
+Sound Blaster Command and SbAe9-AudioMon (the AE-9's level meters) are built
+on one base, **SbAe9-Kit**: the palettes, Glass, UI scale and XWayland
+handling, the frameless window parts, AE-9 detection, the ALSA binding and
+the icon tool. `sbae9kit/` is a vendored copy of it, written by SbAe9-Kit's
+`tools/sync_kit.py`; a test fails if it's edited here instead. Both apps also
+share their conventions: copy-install, `~/.config/<app>/`, the same options,
+tests and release format.
 
 ## Related tools
 
