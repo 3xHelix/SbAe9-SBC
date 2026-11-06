@@ -3,6 +3,19 @@
 Sound Blaster Command for Linux: the UI for the Creative Sound Blaster AE-9
 driver ([SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv)).
 
+## Unreleased
+
+### Changed
+
+- Shorter captions, easier on the eyes: they show the state, and the
+  details moved into tooltips (hover) and the ⓘ buttons. Headphones just
+  says "Plugged In" / "Unplugged"; speakers say "5.1 Surround ·
+  6-ch stream" (hover for which of the card's outputs that uses); the
+  Recording page says "Microphone", "3.5 mm mic: plugged in" and "Hear the
+  mic live". Without the driver's naming config the mic is called "AE-9
+  Head Unit Mic / Aux" instead of PipeWire's long "CA0132 Sound Core3D
+  [...] Analog Stereo".
+
 ## 0.9.0 (2026-11-06)
 
 Under the hood and on the labels. Sound Blaster Command and SbAe9-AudioMon

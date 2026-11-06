@@ -611,7 +611,7 @@ class PlaybackPage(Page):
         self.hp_auto = ToggleSwitch()
         self.hp_auto.toggled.connect(lambda on: self.card.set(C.HU_AUTO, on))
         ar.addWidget(self.hp_auto)
-        ar.addWidget(label("Auto switch on headphone plug (head unit's 3.5 mm headphone jack)", "muted"))
+        ar.addWidget(label("Auto switch on headphone plug", "muted"))
         ar.addWidget(info_button(
             "Plug headphones into the head unit's 3.5 mm headphone jack and the card switches to "
             "headphones; unplug and it goes back to speakers, about a second and a half "
@@ -624,7 +624,8 @@ class PlaybackPage(Page):
         ar.addStretch()
         g.addWidget(self.hp_auto_row, 2, 2, 1, 3)
         self.hp_auto_row.setVisible(False)
-        self.hp_sub.setText(HEADPHONES_TEXT)
+        self.hp_sub.setText("Head unit")
+        self.hp_sub.setToolTip(HEADPHONES_TIP)
         left.addWidget(w)
 
         left.addSpacing(6)
@@ -921,10 +922,10 @@ class PlaybackPage(Page):
             return
         out = self.card.get(C.OUTPUT, 0)
         (self.r_hp if out == 1 else self.r_spk).setChecked(True)
-        hp = HEADPHONES_TEXT
         if self.card.has(C.HU_PHONES):
-            hp += " · 3.5 mm: plugged in" if self.card.get(C.HU_PHONES) else " · 3.5 mm: nothing plugged in"
-        self.hp_sub.setText(hp)
+            self.hp_sub.setText("Plugged In" if self.card.get(C.HU_PHONES) else "Unplugged")
+        else:
+            self.hp_sub.setText("Head unit")
         self.hp_auto_row.setVisible(self.card.has(C.HU_AUTO))
         if self.card.has(C.HU_AUTO):
             self.hp_auto.setCheckedSilently(bool(self.card.get(C.HU_AUTO)))
@@ -942,6 +943,7 @@ class PlaybackPage(Page):
         stream_txt = "6-ch stream" if layout == "surround" else "stereo stream" if layout else ""
         self.spk_sub.setText(" · ".join(x for x in (
             SPEAKER_TEXT.get(shown, shown), stream_txt) if x))
+        self.spk_sub.setToolTip(SPEAKER_JACKS.get(shown, ""))
         self.diagram.set_state(mode="headphones" if out == 1 else "speakers", config=shown)
         self.diagram.clickable = set(self.test_channels())
         what = "says each speaker's name" if pipewire.voices_available() else "plays a tone on each speaker"
@@ -1010,18 +1012,38 @@ OPTICAL_TIP = ("Optical (S/PDIF) out plays what the main output plays, so you ca
                "knob doesn't change it (app volume does): set the level on the receiver.")
 
 SURROUND_CFGS = ("4.0", "4.1", "5.1")
-HEADPHONES_TEXT = "Head unit headphone jacks (3.5 mm and 1/4\")"
+MIC_NAME = "AE-9 Head Unit Mic / Aux"
+
+
+def mic_name(node):
+    """The mic's name to show: the desktop's if it's a short AE-9 one (the
+    driver's naming config gives it "AE-9 Head Unit Mic / Aux"), else that
+    name, not PipeWire's long default ("CA0132 Sound Core3D [...] Analog Stereo")."""
+    desc = (node or {}).get("description") or ""
+    return desc if desc.startswith("AE-9") and len(desc) <= 40 else MIC_NAME
+
+
+HEADPHONES_TIP = ("The head unit's headphone jacks, 3.5 mm and 1/4\". "
+                  "\"Plugged In\" is the 3.5 mm jack; the 1/4\" doesn't report plugs.")
 STREAM_TIP = ("Channels PipeWire sends to the card (its card profile). Picking 4.0, 4.1 or 5.1 "
               "speakers switches to the 5.1 stream, 2.0 or 2.1 back to stereo. The sound "
               "pauses for a moment while the stream reopens.")
 
 TONE_ORDER = ["left", "center", "right", "rear-right", "rear-left", "sub"]
 SPEAKER_TEXT = {
-    "2.0": "2.0 Stereo · RCA out",
-    "2.1": "2.1 Stereo + Sub · RCA out",
-    "4.0": "4.0 Quad · RCA out, 3.5 mm Rear out",
-    "4.1": "4.1 Quad + Sub · RCA out, 3.5 mm C/Sub out, 3.5 mm Rear out",
-    "5.1": "5.1 Surround · RCA out, 3.5 mm C/Sub out, 3.5 mm Rear out",
+    "2.0": "2.0 Stereo",
+    "2.1": "2.1 Stereo + Sub",
+    "4.0": "4.0 Quad",
+    "4.1": "4.1 Quad + Sub",
+    "5.1": "5.1 Surround",
+}
+# which of the card's outputs each layout uses (shown on hover)
+SPEAKER_JACKS = {
+    "2.0": "The card's RCA out",
+    "2.1": "The card's RCA out",
+    "4.0": "The card's RCA out and 3.5 mm Rear out",
+    "4.1": "The card's RCA out, 3.5 mm C/Sub out and 3.5 mm Rear out",
+    "5.1": "The card's RCA out, 3.5 mm C/Sub out and 3.5 mm Rear out",
 }
 
 
@@ -1116,7 +1138,9 @@ class RecordingPage(Page):
         g = QGridLayout()
         g.setHorizontalSpacing(18)
         g.setVerticalSpacing(14)
-        g.addWidget(label("Microphone (head unit XLR/TRS or 3.5 mm mic jack)", "subTitle"), 0, 0, 1, 3)
+        mic_title = label("Microphone", "subTitle")
+        mic_title.setToolTip("The head unit's XLR/TRS jack and 3.5 mm mic jack (they share this input)")
+        g.addWidget(mic_title, 0, 0, 1, 3)
         g.addWidget(label("Level"), 1, 0)
         self.mic = VolumeRow("mic", "mic-off")
         self.mic.valueChanged.connect(Throttle(lambda v: self.card.set(C.MIC, round(v * 99)), 40))
@@ -1148,8 +1172,9 @@ class RecordingPage(Page):
         self.listen = ToggleSwitch()
         self.listen.toggled.connect(self._listen)
         lr.addWidget(self.listen)
-        lr.addWidget(label("Hear the microphone through the default output "
-                           "(use headphones to avoid feedback)", "muted"))
+        listen_lbl = label("Hear the mic live (use headphones to avoid feedback)", "muted")
+        listen_lbl.setToolTip("Plays the mic through the default output")
+        lr.addWidget(listen_lbl)
         lr.addStretch()
         g.addLayout(lr, 4, 1, 1, 2)
         g.addWidget(label("Quality"), 5, 0)
@@ -1181,8 +1206,8 @@ class RecordingPage(Page):
         self.lay.addLayout(g)
         self.lay.addSpacing(8)
         self.lay.addWidget(label(
-            "Phantom power (48V) is the button on the head unit's front panel. The head unit's "
-            "XLR/TRS jack and 3.5 mm mic jack share this input.", "hint", wrap=True))
+            "Phantom power (48V) is the button on the head unit. Its XLR/TRS and 3.5 mm mic "
+            "jacks share this input.", "hint", wrap=True))
         self.mic_jack = label("", "muted")
         self.mic_jack.setVisible(False)
         self.lay.addWidget(self.mic_jack)
@@ -1336,8 +1361,7 @@ class RecordingPage(Page):
 
     def refresh(self):
         n = self.ctx.pw.nodes
-        self.dev_name.setText((n.source.get("description") or "AE-9 Head Unit Mic / Aux") if n.source
-                              else "AE-9 input not found in PipeWire")
+        self.dev_name.setText(mic_name(n.source) if n.source else "AE-9 input not found in PipeWire")
         self.set_default.setEnabled(bool(n.source) and not n.source_is_default)
         self.set_default.setText("Default device" if n.source_is_default else "Set Default")
         self.default_ok.setPixmap(icons.pixmap("check", T.ACCENT_HI if n.source_is_default else T.DIM, 22))
@@ -1351,7 +1375,7 @@ class RecordingPage(Page):
             return
         self.mic_jack.setVisible(self.card.has(C.HU_MIC))
         if self.card.has(C.HU_MIC):
-            self.mic_jack.setText("Head unit 3.5 mm mic jack: " + (
+            self.mic_jack.setText("3.5 mm mic: " + (
                 "plugged in" if self.card.get(C.HU_MIC) else "nothing plugged in"))
         raw = self.card.get(C.MIC, 0)
         self.mic.set_state(raw / 99, muted, "muted" if raw == 0 else f"{C.mic_raw_to_db(raw):+d} dB")

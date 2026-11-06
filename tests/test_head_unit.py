@@ -22,7 +22,7 @@ class HeadUnitTest(S.AppTestCase):
     def test_hidden_on_older_drivers(self):
         pg = self.playback()
         self.assertFalse(pg.hp_auto_row.isVisible())
-        self.assertEqual(pg.hp_sub.text(), pages.HEADPHONES_TEXT)
+        self.assertEqual(pg.hp_sub.text(), "Head unit")
         rec = self.page(pages.RecordingPage)
         self.assertFalse(rec.mic_jack.isVisible())
 
@@ -41,15 +41,15 @@ class HeadUnitTest(S.AppTestCase):
     def test_plugged_indicators_follow_the_jacks(self):
         self.add_all(phones=False, mic=True)
         pg = self.playback()
-        self.assertIn("3.5 mm: nothing plugged in", pg.hp_sub.text())
+        self.assertEqual(pg.hp_sub.text(), "Unplugged")
         self.mixer.external(C.HU_PHONES, True)
         S.process(20)
         pg.refresh()
-        self.assertIn("3.5 mm: plugged in", pg.hp_sub.text())
+        self.assertEqual(pg.hp_sub.text(), "Plugged In")
         rec = self.page(pages.RecordingPage)
         rec.show_tab(0)
         rec.refresh()
-        self.assertEqual(rec.mic_jack.text(), "Head unit 3.5 mm mic jack: plugged in")
+        self.assertEqual(rec.mic_jack.text(), "3.5 mm mic: plugged in")
 
     def test_auto_switch_moves_the_output_selector(self):
         self.add_all(auto=True)
@@ -64,11 +64,31 @@ class HeadUnitTest(S.AppTestCase):
         self.mixer.add_bool("Head Unit Line In Plugged", True)
         pg = self.playback()
         self.assertTrue(self.ctx.card.has(C.HU_PHONES))
-        self.assertIn("3.5 mm: plugged in", pg.hp_sub.text())
+        self.assertEqual(pg.hp_sub.text(), "Plugged In")
         rec = self.page(pages.RecordingPage)
         rec.show_tab(0)
         rec.refresh()
-        self.assertEqual(rec.mic_jack.text(), "Head unit 3.5 mm mic jack: plugged in")
+        self.assertEqual(rec.mic_jack.text(), "3.5 mm mic: plugged in")
+
+    def test_details_moved_to_hover(self):
+        self.add_all(phones=True)
+        pg = self.playback()
+        self.assertIn('1/4"', pg.hp_sub.toolTip())
+        self.assertIn("3.5 mm", pg.hp_sub.toolTip())
+        self.mixer.external(C.SPEAKER_CFG, "5.1")
+        self.mixer.external(C.DIRECT, False)
+        S.process(20)
+        pg.refresh()
+        self.assertTrue(pg.spk_sub.text().startswith("5.1 Surround"))
+        self.assertNotIn("RCA", pg.spk_sub.text())
+        self.assertIn("3.5 mm C/Sub out", pg.spk_sub.toolTip())
+
+    def test_mic_name_is_short(self):
+        self.assertEqual(pages.mic_name({"description": "CA0132 Sound Core3D [Sound Blaster AE-7/AE-9] "
+                                                        "(Sound Blaster AE-9) Analog Stereo"}),
+                         "AE-9 Head Unit Mic / Aux")
+        self.assertEqual(pages.mic_name({"description": "AE-9 Head Unit Mic / Aux"}), "AE-9 Head Unit Mic / Aux")
+        self.assertEqual(pages.mic_name({"description": "AE-9 Studio Mic"}), "AE-9 Studio Mic")
 
 
 class MicGainTest(S.AppTestCase):
