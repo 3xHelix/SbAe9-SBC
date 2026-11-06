@@ -3,6 +3,20 @@
 Sound Blaster Command for Linux: the UI for the Creative Sound Blaster AE-9
 driver ([SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv)).
 
+## 0.8.1 (2026-11-06)
+
+GNOME polish. Two small things that only showed up off KDE. Same drivers
+as 0.8.0.
+
+### Fixed
+
+- Through XWayland (Glass on, or a UI scale other than 100%) the window now
+  calls itself `sbae9-sbc`, so docks match it to the menu entry and show
+  the right icon (it said `-c`, which GNOME's dash couldn't place).
+- Settings → Device → "Open alsamixer" also finds GNOME's terminals (Ptyxis
+  on Fedora 41+, Console) and a few others, and says what to run if there's
+  no terminal at all instead of doing nothing.
+
 ## 0.8.0 (2026-11-06)
 
 Looks round. A new icon, and Glass: frosted see-through backgrounds on any

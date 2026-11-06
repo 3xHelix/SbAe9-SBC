@@ -46,5 +46,22 @@ class AutostartTest(S.AppTestCase):
         self.assertFalse(os.path.exists(path))
 
 
+class DesktopTest(S.AppTestCase):
+    def test_window_is_named_after_the_app_for_docks(self):
+        from sbcommand import __main__ as M
+        self.assertEqual(M.qt_argv(["-platform", "xcb"]), ["sbae9-sbc", "-platform", "xcb"])
+
+    def test_alsamixer_opens_in_the_first_terminal_installed(self):
+        import shutil
+        old = shutil.which
+        try:
+            shutil.which = lambda name: "/usr/bin/" + name if name in ("ptyxis", "xterm") else None
+            self.assertEqual(pages.alsamixer_command(0), ["ptyxis", "--", "alsamixer", "-c", "0"])
+            shutil.which = lambda name: None
+            self.assertIsNone(pages.alsamixer_command(0))
+        finally:
+            shutil.which = old
+
+
 if __name__ == "__main__":
     unittest.main()

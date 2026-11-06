@@ -1580,6 +1580,22 @@ class MixerPage(Page):
 
 
 # =====================================================================================
+# Terminals to open alsamixer in, first one installed wins: KDE, GNOME
+# (Ptyxis on Fedora 41+, Console, the older GNOME Terminal), Debian's
+# alternative, then the usual others.
+TERMINALS = (["konsole", "-e"], ["ptyxis", "--"], ["kgx", "--"], ["gnome-terminal", "--"],
+             ["x-terminal-emulator", "-e"], ["xfce4-terminal", "-x"], ["alacritty", "-e"],
+             ["kitty"], ["foot"], ["xterm", "-e"])
+
+
+def alsamixer_command(card_index):
+    import shutil
+    for term in TERMINALS:
+        if shutil.which(term[0]):
+            return term + ["alsamixer", "-c", str(card_index)]
+    return None
+
+
 class SettingsPage(Page):
     title = "Settings"
 
@@ -1784,12 +1800,16 @@ class SettingsPage(Page):
         self.refresh()
 
     def _alsamixer(self):
-        for term in (["konsole", "-e"], ["gnome-terminal", "--"], ["xterm", "-e"]):
+        cmd = alsamixer_command(self.card.card_index)
+        if cmd:
             try:
-                subprocess.Popen(term + ["alsamixer", "-c", str(self.card.card_index)])
+                subprocess.Popen(cmd)
                 return
             except OSError:
-                continue
+                pass
+        QMessageBox.information(self, "Open alsamixer",
+                                "No terminal app found. Run this in a terminal:\n\n"
+                                f"alsamixer -c {self.card.card_index}")
 
     def _reset(self):
         if QMessageBox.question(self, "Reset", "Reset all SBX effects and the EQ to the driver defaults?") \

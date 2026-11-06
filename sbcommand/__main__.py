@@ -73,6 +73,13 @@ def use_xwayland(scaled, env=os.environ):
         env[QPA_MARK] = "1"
 
 
+def qt_argv(qt_args):
+    """Qt's argv. Its first entry names the window to X11 (WM_CLASS), which
+    is how docks match a window to its menu entry when the app runs through
+    XWayland; the launcher's own argv[0] is "-c", so use the app's id."""
+    return [config.APP_ID] + list(qt_args)
+
+
 def relaunch_args(argv):
     """The command line this launch was started with, minus a one-off
     --scale, so the reopened window uses the saved scale."""
@@ -93,7 +100,7 @@ def main():
     theme.GLASS = bool(saved["glass"])
     theme.GLASS_OPACITY = theme.clamp_glass(saved["glass_opacity"]) / 100
     set_scale(args.scale if args.scale else saved["ui_scale"], glass=theme.GLASS)
-    app = QApplication(sys.argv[:1] + qt_args)
+    app = QApplication(qt_argv(qt_args))
     app.setApplicationName("Sound Blaster Command")
     app.setApplicationVersion(__version__)
     app.setOrganizationName("sbae9-sbc")
