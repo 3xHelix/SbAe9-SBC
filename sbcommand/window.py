@@ -50,7 +50,7 @@ class Context(QObject):
         direct = bool(self.card.get(C.DIRECT, True)) if self.card.present else True
         surround = self.pw.nodes.stream_layout() == "surround"
         return pipewire.playable_rates(direct, surround, C.module_param("pcm_rates") or "1",
-                                       C.surround_max())
+                                       C.surround_max(), C.dsp_96k())
 
     def rate_cap(self):
         return max(self.rate_set())

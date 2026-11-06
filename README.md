@@ -58,8 +58,8 @@ desktop slider show up in the app immediately (it listens to ALSA control events
 **Direct Mode on** = audio goes straight to the DAC at the source's rate
 (44.1 to 384 kHz in stereo; 5.1 at 48/96/192 kHz with driver 0.9.4+, up to
 96 kHz with 0.7.0+, 48 kHz before) with no effects. **Direct Mode off** =
-audio goes through the DSP at 48 kHz, and SBX, the EQ and Scout Mode are
-heard. The app keeps your effect settings either way, and your chosen sample
+audio goes through the DSP at 48 or 96 kHz (48 kHz before driver 0.9.4),
+and SBX, the EQ and Scout Mode are heard. The app keeps your effect settings either way, and your chosen sample
 rate comes back when Direct Mode is switched on again.
 
 Not available on Linux (yet): Super X-Fi, Dolby Digital Live / DTS encoding,
@@ -86,9 +86,11 @@ and 7.1 output. The driver doesn't support these yet.
   [v0.7.0](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.7.0) or newer
   (with its `surround_96k` option on, the default). Older drivers play 5.1 at
   48 kHz.
-- For 44.1 and 88.2 kHz (stereo, Direct Mode) and 5.1 at 192 kHz: driver
-  v0.9.4 or newer (coming next; options `pcm_rates=2` and `surround_192k=1`,
-  both the default). With it, switching Direct Mode on while playing no
+- For 44.1 and 88.2 kHz (stereo, Direct Mode), 5.1 at 192 kHz and 96 kHz
+  with Direct Mode off: driver
+  [v0.9.4](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.9.4) or newer
+  (options `pcm_rates=2`, `surround_192k=1` and `dsp_96k=Y`, all the default).
+  This release pairs with SbAe9-Drv v0.9.4. With it, switching Direct Mode on while playing no
   longer needs a pause and play.
 - For recording at 96 kHz and 32-bit: driver
   [v0.9.1](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.9.1) or newer.

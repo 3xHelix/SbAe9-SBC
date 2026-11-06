@@ -713,12 +713,13 @@ class PlaybackPage(Page):
         qh.addStretch()
         qh.addWidget(info_button(
             "The sample rate PipeWire runs the card at, and the bit depth the card plays.\n\n"
-            "Automatic follows what's playing. A fixed rate resamples everything to it. "
-            "44.1 kHz isn't supported by the driver yet, so that music gets resampled.\n\n"
-            "Direct Mode plays 48–384 kHz in stereo; a 5.1 stream plays at 48 kHz. "
-            "With Direct Mode off the DSP runs at 48 kHz, so your rate comes back when "
-            "Direct Mode is switched on again. 192 and 384 kHz also use a bigger buffer "
-            "(PipeWire quantum), so they don't crackle.\n\n"
+            "Automatic follows what's playing. A fixed rate resamples everything to it.\n\n"
+            "Direct Mode plays up to 384 kHz in stereo (44.1 and 88.2 kHz with driver "
+            "0.9.4+) and up to 192 kHz on a 5.1 stream. With Direct Mode off the DSP runs "
+            "at 48 or 96 kHz (48 kHz only before driver 0.9.4). A rate the card can't play "
+            "right now moves to the nearest one it can, and your pick comes back when it "
+            "can. 192 and 384 kHz also use a bigger buffer (PipeWire quantum), so they "
+            "don't crackle.\n\n"
             "The bit depth applies when the card is opened; the app reopens it for you "
             "(a short gap).\n\n"
             "The rate is PipeWire's global clock (written to "
@@ -854,7 +855,7 @@ class PlaybackPage(Page):
         if C.module_param("pcm_rates") == "0":
             note = "High rates are off in the driver (pcm_rates=0; see Settings → Device)."
         elif not direct:
-            note = "DSP mode runs at 48 kHz."
+            note = "DSP mode runs at 48 or 96 kHz." if C.dsp_96k() else "DSP mode runs at 48 kHz."
         elif n.stream_layout() == "surround":
             note = f"5.1 plays at {'/'.join(f'{r / 1000:g}' for r in ctx.rate_set())} kHz"
             stereo = [r for r in offered if r not in ctx.rate_set()]
@@ -1008,8 +1009,8 @@ class PlaybackPage(Page):
 
 DIRECT_TIP = ("Direct Mode sends audio straight to the ESS DAC at the stream's own sample rate "
               "(up to 384 kHz), bypassing the DSP. SBX effects and the EQ are not heard.\n\n"
-              "With Direct Mode off, audio goes through the Sound Core3D DSP at 48 kHz, so "
-              "SBX, the EQ and Scout Mode work.")
+              "With Direct Mode off, audio goes through the Sound Core3D DSP at 48 or 96 kHz "
+              "(48 kHz only before driver 0.9.4), so SBX, the EQ and Scout Mode work.")
 # drivers before 0.9.4 don't restart a playing stream when Direct Mode turns on
 DIRECT_PAUSE_TIP = ("\n\nSwitching Direct Mode on during playback goes silent until the stream "
                     "restarts (pause and play), same as on Windows.")
@@ -1034,7 +1035,8 @@ def mic_name(node):
 
 
 # driver options shown read-only on Settings → Device
-DEVICE_PARAMS = ("pcm_rates", "pcm_bits", "dac_441", "surround", "surround_96k", "surround_192k")
+DEVICE_PARAMS = ("pcm_rates", "pcm_bits", "dac_441", "surround", "surround_96k", "surround_192k",
+                  "dsp_96k")
 
 HEADPHONES_TIP = ("The head unit's headphone jacks, 3.5 mm and 1/4\". "
                   "\"Plugged In\" is the 3.5 mm jack; the 1/4\" doesn't report plugs.")
@@ -1888,7 +1890,9 @@ class SettingsPage(Page):
             f"Playback rates: {'48 kHz only' if rates == '0' else '48/96/192/384 kHz' if rates == '1' else '44.1/48/88.2/96/192/384 kHz' if rates == '2' else '?'}"
             f" · sample bits: {bits or '?'}",
             "5.1 rates: " + "/".join(f"{r / 1000:g}" for r in pipewire.playable_rates(
-                True, True, rates or "1", C.surround_max())) + " kHz",
+                True, True, rates or "1", C.surround_max())) + " kHz"
+            " · DSP mode: " + "/".join(f"{r / 1000:g}" for r in pipewire.playable_rates(
+                False, False, rates or "1", dsp_96k=C.dsp_96k())) + " kHz",
             "Driver options: " + " · ".join(
                 f"{p}={C.module_param(p)}" for p in DEVICE_PARAMS if C.module_param(p) is not None),
             f"PipeWire sink: {n.sink['name'] if n.sink else '—'}",

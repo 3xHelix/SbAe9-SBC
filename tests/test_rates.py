@@ -214,7 +214,7 @@ class Driver094Test(RateBase):
     def setUp(self):
         super().setUp()
         S.PARAMS.update({"version": "0.9.4", "pcm_rates": "2", "surround_96k": "1",
-                         "surround_192k": "1", "dac_441": "Y"})
+                         "surround_192k": "1", "dac_441": "Y", "dsp_96k": "N"})
 
     def enabled(self, pg):
         q = pg.quality
@@ -277,6 +277,35 @@ class Driver094Test(RateBase):
         self.assertEqual(self.rate(), (48000, 0))
         self.direct(True)
         self.assertEqual(self.rate(), (44100, 0))
+
+    def test_dsp_96k_lets_dsp_mode_play_96(self):
+        S.PARAMS["dsp_96k"] = "Y"
+        for pick, dsp in ((96000, 96000), (44100, 48000), (88200, 96000),
+                          (192000, 96000), (384000, 96000), (48000, 48000)):
+            self.direct(True)
+            self.pick(pick)
+            self.direct(False)
+            self.assertEqual(self.rate()[0], dsp, pick)
+            self.direct(True)
+            self.assertEqual(self.rate()[0], pick, pick)     # back with Direct Mode on
+
+    def test_dsp_96k_on_5_1_too(self):
+        S.PARAMS["dsp_96k"] = "Y"
+        self.layout(S.SURROUND)
+        self.pick(192000)
+        self.direct(False)
+        self.assertEqual(self.rate(), (96000, 0))
+
+    def test_dsp_mode_picker_with_dsp_96k(self):
+        S.PARAMS["dsp_96k"] = "Y"
+        pg = self.page(pages.PlaybackPage)
+        self.direct(False)
+        pg.refresh()
+        self.assertEqual(self.enabled(pg), ["Auto (48–96 kHz)", "48 kHz", "96 kHz"])
+        self.assertIn("DSP mode runs at 48 or 96 kHz", pg.rate_note.text())
+        S.PARAMS["dsp_96k"] = "N"
+        pg.refresh()
+        self.assertEqual(self.enabled(pg), ["Auto (48 kHz)", "48 kHz"])
 
     def test_picker_lists_cd_rates_and_greys_them_on_5_1(self):
         pg = self.page(pages.PlaybackPage)

@@ -300,6 +300,12 @@ def surround_max():
     return 192000 if module_param("surround_192k") == "1" else 96000
 
 
+def dsp_96k():
+    """DSP mode (Direct Mode off) takes 96 kHz as well as 48 (driver 0.9.4+,
+    its dsp_96k option, on by default)."""
+    return module_param("dsp_96k") in ("Y", "1")
+
+
 def plays_cd_rates():
     """The driver can play 44.1 and 88.2 kHz (0.9.4+, its dac_441 option)."""
     return module_param("dac_441") is not None

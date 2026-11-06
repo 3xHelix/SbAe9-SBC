@@ -307,14 +307,18 @@ def allowed_rates(pcm_rates):
     return list(ALL_RATES) if pcm_rates == "2" else list(RATES)
 
 
-def playable_rates(direct, surround, pcm_rates="1", surround_max=48000):
-    """The rates the card takes right now. DSP mode runs at 48 kHz (96 kHz
-    through the DSP played twice, so the driver blocks it). 44.1 and 88.2 kHz
-    are stereo only. 5.1 goes up to `surround_max`: 48 kHz on old drivers, 96
-    kHz from 0.7.0, 192 kHz from 0.9.4. Stereo in Direct Mode gets them all."""
+DSP_RATES = (48000, 96000)   # what DSP mode (Direct Mode off) plays with dsp_96k on
+
+
+def playable_rates(direct, surround, pcm_rates="1", surround_max=48000, dsp_96k=False):
+    """The rates the card takes right now. DSP mode (Direct Mode off) runs at
+    48 kHz, or 48 and 96 kHz with the driver's dsp_96k option (0.9.4+), in
+    stereo and 5.1. 44.1 and 88.2 kHz are stereo only. 5.1 goes up to
+    `surround_max`: 48 kHz on old drivers, 96 kHz from 0.7.0, 192 kHz from
+    0.9.4. Stereo in Direct Mode gets them all."""
     rates = card_rates(pcm_rates)
     if not direct:
-        return [48000]
+        return [r for r in rates if r in DSP_RATES] if dsp_96k else [48000]
     if surround:
         return [r for r in rates if r in SURROUND_RATES and r <= surround_max] or [48000]
     return rates

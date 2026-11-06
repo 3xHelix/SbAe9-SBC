@@ -3,7 +3,12 @@
 Sound Blaster Command for Linux: the UI for the Creative Sound Blaster AE-9
 driver ([SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv)).
 
-## Unreleased
+## 0.10.0 (2026-11-06)
+
+Every rate the card plays, CD rates included. Pairs with
+[SbAe9-Drv v0.9.4](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.9.4):
+44.1 and 88.2 kHz as is, 5.1 at 192 kHz, and 96 kHz with SBX on. Older
+drivers still work, with the shorter rate lists they had.
 
 ### Added
 
@@ -12,8 +17,12 @@ driver ([SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv)).
   stream they're greyed out, and a 44.1/88.2 pick plays at 48/96 kHz there.
 - 5.1 at 192 kHz (driver 0.9.4+, `surround_192k=1`). Only 384 kHz is stereo
   only now.
+- 96 kHz with Direct Mode off, stereo and 5.1, SBX on or off (driver 0.9.4+,
+  `dsp_96k=Y`). Other picks move to 48 or 96 kHz in DSP mode (44.1 -> 48,
+  88.2/192/384 -> 96) and come back with Direct Mode on.
 - Settings → Device lists the driver's rate options (`pcm_rates`,
-  `dac_441`, `surround_192k`, ...) read-only, and the 5.1 rates.
+  `dac_441`, `surround_192k`, `dsp_96k`, ...) read-only, and the 5.1 and
+  DSP-mode rates.
 
 ### Changed
 
@@ -22,7 +31,6 @@ driver ([SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv)).
   start.
 - Direct Mode's ⓘ drops the "pause and play" hint on driver 0.9.4+: the
   driver restarts a playing stream itself now.
-
 - README: the head unit's plug indicators, the auto switch and the "Mic
   Gain" name now name their driver,
   [SbAe9-Drv v0.9.3](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.9.3),
