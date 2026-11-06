@@ -9,3 +9,10 @@ pw-dump-output.txt
 
 # Local artwork, not part of the app
 3xHelixLogo.png
+
+# Icon artwork (tools/make_icons.py in SbAe9-Kit rebuilds appicon/ from it)
+Neon Purple Audio Mixer Icon.png
+
+# Local session launchers (they hold Claude session IDs): never commit
+sbc
+resume-code
