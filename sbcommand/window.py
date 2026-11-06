@@ -182,7 +182,7 @@ class Context(QObject):
                                    lambda: self.card.get(C.BIT_DEPTH) != k))
 
     def set_mic_rate(self, rate):
-        """Record the mic / line-in at `rate` (None = PipeWire decides). Goes
+        """Record the head unit mic at `rate` (None = PipeWire decides). Goes
         through a WirePlumber restart, which re-creates the card's nodes."""
         src = self.pw.nodes.source
         if not src:
@@ -262,7 +262,8 @@ class OutputSwitch(QWidget):
         self.card = card
         self.setFixedSize(58, 30)
         self.setCursor(Qt.PointingHandCursor)
-        self.setToolTip("Switch between speakers and the head unit's headphone jack")
+        self.setToolTip("Switch between speakers (the card's RCA out) and headphones "
+                        "(the head unit's headphone jacks)")
         card.changed.connect(self._on_change)
 
     def _on_change(self, name):

@@ -603,7 +603,7 @@ class PlaybackPage(Page):
         self._stream_pending = None
         left.addWidget(w)
         w, g, self.hp_sub = out_row(self.r_hp, "headphones", "Headphones")
-        # auto switch on the head unit's 3.5 mm headphone plug (newer drivers)
+        # auto switch on the head unit's 3.5 mm headphone jack (newer drivers)
         self.hp_auto_row = QWidget()
         ar = QHBoxLayout(self.hp_auto_row)
         ar.setContentsMargins(0, 4, 0, 0)
@@ -611,19 +611,20 @@ class PlaybackPage(Page):
         self.hp_auto = ToggleSwitch()
         self.hp_auto.toggled.connect(lambda on: self.card.set(C.HU_AUTO, on))
         ar.addWidget(self.hp_auto)
-        ar.addWidget(label("Auto switch on headphone plug (3.5 mm jack)", "muted"))
+        ar.addWidget(label("Auto switch on headphone plug (head unit's 3.5 mm headphone jack)", "muted"))
         ar.addWidget(info_button(
-            "Plug headphones into the head unit's 3.5 mm jack and the card switches to "
+            "Plug headphones into the head unit's 3.5 mm headphone jack and the card switches to "
             "headphones; unplug and it goes back to speakers, about a second and a half "
             "after the plug settles. Same switch as holding the knob, and each output keeps "
             "its own volume.\n\n"
             "It acts once per plug change: switch back yourself afterwards and it stays that "
             "way until the next plug or unplug.\n\n"
-            "Only the 3.5 mm jack is reported. The 6.3 mm jack can't switch outputs by itself."))
+            "Only the 3.5 mm headphone jack reports plugs: the 1/4\" headphone jack can't "
+            "switch outputs by itself."))
         ar.addStretch()
         g.addWidget(self.hp_auto_row, 2, 2, 1, 3)
         self.hp_auto_row.setVisible(False)
-        self.hp_sub.setText("Head unit headphone jack")
+        self.hp_sub.setText(HEADPHONES_TEXT)
         left.addWidget(w)
 
         left.addSpacing(6)
@@ -673,7 +674,7 @@ class PlaybackPage(Page):
         ob.addWidget(self.optical_quality)
         ob.addWidget(label(
             "Optical plays the same audio as the main output, so its quality is set on the "
-            "Speakers/Headphones tab: stereo, 24-bit, 48–192 kHz reaches the optical jack "
+            "Speakers/Headphones tab: stereo, 24-bit, 48–192 kHz reaches the card's Optical out "
             "bit for bit. It's taken before the DSP, so SBX and the EQ aren't on it, and the "
             "volume knob doesn't change it: set the level on your receiver.", "hint", wrap=True))
         self.optical_box.setVisible(False)
@@ -920,9 +921,9 @@ class PlaybackPage(Page):
             return
         out = self.card.get(C.OUTPUT, 0)
         (self.r_hp if out == 1 else self.r_spk).setChecked(True)
-        hp = "Head unit headphone jack"
+        hp = HEADPHONES_TEXT
         if self.card.has(C.HU_PHONES):
-            hp += " · 3.5 mm plugged in" if self.card.get(C.HU_PHONES) else " · nothing in the 3.5 mm jack"
+            hp += " · 3.5 mm: plugged in" if self.card.get(C.HU_PHONES) else " · 3.5 mm: nothing plugged in"
         self.hp_sub.setText(hp)
         self.hp_auto_row.setVisible(self.card.has(C.HU_AUTO))
         if self.card.has(C.HU_AUTO):
@@ -1009,17 +1010,18 @@ OPTICAL_TIP = ("Optical (S/PDIF) out plays what the main output plays, so you ca
                "knob doesn't change it (app volume does): set the level on the receiver.")
 
 SURROUND_CFGS = ("4.0", "4.1", "5.1")
+HEADPHONES_TEXT = "Head unit headphone jacks (3.5 mm and 1/4\")"
 STREAM_TIP = ("Channels PipeWire sends to the card (its card profile). Picking 4.0, 4.1 or 5.1 "
               "speakers switches to the 5.1 stream, 2.0 or 2.1 back to stereo. The sound "
               "pauses for a moment while the stream reopens.")
 
 TONE_ORDER = ["left", "center", "right", "rear-right", "rear-left", "sub"]
 SPEAKER_TEXT = {
-    "2.0": "2.0 Stereo · front RCA",
-    "2.1": "2.1 Stereo + Sub · RCA outputs",
-    "4.0": "4.0 Quad · front RCA + Rear",
-    "4.1": "4.1 Quad + Sub · front RCA, Center/Sub, Rear",
-    "5.1": "5.1 Surround · front RCA, Center/Sub, Rear",
+    "2.0": "2.0 Stereo · RCA out",
+    "2.1": "2.1 Stereo + Sub · RCA out",
+    "4.0": "4.0 Quad · RCA out, 3.5 mm Rear out",
+    "4.1": "4.1 Quad + Sub · RCA out, 3.5 mm C/Sub out, 3.5 mm Rear out",
+    "5.1": "5.1 Surround · RCA out, 3.5 mm C/Sub out, 3.5 mm Rear out",
 }
 
 
@@ -1114,7 +1116,7 @@ class RecordingPage(Page):
         g = QGridLayout()
         g.setHorizontalSpacing(18)
         g.setVerticalSpacing(14)
-        g.addWidget(label("Microphone (XLR / head unit)", "subTitle"), 0, 0, 1, 3)
+        g.addWidget(label("Microphone (head unit XLR/TRS or 3.5 mm mic jack)", "subTitle"), 0, 0, 1, 3)
         g.addWidget(label("Level"), 1, 0)
         self.mic = VolumeRow("mic", "mic-off")
         self.mic.valueChanged.connect(Throttle(lambda v: self.card.set(C.MIC, round(v * 99)), 40))
@@ -1130,12 +1132,13 @@ class RecordingPage(Page):
         self.peak = label("", "muted")
         self.peak.setMinimumWidth(66)
         g.addWidget(self.peak, 2, 2)
-        g.addWidget(label("XLR Gain"), 3, 0)
+        g.addWidget(label("Mic Gain"), 3, 0)
         self.xlr = Segmented(["0", "1", "2"], labels={"0": "0 dB", "1": "+10 dB", "2": "+20 dB"})
-        self.xlr.selected.connect(lambda v: self.card.set(C.XLR_GAIN, int(v)))
+        self.xlr.selected.connect(lambda v: self.card.set(C.MIC_GAIN, int(v)))
         xr = QHBoxLayout()
         xr.addWidget(self.xlr)
-        xr.addWidget(info_button("Microphone preamp boost on the XLR input. Use +20 dB for quiet "
+        xr.addWidget(info_button("Mic preamp boost for the head unit's XLR/TRS jack and 3.5 mm mic "
+                                 "jack (they share one input). Use +20 dB for quiet "
                                  "dynamic mics, 0 dB for loud sources or condensers."))
         xr.addStretch()
         g.addLayout(xr, 3, 1)
@@ -1161,7 +1164,7 @@ class RecordingPage(Page):
         self.mic_depth.setMinimumWidth(110)
         qr.addWidget(self.mic_depth)
         qr.addWidget(info_button(
-            "The sample rate the card records the mic / line-in at.\n\n"
+            "The sample rate the card records the head unit's mic input at.\n\n"
             "Automatic lets PipeWire pick (it follows the playback side, usually 48 kHz). "
             "A fixed rate makes the input open at that rate whatever else plays.\n\n"
             "96 kHz needs driver 0.9.1 or newer. Changing the rate restarts WirePlumber, so "
@@ -1178,18 +1181,18 @@ class RecordingPage(Page):
         self.lay.addLayout(g)
         self.lay.addSpacing(8)
         self.lay.addWidget(label(
-            "Phantom power (48V) is the button on the head unit's front panel. The XLR / TRS "
-            "jack and the head unit's 3.5 mm line-in share this input.", "hint", wrap=True))
-        self.line_in = label("", "muted")
-        self.line_in.setVisible(False)
-        self.lay.addWidget(self.line_in)
+            "Phantom power (48V) is the button on the head unit's front panel. The head unit's "
+            "XLR/TRS jack and 3.5 mm mic jack share this input.", "hint", wrap=True))
+        self.mic_jack = label("", "muted")
+        self.mic_jack.setVisible(False)
+        self.lay.addWidget(self.mic_jack)
 
         self.lay.addStretch()
 
         # extra inputs: each its own device, recording alongside the mic
         self.inputs = [
             InputSection("optical_in", "Optical In (S/PDIF)", "AE-9 Optical In", 1,
-                         "Records alongside the XLR mic, as its own device: pick it in your "
+                         "Records alongside the head unit mic, as its own device: pick it in your "
                          "recording app. S/PDIF can't be resampled, so it opens at the sender's "
                          "rate (44.1–192 kHz) and won't open at all without a signal.",
                          "ae9-optical-in.conf"),
@@ -1333,7 +1336,7 @@ class RecordingPage(Page):
 
     def refresh(self):
         n = self.ctx.pw.nodes
-        self.dev_name.setText((n.source.get("description") or "Sound Blaster AE-9 (XLR mic)") if n.source
+        self.dev_name.setText((n.source.get("description") or "AE-9 Head Unit Mic / Aux") if n.source
                               else "AE-9 input not found in PipeWire")
         self.set_default.setEnabled(bool(n.source) and not n.source_is_default)
         self.set_default.setText("Default device" if n.source_is_default else "Set Default")
@@ -1346,13 +1349,13 @@ class RecordingPage(Page):
             _, muted = pipewire.get_volume(n.source["id"])
         if not self.card.present:
             return
-        self.line_in.setVisible(self.card.has(C.HU_LINE_IN))
-        if self.card.has(C.HU_LINE_IN):
-            self.line_in.setText("Head unit 3.5 mm line-in: " + (
-                "plugged in" if self.card.get(C.HU_LINE_IN) else "nothing plugged in"))
+        self.mic_jack.setVisible(self.card.has(C.HU_MIC))
+        if self.card.has(C.HU_MIC):
+            self.mic_jack.setText("Head unit 3.5 mm mic jack: " + (
+                "plugged in" if self.card.get(C.HU_MIC) else "nothing plugged in"))
         raw = self.card.get(C.MIC, 0)
         self.mic.set_state(raw / 99, muted, "muted" if raw == 0 else f"{C.mic_raw_to_db(raw):+d} dB")
-        self.xlr.set_value(str(self.card.get(C.XLR_GAIN, 1)))
+        self.xlr.set_value(str(self.card.get(C.MIC_GAIN, 1)))
 
 
 # =====================================================================================
@@ -1471,9 +1474,9 @@ class MixerPage(Page):
         self.mic.muteToggled.connect(self._mic_mute)
         g.addWidget(self.mic, r, 1)
         r += 1
-        g.addWidget(label("XLR Gain"), r, 0)
+        g.addWidget(label("Mic Gain"), r, 0)
         self.xlr = Segmented(["0", "1", "2"], labels={"0": "0 dB", "1": "+10 dB", "2": "+20 dB"})
-        self.xlr.selected.connect(lambda v: self.card.set(C.XLR_GAIN, int(v)))
+        self.xlr.selected.connect(lambda v: self.card.set(C.MIC_GAIN, int(v)))
         xr = QHBoxLayout()
         xr.addWidget(self.xlr)
         xr.addStretch()
@@ -1576,7 +1579,7 @@ class MixerPage(Page):
         mraw = self.card.get(C.MIC, 0)
         mm = pipewire.get_volume(n.source["id"])[1] if n.source else False
         self.mic.set_state(mraw / 99, mm, "muted" if mraw == 0 else f"{C.mic_raw_to_db(mraw):+d} dB")
-        self.xlr.set_value(str(self.card.get(C.XLR_GAIN, 1)))
+        self.xlr.set_value(str(self.card.get(C.MIC_GAIN, 1)))
 
 
 # =====================================================================================

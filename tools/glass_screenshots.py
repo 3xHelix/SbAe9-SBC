@@ -45,7 +45,7 @@ wall.setPixmap(QPixmap(WALL).scaled(MON[2], MON[3])); wall.setGeometry(*MON); wa
 
 ctx = Context(); m = S.FakeMixer.last
 for name, v in {C.DIRECT: False, C.SBX: True, C.OUTPUT: 0, C.MASTER: 214, C.MASTER_SW: True,
-                C.SPEAKER_CFG: 4, C.BIT_DEPTH: 0, C.MIC: 80, C.XLR_GAIN: 1, C.SCOUT: False,
+                C.SPEAKER_CFG: 4, C.BIT_DEPTH: 0, C.MIC: 80, "XLR Gain Capture Volume": 1, C.SCOUT: False,
                 C.DAC_FILTER: 1}.items():
     m.values[name] = v
 S.process(20)

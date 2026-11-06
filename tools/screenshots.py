@@ -32,7 +32,7 @@ S.PW.stream = (48000, 6)
 # a current driver (v0.9.1): 96 kHz recording, its names, optical and What U Hear
 S.PARAMS.update({"version": "0.9.1", "surround_96k": "1"})
 S.PW.set_mic_range(96000)
-S.PW.source["info"]["props"]["node.description"] = "AE-9 Mic / Line In"
+S.PW.source["info"]["props"]["node.description"] = "AE-9 Head Unit Mic / Aux"
 S.PW.capture = (48000, 2)
 S.PW.add_optical_in()
 S.PW.add_what_u_hear()
@@ -42,7 +42,7 @@ m = S.FakeMixer.last
 m.add_bool(C.OPTICAL_OUT, True)
 m.add_enum(C.CAP_BIT_DEPTH, ["24-bit", "32-bit"])
 for name, v in {C.DIRECT: False, C.SBX: True, C.OUTPUT: 0, C.MASTER: 214, C.MASTER_SW: True,
-                C.SPEAKER_CFG: 4, C.BIT_DEPTH: 0, C.MIC: 80, C.XLR_GAIN: 1, C.SCOUT: False,
+                C.SPEAKER_CFG: 4, C.BIT_DEPTH: 0, C.MIC: 80, "XLR Gain Capture Volume": 1, C.SCOUT: False,
                 C.DAC_FILTER: 1}.items():
     m.values[name] = v
 ctx.settings.data["palette"] = palette

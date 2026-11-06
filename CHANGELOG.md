@@ -18,6 +18,22 @@ driver ([SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv)).
   pixel-identical. The icon tool moved to SbAe9-Kit, and the tests use the
   kit's shared fake AE-9 mixer and snapshots.
 
+- Jacks are named the same way everywhere, after where they are. On the
+  head unit: the XLR/TRS jack, the 3.5 mm mic jack, and the 3.5 mm and 1/4"
+  headphone jacks. On the card: the RCA out, the 3.5 mm Rear out, the
+  3.5 mm C/Sub out, and Optical out and in. So the speaker captions say
+  "RCA out, 3.5 mm C/Sub out, 3.5 mm Rear out", Recording shows "Head unit
+  3.5 mm mic jack: plugged in" (it's the mic jack, not a line-in), and the
+  auto switch says it's the head unit's 3.5 mm headphone jack that reports
+  plugs (the 1/4" doesn't).
+- **XLR Gain is now "Mic Gain"** (Recording and Mixer): it boosts both of the
+  head unit's mic jacks, the XLR/TRS and the 3.5 mm (they share one input;
+  tested at +20 dB on both). It follows the driver's new "Mic Gain Capture
+  Volume" control, and released drivers' "XLR Gain" control still works.
+- The head unit's plug indicators use the driver's new control names
+  ("Head Unit 3.5mm Phones Plugged", "Head Unit 3.5mm Mic Plugged"); the
+  test builds' old names still work.
+
 ### Fixed
 
 - Reopening the app (for a new UI scale or Glass) could close the window

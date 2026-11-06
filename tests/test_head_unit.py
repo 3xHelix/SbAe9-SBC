@@ -8,10 +8,10 @@ from sbcommand import card as C, pages
 
 
 class HeadUnitTest(S.AppTestCase):
-    def add_all(self, auto=False, phones=False, line_in=False):
+    def add_all(self, auto=False, phones=False, mic=False):
         self.mixer.add_bool(C.HU_AUTO, auto)
         self.mixer.add_bool(C.HU_PHONES, phones)
-        self.mixer.add_bool(C.HU_LINE_IN, line_in)
+        self.mixer.add_bool(C.HU_MIC, mic)
 
     def playback(self):
         pg = self.page(pages.PlaybackPage)
@@ -22,9 +22,9 @@ class HeadUnitTest(S.AppTestCase):
     def test_hidden_on_older_drivers(self):
         pg = self.playback()
         self.assertFalse(pg.hp_auto_row.isVisible())
-        self.assertEqual(pg.hp_sub.text(), "Head unit headphone jack")
+        self.assertEqual(pg.hp_sub.text(), pages.HEADPHONES_TEXT)
         rec = self.page(pages.RecordingPage)
-        self.assertFalse(rec.line_in.isVisible())
+        self.assertFalse(rec.mic_jack.isVisible())
 
     def test_auto_switch_off_by_default_and_drives_the_control(self):
         self.add_all()
@@ -39,17 +39,17 @@ class HeadUnitTest(S.AppTestCase):
         self.assertFalse(pg.hp_auto.isChecked())
 
     def test_plugged_indicators_follow_the_jacks(self):
-        self.add_all(phones=False, line_in=True)
+        self.add_all(phones=False, mic=True)
         pg = self.playback()
-        self.assertIn("nothing in the 3.5 mm jack", pg.hp_sub.text())
+        self.assertIn("3.5 mm: nothing plugged in", pg.hp_sub.text())
         self.mixer.external(C.HU_PHONES, True)
         S.process(20)
         pg.refresh()
-        self.assertIn("3.5 mm plugged in", pg.hp_sub.text())
+        self.assertIn("3.5 mm: plugged in", pg.hp_sub.text())
         rec = self.page(pages.RecordingPage)
         rec.show_tab(0)
         rec.refresh()
-        self.assertEqual(rec.line_in.text(), "Head unit 3.5 mm line-in: plugged in")
+        self.assertEqual(rec.mic_jack.text(), "Head unit 3.5 mm mic jack: plugged in")
 
     def test_auto_switch_moves_the_output_selector(self):
         self.add_all(auto=True)
@@ -58,6 +58,35 @@ class HeadUnitTest(S.AppTestCase):
         S.process(20)
         pg.refresh()
         self.assertTrue(pg.r_hp.isChecked())
+
+    def test_older_test_builds_names_still_work(self):
+        self.mixer.add_bool("Head Unit Phones Plugged", True)       # before the rename
+        self.mixer.add_bool("Head Unit Line In Plugged", True)
+        pg = self.playback()
+        self.assertTrue(self.ctx.card.has(C.HU_PHONES))
+        self.assertIn("3.5 mm: plugged in", pg.hp_sub.text())
+        rec = self.page(pages.RecordingPage)
+        rec.show_tab(0)
+        rec.refresh()
+        self.assertEqual(rec.mic_jack.text(), "Head unit 3.5 mm mic jack: plugged in")
+
+
+class MicGainTest(S.AppTestCase):
+    def test_released_drivers_xlr_gain_name_still_works(self):
+        pg = self.page(pages.RecordingPage)          # the 0.6.8 snapshot: "XLR Gain Capture Volume"
+        pg.show_tab(0)
+        pg.xlr.selected.emit("2")
+        self.assertEqual(self.mixer.writes[-1], ("XLR Gain Capture Volume", 2))
+
+    def test_new_mic_gain_name_is_used_when_the_driver_has_it(self):
+        self.mixer.remove("XLR Gain Capture Volume")
+        self.mixer.add_enum(C.MIC_GAIN, ["0", "1", "2"], 1)
+        pg = self.page(pages.RecordingPage)
+        pg.show_tab(0)
+        pg.refresh()
+        self.assertEqual(self.ctx.card.get(C.MIC_GAIN), 1)
+        pg.xlr.selected.emit("0")
+        self.assertEqual(self.mixer.writes[-1], (C.MIC_GAIN, 0))
 
 
 if __name__ == "__main__":

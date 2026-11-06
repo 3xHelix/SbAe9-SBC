@@ -19,13 +19,20 @@ OUTPUT = "Head Unit Output"            # Speakers / Headphones
 MASTER = "Master Playback Volume"      # 0..254, 0.5 dB steps, -127..0 dB
 MASTER_SW = "Master Playback Switch"
 MIC = "Capture Volume"                 # 0..99, -90 + v dB, 0 = mute
-XLR_GAIN = "XLR Gain Capture Volume"   # 0/1/2 = 0/+10/+20 dB
+MIC_GAIN = "Mic Gain Capture Volume"   # 0/1/2 = 0/+10/+20 dB, head unit XLR/TRS + 3.5 mm mic jack
 DAC_FILTER = "DAC Filter"              # Default / Fast / Slow
 DIRECT = "Direct Mode Switch"
 SBX = "SBX Switch"
-HU_AUTO = "Head Unit Auto Switch"              # newer drivers: 3.5 mm headphone plug switches outputs
-HU_PHONES = "Head Unit Phones Plugged"         # read-only: 3.5 mm headphone jack
-HU_LINE_IN = "Head Unit Line In Plugged"       # read-only: 3.5 mm line-in jack
+HU_AUTO = "Head Unit Auto Switch"              # newer drivers: the 3.5 mm headphone plug switches outputs
+HU_PHONES = "Head Unit 3.5mm Phones Plugged"   # read-only: head unit's 3.5 mm headphone jack
+HU_MIC = "Head Unit 3.5mm Mic Plugged"         # read-only: head unit's 3.5 mm mic jack
+# Older names of renamed controls: released drivers' (kept for good) and some
+# test builds' (until every build in use has the new ones).
+ALIASES = {
+    MIC_GAIN: ("XLR Gain Capture Volume",),     # its name in drivers up to 0.9.2
+    HU_PHONES: ("Head Unit Phones Plugged",),
+    HU_MIC: ("Head Unit Line In Plugged",),
+}
 OPTICAL_OUT = "Optical Out Playback Switch"   # newer drivers: optical plays what the main output plays
 BIT_DEPTH = "PCM Bit Depth"
 CAP_BIT_DEPTH = "Capture Bit Depth"       # 24-bit / 32-bit recording (newer drivers), next open             # 24-bit / 32-bit (newer drivers), next stream open
@@ -165,10 +172,19 @@ class AE9(QObject):
                 self.changed.emit(c.name)
 
     # --- generic access ----------------------------------------------------------
+    def _name(self, name):
+        """The control's name on this driver: `name`, or an older name for it."""
+        if self.mixer and not self.mixer.has(name):
+            for old in ALIASES.get(name, ()):
+                if self.mixer.has(old):
+                    return old
+        return name
+
     def has(self, name):
-        return bool(self.mixer and self.mixer.has(name))
+        return bool(self.mixer and self.mixer.has(self._name(name)))
 
     def get(self, name, default=None):
+        name = self._name(name)
         if not self.has(name):
             return default
         try:
@@ -177,6 +193,7 @@ class AE9(QObject):
             return default
 
     def set(self, name, value, force=False):
+        name = self._name(name)
         if not self.has(name):
             return False
         try:
@@ -190,7 +207,7 @@ class AE9(QObject):
             return False
 
     def control(self, name):
-        return self.mixer.controls.get(name) if self.mixer else None
+        return self.mixer.controls.get(self._name(name)) if self.mixer else None
 
     def items(self, name):
         c = self.control(name)

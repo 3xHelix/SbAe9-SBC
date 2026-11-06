@@ -23,7 +23,7 @@ from . import config
 
 RATES = [48000, 96000, 192000, 384000]  # what the AE-9 driver plays (pcm_rates=1)
 RATES_CONF = os.path.expanduser("~/.config/pipewire/pipewire.conf.d/90-sbae9-sbc-rates.conf")
-# The mic / line-in's own sample rate: a WirePlumber rule on that one source
+# The head unit mic input's own sample rate: a WirePlumber rule on that one source
 # (written only when you pick a rate; Automatic removes it).
 MIC_CONF = os.path.expanduser("~/.config/wireplumber/wireplumber.conf.d/91-sbae9-sbc-mic.conf")
 MIC_RATES = (48000, 96000)
@@ -54,7 +54,7 @@ def _is_ae9(props):
 
 
 # The AE-9's extra capture devices (optical in, What U Hear): each its own
-# PipeWire source, never taken for the XLR mic.
+# PipeWire source, never taken for the head unit mic.
 EXTRA_INPUTS = ae9.EXTRA_INPUTS
 OPTICAL_IN = EXTRA_INPUTS["optical_in"][0]
 
@@ -356,7 +356,7 @@ def reopen_sink(nodes):
 
 
 def reopen_source(nodes):
-    """Suspend and resume the mic / line-in source so the capture reopens
+    """Suspend and resume the head unit mic source so the capture reopens
     (a new capture bit depth takes effect on the next open)."""
     if not nodes.source:
         return False
@@ -371,12 +371,12 @@ def card_stream(card_id="AE9"):
 
 
 def capture_stream(card_id="AE9"):
-    """(rate, channels) the mic / line-in capture is open at, or None."""
+    """(rate, channels) the head unit mic capture is open at, or None."""
     return ae9.pcm_open_at("pcm0c", card_id)
 
 
 def mic_rates(nodes):
-    """Rates the mic / line-in can record at, from what the driver offers
+    """Rates the head unit mic can record at, from what the driver offers
     (48 kHz only before driver 0.9.1, 48 and 96 kHz after)."""
     src = nodes.source
     for f in ((src or {}).get("params") or {}).get("EnumFormat", []):
@@ -399,14 +399,14 @@ def mic_rate_setting():
 
 
 def set_mic_rate(source_name, rate):
-    """Record the mic / line-in at `rate` (None = follow PipeWire): a
+    """Record the head unit mic at `rate` (None = follow PipeWire): a
     WirePlumber rule for that source. Rule props only apply when a node is
     created, so WirePlumber is restarted: audio on every device drops for a
     moment."""
     if rate:
         os.makedirs(os.path.dirname(MIC_CONF), exist_ok=True)
         with open(MIC_CONF, "w") as f:
-            f.write("# Written by Sound Blaster Command (sbae9-sbc): the AE-9 mic / line-in's\n"
+            f.write("# Written by Sound Blaster Command (sbae9-sbc): the AE-9 head unit mic's\n"
                     "# sample rate. Pick Automatic in the app, or delete this file, to undo.\n"
                     "monitor.alsa.rules = [\n"
                     "  {\n"
