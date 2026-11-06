@@ -50,7 +50,7 @@ class Context(QObject):
         direct = bool(self.card.get(C.DIRECT, True)) if self.card.present else True
         surround = self.pw.nodes.stream_layout() == "surround"
         return pipewire.playable_rates(direct, surround, C.module_param("pcm_rates") or "1",
-                                       C.surround_max(), C.dsp_96k())
+                                       C.surround_max(), C.dsp_96k(), C.plays_176k4())
 
     def rate_cap(self):
         return max(self.rate_set())
@@ -108,7 +108,7 @@ class Context(QObject):
                 return   # re-checked when the current change has settled
 
         def run():
-            pipewire.set_rate_mode(eff, pipewire.allowed_rates(C.module_param("pcm_rates")))
+            pipewire.set_rate_mode(eff, pipewire.allowed_rates(C.module_param("pcm_rates"), C.plays_176k4()))
             self._rate_written = want
 
         def settled():
@@ -233,7 +233,7 @@ class Context(QObject):
         is in: before it, a 5.1 profile isn't known yet and the cap would be
         too high (6 ch above 48 kHz falls apart). With "Reload last rate on
         start" off the app only shows what PipeWire is running."""
-        pipewire.update_allowed_rates(pipewire.allowed_rates(C.module_param("pcm_rates")))
+        pipewire.update_allowed_rates(pipewire.allowed_rates(C.module_param("pcm_rates"), C.plays_176k4()))
         if not self.settings["rate_mode"] or not self.settings["restore_rate_on_start"]:
             return
         if self.pw.nodes.device or self.pw.nodes.sink:

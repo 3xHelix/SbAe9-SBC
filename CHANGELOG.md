@@ -3,6 +3,22 @@
 Sound Blaster Command for Linux: the UI for the Creative Sound Blaster AE-9
 driver ([SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv)).
 
+## 0.11.1 (2026-11-06)
+
+176.4 kHz. Pairs with
+[SbAe9-Drv v0.9.7](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.9.7).
+
+### Added
+
+- 176.4 kHz in the sample-rate picker (driver 0.9.7+, `pcm_176k4=Y`), with
+  the same rules as 44.1/88.2: stereo in Direct Mode only. On the 5.1
+  stream it plays at 192 kHz, with Direct Mode off at 96 kHz (48 without
+  `dsp_96k`), and it comes back in stereo / Direct Mode. It gets the bigger
+  buffer 192 kHz uses, and PipeWire's allowed rates list it.
+- Settings → Device lists the driver's new `pcm_176k4` and `src_reclock`
+  options (and `wuh_96k`) read-only. The playback rates line comes from the
+  driver's options now.
+
 ## 0.11.0 (2026-11-06)
 
 Phantom power from the app, and What U Hear at 96 kHz. Pairs with

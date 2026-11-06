@@ -717,11 +717,11 @@ class PlaybackPage(Page):
             "The sample rate PipeWire runs the card at, and the bit depth the card plays.\n\n"
             "Automatic follows what's playing. A fixed rate resamples everything to it.\n\n"
             "Direct Mode plays up to 384 kHz in stereo (44.1 and 88.2 kHz with driver "
-            "0.9.4+) and up to 192 kHz on a 5.1 stream. With Direct Mode off the DSP runs "
-            "at 48 or 96 kHz (48 kHz only before driver 0.9.4). A rate the card can't play "
-            "right now moves to the nearest one it can, and your pick comes back when it "
-            "can. 192 and 384 kHz also use a bigger buffer (PipeWire quantum), so they "
-            "don't crackle.\n\n"
+            "0.9.4+, 176.4 kHz with 0.9.7+) and up to 192 kHz on a 5.1 stream. With "
+            "Direct Mode off the DSP runs at 48 or 96 kHz (48 kHz only before driver "
+            "0.9.4). A rate the card can't play right now moves to the nearest one it can, "
+            "and your pick comes back when it can. 176.4 kHz and up also use a bigger "
+            "buffer (PipeWire quantum), so they don't crackle.\n\n"
             "The bit depth applies when the card is opened; the app reopens it for you "
             "(a short gap).\n\n"
             "The rate is PipeWire's global clock (written to "
@@ -830,7 +830,7 @@ class PlaybackPage(Page):
         choice = ctx.settings["rate_mode"] or 0
         # show what PipeWire is forced to now, whoever set it (0 = Automatic)
         eff = pipewire.current_force_rate()
-        offered = pipewire.card_rates(C.module_param("pcm_rates") or "1")
+        offered = pipewire.card_rates(C.module_param("pcm_rates") or "1", C.plays_176k4())
         if C.module_param("pcm_rates") == "0":
             offered = pipewire.RATES      # listed, greyed out: Settings can turn them on
         if [self.quality.itemData(k) for k in range(1, self.quality.count())] != offered:
@@ -1038,7 +1038,7 @@ def mic_name(node):
 
 # driver options shown read-only on Settings → Device
 DEVICE_PARAMS = ("pcm_rates", "pcm_bits", "dac_441", "surround", "surround_96k", "surround_192k",
-                  "dsp_96k")
+                  "dsp_96k", "wuh_96k", "pcm_176k4", "src_reclock")
 
 INPUT_RATES = (48000, 96000)   # What U Hear: 48, or 96 kHz with the driver's wuh_96k
 
@@ -2103,7 +2103,8 @@ class SettingsPage(Page):
         lines = [
             f"<b>{self.card.longname or 'Sound Blaster AE-9 not found'}</b>",
             f"ALSA card {self.card.card_index} · driver snd-hda-codec-creative-ae9 {mod}",
-            f"Playback rates: {'48 kHz only' if rates == '0' else '48/96/192/384 kHz' if rates == '1' else '44.1/48/88.2/96/192/384 kHz' if rates == '2' else '?'}"
+            "Playback rates: " + ("/".join(f"{r / 1000:g}" for r in pipewire.card_rates(
+                rates, C.plays_176k4())) + " kHz" if rates in ("0", "1", "2") else "?") +
             f" · sample bits: {bits or '?'}",
             "5.1 rates: " + "/".join(f"{r / 1000:g}" for r in pipewire.playable_rates(
                 True, True, rates or "1", C.surround_max())) + " kHz"

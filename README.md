@@ -56,7 +56,8 @@ Volume, mute and output changes made with the head-unit knob, `alsamixer` or the
 desktop slider show up in the app immediately (it listens to ALSA control events).
 
 **Direct Mode on** = audio goes straight to the DAC at the source's rate
-(44.1 to 384 kHz in stereo; 5.1 at 48/96/192 kHz with driver 0.9.4+, up to
+(44.1 to 384 kHz in stereo, 176.4 kHz with driver 0.9.7+; 5.1 at
+48/96/192 kHz with driver 0.9.4+, up to
 96 kHz with 0.7.0+, 48 kHz before) with no effects. **Direct Mode off** =
 audio goes through the DSP at 48 or 96 kHz (48 kHz before driver 0.9.4),
 and SBX, the EQ and Scout Mode are heard. The app keeps your effect settings either way, and your chosen sample
@@ -100,10 +101,12 @@ and 7.1 output. The driver doesn't support these yet.
 - For What U Hear: driver
   [v0.9.0](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.9.0) or newer, with its
   `config/ae9-what-u-hear.conf` in the same folder.
+- For 176.4 kHz (stereo, Direct Mode): driver
+  [v0.9.7](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.9.7) or newer
+  (`pcm_176k4=Y`). This release pairs with SbAe9-Drv v0.9.7.
 - For switching phantom power (48V) from the app and What U Hear at 96 kHz:
   driver [v0.9.5](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.9.5)
-  or newer (`wuh_96k=Y`, the default). This release pairs with SbAe9-Drv
-  v0.9.5.
+  or newer (`wuh_96k=Y`, the default).
 - For the head unit's plug indicators (3.5 mm headphone and mic jacks), the
   auto switch on headphone plug and the "Mic Gain" control name: driver
   [v0.9.3](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.9.3) or newer.

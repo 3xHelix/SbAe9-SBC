@@ -330,6 +330,11 @@ def wuh_96k():
     return module_param("wuh_96k") in ("Y", "1")
 
 
+def plays_176k4():
+    """The driver plays 176.4 kHz (0.9.7+, its pcm_176k4 option)."""
+    return module_param("pcm_176k4") in ("Y", "1")
+
+
 def plays_cd_rates():
     """The driver can play 44.1 and 88.2 kHz (0.9.4+, its dac_441 option)."""
     return module_param("dac_441") is not None

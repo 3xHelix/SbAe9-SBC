@@ -21,9 +21,9 @@ from sbae9kit import ae9
 
 from . import config
 
-ALL_RATES = [44100, 48000, 88200, 96000, 192000, 384000]   # every rate the AE-9 driver can play
+ALL_RATES = [44100, 48000, 88200, 96000, 176400, 192000, 384000]   # every rate the AE-9 driver can play
 RATES = [48000, 96000, 192000, 384000]   # without 44.1/88.2 (pcm_rates=1, drivers before 0.9.4)
-CD_RATES = (44100, 88200)                # stereo, Direct Mode only (pcm_rates=2)
+CD_RATES = (44100, 88200, 176400)        # stereo, Direct Mode only (pcm_rates=2; 176.4 with pcm_176k4)
 SURROUND_RATES = (48000, 96000, 192000)  # what 5.1 can play at most
 RATES_CONF = os.path.expanduser("~/.config/pipewire/pipewire.conf.d/90-sbae9-sbc-rates.conf")
 # The head unit mic input's own sample rate: a WirePlumber rule on that one source
@@ -292,33 +292,36 @@ def clock_settings():
 
 # Bigger buffers at the top rates: 384 kHz crackles with PipeWire's default
 # quantum (tested by ear on the AE-9; 1024-2048 is clean, 2048 gives margin).
-QUANTUM = {384000: 2048, 192000: 1024}
+QUANTUM = {384000: 2048, 192000: 1024, 176400: 1024}
 
 
-def card_rates(pcm_rates):
+def card_rates(pcm_rates, k176=False):
     """Every rate the loaded driver plays, from its pcm_rates option: 0 = 48
-    kHz only, 1 = 48-384 kHz, 2 = also 44.1 and 88.2 kHz (driver 0.9.4+)."""
+    kHz only, 1 = 48-384 kHz, 2 = also 44.1 and 88.2 kHz (driver 0.9.4+),
+    and 176.4 kHz with `k176` (the pcm_176k4 option, driver 0.9.7+)."""
     if pcm_rates == "0":
         return [48000]
-    return list(ALL_RATES) if pcm_rates == "2" else list(RATES)
+    return allowed_rates(pcm_rates, k176)
 
 
-def allowed_rates(pcm_rates):
+def allowed_rates(pcm_rates, k176=False):
     """What PipeWire may open the card at (clock.allowed-rates): the full set,
     even with pcm_rates=0, so turning high rates back on needs no rewrite."""
-    return list(ALL_RATES) if pcm_rates == "2" else list(RATES)
+    if pcm_rates != "2":
+        return list(RATES)
+    return [r for r in ALL_RATES if r != 176400 or k176]
 
 
 DSP_RATES = (48000, 96000)   # what DSP mode (Direct Mode off) plays with dsp_96k on
 
 
-def playable_rates(direct, surround, pcm_rates="1", surround_max=48000, dsp_96k=False):
+def playable_rates(direct, surround, pcm_rates="1", surround_max=48000, dsp_96k=False, k176=False):
     """The rates the card takes right now. DSP mode (Direct Mode off) runs at
     48 kHz, or 48 and 96 kHz with the driver's dsp_96k option (0.9.4+), in
     stereo and 5.1. 44.1 and 88.2 kHz are stereo only. 5.1 goes up to
     `surround_max`: 48 kHz on old drivers, 96 kHz from 0.7.0, 192 kHz from
     0.9.4. Stereo in Direct Mode gets them all."""
-    rates = card_rates(pcm_rates)
+    rates = card_rates(pcm_rates, k176)
     if not direct:
         return [r for r in rates if r in DSP_RATES] if dsp_96k else [48000]
     if surround:

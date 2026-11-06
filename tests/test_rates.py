@@ -331,6 +331,72 @@ class Driver094Test(RateBase):
         self.assertFalse(C.restarts_stream_on_direct())
 
 
+class Driver097Test(RateBase):
+    """Driver 0.9.7: 176.4 kHz in stereo, with its pcm_176k4 option."""
+
+    def setUp(self):
+        super().setUp()
+        S.PARAMS.update({"version": "0.9.7", "pcm_rates": "2", "surround_96k": "1",
+                         "surround_192k": "1", "dac_441": "Y", "dsp_96k": "Y",
+                         "pcm_176k4": "Y", "src_reclock": "Y"})
+
+    def offered(self, pg):
+        q = pg.quality
+        return [q.itemText(k) for k in range(q.count()) if q.model().item(k).isEnabled()]
+
+    def test_176_4_plays_in_stereo_with_the_big_buffer(self):
+        self.pick(176400)
+        self.assertEqual(self.rate(), (176400, 1024))
+        self.assertEqual(S.PW.settings["clock.allowed-rates"],
+                         "[ 44100 48000 88200 96000 176400 192000 384000 ]")
+
+    def test_5_1_moves_it_to_192_and_dsp_mode_to_96(self):
+        self.pick(176400)
+        self.layout(S.SURROUND)
+        self.assertEqual(self.rate(), (192000, 1024))
+        self.layout(S.STEREO)
+        self.direct(False)
+        self.assertEqual(self.rate(), (96000, 0))
+        self.direct(True)
+        self.assertEqual(self.rate(), (176400, 1024))
+
+    def test_dsp_mode_without_dsp_96k_goes_to_48(self):
+        S.PARAMS["dsp_96k"] = "N"
+        self.pick(176400)
+        self.direct(False)
+        self.assertEqual(self.rate(), (48000, 0))
+
+    def test_picker_lists_it_and_greys_it_on_5_1(self):
+        pg = self.page(pages.PlaybackPage)
+        pg.refresh()
+        self.assertIn("176.4 kHz", self.offered(pg))
+        self.layout(S.SURROUND)
+        pg.refresh()
+        self.assertNotIn("176.4 kHz", self.offered(pg))
+        self.assertIn("44.1/88.2/176.4/384 kHz are stereo only", pg.rate_note.text())
+
+    def test_not_offered_without_pcm_176k4(self):
+        for value in ("N", None):
+            if value:
+                S.PARAMS["pcm_176k4"] = value
+            else:
+                S.PARAMS.pop("pcm_176k4", None)
+            pg = self.page(pages.PlaybackPage)
+            pg.refresh()
+            items = [pg.quality.itemText(k) for k in range(pg.quality.count())]
+            self.assertNotIn("176.4 kHz", items)
+            self.pick(44100)
+            self.assertNotIn("176400", S.PW.settings["clock.allowed-rates"])
+
+    def test_device_tab_lists_the_new_options(self):
+        pg = self.page(pages.SettingsPage)
+        pg.refresh()
+        text = pg.info.text()
+        self.assertIn("pcm_176k4=Y", text)
+        self.assertIn("src_reclock=Y", text)
+        self.assertIn("44.1/48/88.2/96/176.4/192/384 kHz", text)
+
+
 class RatePickerUiTest(S.AppTestCase):
     def setUp(self):
         super().setUp()
