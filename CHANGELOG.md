@@ -5,7 +5,23 @@ driver ([SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv)).
 
 ## Unreleased
 
+### Added
+
+- 44.1 and 88.2 kHz in the sample-rate picker, for CD-family music played as
+  is (driver 0.9.4+, `pcm_rates=2`). Stereo in Direct Mode only: on the 5.1
+  stream they're greyed out, and a 44.1/88.2 pick plays at 48/96 kHz there.
+- 5.1 at 192 kHz (driver 0.9.4+, `surround_192k=1`). Only 384 kHz is stereo
+  only now.
+- Settings → Device lists the driver's rate options (`pcm_rates`,
+  `dac_441`, `surround_192k`, ...) read-only, and the 5.1 rates.
+
 ### Changed
+
+- "Follow the file" (Auto) lets PipeWire open the card at 44.1 and 88.2 kHz
+  too. A rates file written by an older version is brought up to date at
+  start.
+- Direct Mode's ⓘ drops the "pause and play" hint on driver 0.9.4+: the
+  driver restarts a playing stream itself now.
 
 - README: the head unit's plug indicators, the auto switch and the "Mic
   Gain" name now name their driver,

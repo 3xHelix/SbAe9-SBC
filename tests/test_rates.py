@@ -204,7 +204,102 @@ class Driver070Test(RateBase):
         q = pg.quality
         enabled = [q.itemText(k) for k in range(q.count()) if q.model().item(k).isEnabled()]
         self.assertEqual(enabled, ["Auto (48–96 kHz)", "48 kHz", "96 kHz"])
-        self.assertIn("5.1 plays at up to 96 kHz", pg.rate_note.text())
+        self.assertIn("5.1 plays at 48/96 kHz", pg.rate_note.text())
+
+
+class Driver094Test(RateBase):
+    """Driver 0.9.4: 44.1/88.2 kHz in stereo (pcm_rates=2), 5.1 up to 192 kHz
+    (surround_192k), and Direct Mode restarts a playing stream itself."""
+
+    def setUp(self):
+        super().setUp()
+        S.PARAMS.update({"version": "0.9.4", "pcm_rates": "2", "surround_96k": "1",
+                         "surround_192k": "1", "dac_441": "Y"})
+
+    def enabled(self, pg):
+        q = pg.quality
+        return [q.itemText(k) for k in range(q.count()) if q.model().item(k).isEnabled()]
+
+    def test_44_1_and_88_2_play_in_stereo(self):
+        for r in (44100, 88200):
+            self.pick(r)
+            self.assertEqual(self.rate(), (r, 0))
+
+    def test_allowed_rates_list_the_cd_rates(self):
+        self.pick(44100)
+        full = "[ 44100 48000 88200 96000 192000 384000 ]"
+        self.assertEqual(S.PW.settings["clock.allowed-rates"], full)
+        with open(pipewire.RATES_CONF) as f:
+            self.assertIn(f"allowed-rates = {full}", f.read())
+
+    def test_start_updates_an_old_drop_in(self):
+        old = "[ 48000 96000 192000 384000 ]"
+        pipewire.set_rate_mode(0, pipewire.RATES)             # written by an older version
+        self.assertEqual(S.PW.settings["clock.allowed-rates"], old)
+        self.ctx.restore_rate()
+        full = "[ 44100 48000 88200 96000 192000 384000 ]"
+        self.assertEqual(S.PW.settings["clock.allowed-rates"], full)
+        with open(pipewire.RATES_CONF) as f:
+            self.assertIn(full, f.read())
+
+    def test_start_leaves_rates_set_elsewhere(self):
+        pipewire.set_rate_mode(0, pipewire.RATES)
+        S.PW.settings["clock.allowed-rates"] = "[ 48000 ]"     # another tool
+        self.ctx.restore_rate()
+        self.assertEqual(S.PW.settings["clock.allowed-rates"], "[ 48000 ]")
+
+    def test_start_without_a_drop_in_writes_nothing(self):
+        self.ctx.restore_rate()
+        self.assertFalse(os.path.exists(pipewire.RATES_CONF))
+
+    def test_5_1_goes_to_192_and_moves_cd_rates_up(self):
+        self.pick(192000)
+        self.layout(S.SURROUND)
+        self.assertEqual(self.rate(), (192000, 1024))
+        self.pick(88200)                            # stereo only: 96 kHz on 5.1
+        self.assertEqual(self.rate(), (96000, 0))
+        self.pick(44100)
+        self.assertEqual(self.rate(), (48000, 0))
+        self.pick(384000)
+        self.assertEqual(self.rate(), (192000, 1024))
+        self.layout(S.STEREO)
+        self.assertEqual(self.rate(), (384000, 2048))
+
+    def test_surround_192k_off_keeps_5_1_at_96(self):
+        S.PARAMS["surround_192k"] = "0"
+        self.pick(192000)
+        self.layout(S.SURROUND)
+        self.assertEqual(self.rate(), (96000, 0))
+
+    def test_dsp_mode_still_48(self):
+        self.pick(44100)
+        self.direct(False)
+        self.assertEqual(self.rate(), (48000, 0))
+        self.direct(True)
+        self.assertEqual(self.rate(), (44100, 0))
+
+    def test_picker_lists_cd_rates_and_greys_them_on_5_1(self):
+        pg = self.page(pages.PlaybackPage)
+        pg.refresh()
+        self.assertEqual(self.enabled(pg), ["Auto (44.1–384 kHz)", "44.1 kHz", "48 kHz", "88.2 kHz",
+                                            "96 kHz", "192 kHz", "384 kHz"])
+        self.layout(S.SURROUND)
+        pg.refresh()
+        self.assertEqual(self.enabled(pg), ["Auto (48–192 kHz)", "48 kHz", "96 kHz", "192 kHz"])
+        self.assertIn("5.1 plays at 48/96/192 kHz; 44.1/88.2/384 kHz are stereo only.",
+                      pg.rate_note.text())
+
+    def test_pcm_rates_1_hides_cd_rates(self):
+        S.PARAMS["pcm_rates"] = "1"
+        pg = self.page(pages.PlaybackPage)
+        pg.refresh()
+        self.assertNotIn("44.1 kHz", [pg.quality.itemText(k) for k in range(pg.quality.count())])
+
+    def test_no_pause_and_play_hint(self):
+        self.assertTrue(C.restarts_stream_on_direct())
+        self.assertNotIn("pause and play", pages.DIRECT_TIP)
+        del S.PARAMS["surround_192k"]
+        self.assertFalse(C.restarts_stream_on_direct())
 
 
 class RatePickerUiTest(S.AppTestCase):

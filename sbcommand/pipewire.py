@@ -21,7 +21,10 @@ from sbae9kit import ae9
 
 from . import config
 
-RATES = [48000, 96000, 192000, 384000]  # what the AE-9 driver plays (pcm_rates=1)
+ALL_RATES = [44100, 48000, 88200, 96000, 192000, 384000]   # every rate the AE-9 driver can play
+RATES = [48000, 96000, 192000, 384000]   # without 44.1/88.2 (pcm_rates=1, drivers before 0.9.4)
+CD_RATES = (44100, 88200)                # stereo, Direct Mode only (pcm_rates=2)
+SURROUND_RATES = (48000, 96000, 192000)  # what 5.1 can play at most
 RATES_CONF = os.path.expanduser("~/.config/pipewire/pipewire.conf.d/90-sbae9-sbc-rates.conf")
 # The head unit mic input's own sample rate: a WirePlumber rule on that one source
 # (written only when you pick a rate; Automatic removes it).
@@ -290,45 +293,100 @@ def clock_settings():
 QUANTUM = {384000: 2048, 192000: 1024}
 
 
-def max_rate(direct, surround, high_rates=True, surround_96k=False):
-    """Highest rate the card takes: DSP mode runs at 48 kHz (96 kHz through
-    the DSP played twice, so the driver blocks it), 5.1 plays at 48 kHz (96
-    kHz with driver 0.7.0+, which fixed it; before that 6 ch at 96 kHz fell
-    apart while playing), and stereo in Direct Mode goes to 384 kHz."""
-    if not high_rates or not direct:
-        return 48000
+def card_rates(pcm_rates):
+    """Every rate the loaded driver plays, from its pcm_rates option: 0 = 48
+    kHz only, 1 = 48-384 kHz, 2 = also 44.1 and 88.2 kHz (driver 0.9.4+)."""
+    if pcm_rates == "0":
+        return [48000]
+    return list(ALL_RATES) if pcm_rates == "2" else list(RATES)
+
+
+def allowed_rates(pcm_rates):
+    """What PipeWire may open the card at (clock.allowed-rates): the full set,
+    even with pcm_rates=0, so turning high rates back on needs no rewrite."""
+    return list(ALL_RATES) if pcm_rates == "2" else list(RATES)
+
+
+def playable_rates(direct, surround, pcm_rates="1", surround_max=48000):
+    """The rates the card takes right now. DSP mode runs at 48 kHz (96 kHz
+    through the DSP played twice, so the driver blocks it). 44.1 and 88.2 kHz
+    are stereo only. 5.1 goes up to `surround_max`: 48 kHz on old drivers, 96
+    kHz from 0.7.0, 192 kHz from 0.9.4. Stereo in Direct Mode gets them all."""
+    rates = card_rates(pcm_rates)
+    if not direct:
+        return [48000]
     if surround:
-        return 96000 if surround_96k else 48000
-    return 384000
+        return [r for r in rates if r in SURROUND_RATES and r <= surround_max] or [48000]
+    return rates
 
 
-def effective_rate(mode, cap):
-    """The rate applied for the user's choice (0 = automatic) under `cap`."""
-    return 0 if not mode else min(mode, cap)
+def effective_rate(mode, rates):
+    """The rate applied for the user's choice (0 = automatic) given the
+    `rates` the card takes now: the choice itself, else the next one up
+    (88.2 -> 96 kHz on 5.1, so nothing is lost), else the highest."""
+    if not mode:
+        return 0
+    if mode in rates:
+        return mode
+    up = [r for r in rates if r >= mode]
+    return min(up) if up else max(rates)
 
 
-def set_rate_mode(mode):
+def set_rate_mode(mode, rates=None):
     """mode 0 = follow the source, else force that rate (with its quantum).
 
     Only the forced rate is capped by the caller. allowed-rates, live and in
     the drop-in, always lists the card's full set: PipeWire treats it as the
     rates the device may open at, so a short list would make it resample.
+    `rates` is that set (allowed_rates()); 48-384 kHz if not given.
     The drop-in keeps PipeWire from falling back to 44.1/48 kHz-only after a
     restart; the forced rate is restored by the app at start.
     """
-    full = "[ " + " ".join(map(str, RATES)) + " ]"
-    _run("pw-metadata", "-n", "settings", "0", "clock.allowed-rates", full)
+    rates = rates or RATES
+    _run("pw-metadata", "-n", "settings", "0", "clock.allowed-rates", _rate_list(rates))
     _run("pw-metadata", "-n", "settings", "0", "clock.force-rate", str(mode))
     _run("pw-metadata", "-n", "settings", "0", "clock.force-quantum", str(QUANTUM.get(mode, 0)))
+    _write_rates_conf(rates)
+
+
+def _rate_list(rates):
+    return "[ " + " ".join(map(str, rates)) + " ]"
+
+
+def _write_rates_conf(rates):
+    full = _rate_list(rates)
+    resampled = ("Every listed rate is played as is." if 44100 in rates else
+                 "44.1 kHz material is resampled.")
     os.makedirs(os.path.dirname(RATES_CONF), exist_ok=True)
     with open(RATES_CONF, "w") as f:
         f.write("# Written by Sound Blaster Command for Linux (sbae9-sbc).\n"
-                "# The AE-9 plays 48/96/192/384 kHz; 44.1 kHz material is resampled.\n"
+                f"# The AE-9 plays {'/'.join(f'{r / 1000:g}' for r in rates)} kHz. {resampled}\n"
                 "# The app's chosen rate is applied at run time (clock.force-rate).\n"
                 "context.properties = {\n"
-                f"    default.clock.rate          = {RATES[0]}\n"
+                "    default.clock.rate          = 48000\n"
                 f"    default.clock.allowed-rates = {full}\n"
                 "}\n")
+
+
+def update_allowed_rates(rates):
+    """At start: if the app's drop-in lists other rates than the driver plays
+    now (written before the driver got 44.1/88.2 kHz, say), rewrite it, and
+    the live allowed-rates too while they're still the app's old list. Does
+    nothing without the drop-in (the app never wrote rates) and never touches
+    the forced rate."""
+    try:
+        with open(RATES_CONF) as f:
+            text = f.read()
+    except OSError:
+        return False
+    full = _rate_list(rates)
+    if f"allowed-rates = {full}\n" in text:
+        return False
+    old = re.search(r"allowed-rates = (\[[^\]]*\])", text)
+    _write_rates_conf(rates)
+    if old and clock_settings().get("clock.allowed-rates") == old.group(1):
+        _run("pw-metadata", "-n", "settings", "0", "clock.allowed-rates", full)
+    return True
 
 
 def current_force_rate():

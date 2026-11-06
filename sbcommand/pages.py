@@ -631,13 +631,7 @@ class PlaybackPage(Page):
         left.addSpacing(6)
         dm = QHBoxLayout()
         dm.addWidget(label("Direct Mode", "sectionTitle"))
-        dm.addWidget(info_button(
-            "Direct Mode sends audio straight to the ESS DAC at the stream's own sample rate "
-            "(up to 384 kHz), bypassing the DSP. SBX effects and the EQ are not heard.\n\n"
-            "With Direct Mode off, audio goes through the Sound Core3D DSP at 48 kHz, so "
-            "SBX, the EQ and Scout Mode work.\n\n"
-            "Switching Direct Mode on during playback goes silent until the stream restarts "
-            "(pause and play), same as on Windows."))
+        dm.addWidget(info_button(DIRECT_TIP + ("" if C.restarts_stream_on_direct() else DIRECT_PAUSE_TIP)))
         dm.addStretch()
         left.addLayout(dm)
         dmr = QHBoxLayout()
@@ -828,24 +822,30 @@ class PlaybackPage(Page):
 
     def _refresh_quality(self, n):
         ctx = self.ctx
-        cap = ctx.active_cap()
+        rates = ctx.active_rates()
         dragons = ctx.dragons_available()
         choice = ctx.settings["rate_mode"] or 0
         # show what PipeWire is forced to now, whoever set it (0 = Automatic)
         eff = pipewire.current_force_rate()
-        if self.quality.count() == 0:
+        offered = pipewire.card_rates(C.module_param("pcm_rates") or "1")
+        if C.module_param("pcm_rates") == "0":
+            offered = pipewire.RATES      # listed, greyed out: Settings can turn them on
+        if [self.quality.itemData(k) for k in range(1, self.quality.count())] != offered:
+            self.quality.clear()
             self.quality.addItem("", 0)
-            for r in pipewire.RATES:
+            for r in offered:
                 self.quality.addItem(f"{r / 1000:g} kHz", r)
         model = self.quality.model()
-        auto_top = ctx.rate_cap()   # Automatic never reaches the experimental rate
-        top = "48" if auto_top == 48000 else f"48–{auto_top // 1000}"
-        self.quality.setItemText(0, f"Auto ({top} kHz)")
+        auto = ctx.rate_set()       # Automatic never reaches the experimental rate
+        span = f"{min(auto) / 1000:g}" if len(auto) == 1 else f"{min(auto) / 1000:g}–{max(auto) / 1000:g}"
+        self.quality.setItemText(0, f"Auto ({span} kHz)")
         for k in range(1, self.quality.count()):
             r = self.quality.itemData(k)
             exp = dragons and r == 96000
+            stereo_only = r in pipewire.CD_RATES or r == 384000
             self.quality.setItemText(k, f"{r / 1000:g} kHz" + (" (experimental: here be dragons)" if exp else ""))
-            model.item(k).setEnabled(r <= cap or exp)
+            model.item(k).setEnabled(r in rates or exp)
+            model.item(k).setToolTip("Stereo only" if stereo_only and n.stream_layout() == "surround" else "")
         i = self.quality.findData(eff)
         self.quality.setCurrentIndex(i if i >= 0 else 0)
 
@@ -856,12 +856,14 @@ class PlaybackPage(Page):
         elif not direct:
             note = "DSP mode runs at 48 kHz."
         elif n.stream_layout() == "surround":
-            note = f"5.1 plays at up to {ctx.rate_cap() // 1000} kHz."
+            note = f"5.1 plays at {'/'.join(f'{r / 1000:g}' for r in ctx.rate_set())} kHz"
+            stereo = [r for r in offered if r not in ctx.rate_set()]
+            note += (f"; {'/'.join(f'{r / 1000:g}' for r in stereo)} kHz are stereo only." if stereo else ".")
             if dragons:
                 note += (" 96 kHz is experimental: it stutters more and more as it plays, "
                          "and needs a Windows capture to fix.")
-        outside = bool(eff) and eff != pipewire.effective_rate(choice, cap)
-        if choice and choice > cap and note and not outside:
+        outside = bool(eff) and eff != pipewire.effective_rate(choice, rates)
+        if choice and choice not in rates and note and not outside:
             note += f" Your {choice / 1000:g} kHz comes back when it can."
         if outside:
             note = (note + " " if note else "") + f"PipeWire is set to {eff / 1000:g} kHz outside the app."
@@ -1004,6 +1006,14 @@ class PlaybackPage(Page):
             self.optical_note.setStyleSheet("")
 
 
+DIRECT_TIP = ("Direct Mode sends audio straight to the ESS DAC at the stream's own sample rate "
+              "(up to 384 kHz), bypassing the DSP. SBX effects and the EQ are not heard.\n\n"
+              "With Direct Mode off, audio goes through the Sound Core3D DSP at 48 kHz, so "
+              "SBX, the EQ and Scout Mode work.")
+# drivers before 0.9.4 don't restart a playing stream when Direct Mode turns on
+DIRECT_PAUSE_TIP = ("\n\nSwitching Direct Mode on during playback goes silent until the stream "
+                    "restarts (pause and play), same as on Windows.")
+
 OPTICAL_TIP = ("Optical (S/PDIF) out plays what the main output plays, so you can feed a "
                "receiver or another device alongside your speakers.\n\n"
                "It only plays a stereo stream at 24-bit, up to 192 kHz: with Bit Depth at "
@@ -1022,6 +1032,9 @@ def mic_name(node):
     desc = (node or {}).get("description") or ""
     return desc if desc.startswith("AE-9") and len(desc) <= 40 else MIC_NAME
 
+
+# driver options shown read-only on Settings → Device
+DEVICE_PARAMS = ("pcm_rates", "pcm_bits", "dac_441", "surround", "surround_96k", "surround_192k")
 
 HEADPHONES_TIP = ("The head unit's headphone jacks, 3.5 mm and 1/4\". "
                   "\"Plugged In\" is the 3.5 mm jack; the 1/4\" doesn't report plugs.")
@@ -1739,7 +1752,7 @@ class SettingsPage(Page):
         self.info.setTextInteractionFlags(Qt.TextSelectableByMouse)
         self.lay.addWidget(self.info)
 
-        self.rates_banner = Banner("High sample rates (96–384 kHz) are off in the driver "
+        self.rates_banner = Banner("Sample rates other than 48 kHz are off in the driver "
                                    "(pcm_rates=0). Turn them on until the next reboot?",
                                    "Enable (asks for password)")
         self.rates_banner.button.clicked.connect(self._enable_rates)
@@ -1821,7 +1834,8 @@ class SettingsPage(Page):
     def _enable_rates(self):
         path = f"{C.MODULE_PARAMS}/pcm_rates"
         try:
-            subprocess.run(["pkexec", "sh", "-c", f"echo 1 > {path}"], timeout=120)
+            on = "2" if C.plays_cd_rates() else "1"
+            subprocess.run(["pkexec", "sh", "-c", f"echo {on} > {path}"], timeout=120)
         except (OSError, subprocess.TimeoutExpired):
             pass
         self.refresh()
@@ -1871,8 +1885,12 @@ class SettingsPage(Page):
         lines = [
             f"<b>{self.card.longname or 'Sound Blaster AE-9 not found'}</b>",
             f"ALSA card {self.card.card_index} · driver snd-hda-codec-creative-ae9 {mod}",
-            f"Playback rates: {'48 kHz only' if rates == '0' else '48/96/192/384 kHz' if rates == '1' else '+ 44.1/88.2 kHz (experimental)' if rates == '2' else '?'}"
+            f"Playback rates: {'48 kHz only' if rates == '0' else '48/96/192/384 kHz' if rates == '1' else '44.1/48/88.2/96/192/384 kHz' if rates == '2' else '?'}"
             f" · sample bits: {bits or '?'}",
+            "5.1 rates: " + "/".join(f"{r / 1000:g}" for r in pipewire.playable_rates(
+                True, True, rates or "1", C.surround_max())) + " kHz",
+            "Driver options: " + " · ".join(
+                f"{p}={C.module_param(p)}" for p in DEVICE_PARAMS if C.module_param(p) is not None),
             f"PipeWire sink: {n.sink['name'] if n.sink else '—'}",
             f"PipeWire source: {n.source['name'] if n.source else '—'}",
             f"Sound Blaster Command for Linux {__version__}",

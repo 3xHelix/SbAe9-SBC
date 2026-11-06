@@ -6,7 +6,8 @@ A desktop control panel for the Creative Sound Blaster AE-9, styled after
 Creative's *Sound Blaster Command*. This is the UI half of
 [SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv): it drives the card through that
 driver (`snd-hda-codec-creative-ae9`, 0.6.x; 0.6.7+ for 5.1, 0.6.8+ for
-bit depth, 0.7.0+ for 5.1 at 96 kHz) and
+bit depth, 0.7.0+ for 5.1 at 96 kHz, 0.9.4+ for 44.1/88.2 kHz and 5.1 at
+192 kHz) and
 works with the normal Linux audio stack: apps play to the AE-9 through
 PipeWire as usual. The effects run on the card's own DSP, and this app
 switches and adjusts them.
@@ -54,16 +55,15 @@ Regenerate them on a KDE desktop with `python3 tools/glass_screenshots.py BACKDR
 Volume, mute and output changes made with the head-unit knob, `alsamixer` or the
 desktop slider show up in the app immediately (it listens to ALSA control events).
 
-**Direct Mode on** = audio goes straight to the DAC at the source's rate (up
-to 384 kHz in stereo; 5.1 at up to 96 kHz with driver 0.7.0+, 48 kHz
-before) with no effects. **Direct Mode off** =
+**Direct Mode on** = audio goes straight to the DAC at the source's rate
+(44.1 to 384 kHz in stereo; 5.1 at 48/96/192 kHz with driver 0.9.4+, up to
+96 kHz with 0.7.0+, 48 kHz before) with no effects. **Direct Mode off** =
 audio goes through the DSP at 48 kHz, and SBX, the EQ and Scout Mode are
 heard. The app keeps your effect settings either way, and your chosen sample
 rate comes back when Direct Mode is switched on again.
 
 Not available on Linux (yet): Super X-Fi, Dolby Digital Live / DTS encoding,
-7.1 output, and 44.1 kHz-family playback. The driver
-doesn't support these yet.
+and 7.1 output. The driver doesn't support these yet.
 
 ## Requirements
 
@@ -86,6 +86,10 @@ doesn't support these yet.
   [v0.7.0](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.7.0) or newer
   (with its `surround_96k` option on, the default). Older drivers play 5.1 at
   48 kHz.
+- For 44.1 and 88.2 kHz (stereo, Direct Mode) and 5.1 at 192 kHz: driver
+  v0.9.4 or newer (coming next; options `pcm_rates=2` and `surround_192k=1`,
+  both the default). With it, switching Direct Mode on while playing no
+  longer needs a pause and play.
 - For recording at 96 kHz and 32-bit: driver
   [v0.9.1](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.9.1) or newer.
 - For optical (S/PDIF) out and in: driver

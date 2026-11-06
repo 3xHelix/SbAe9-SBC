@@ -290,3 +290,22 @@ def surround_96k_stable():
     """Driver 0.7.0 fixed 5.1 at 96 kHz and turned it on by default
     (surround_96k=1). Before that the option was an unstable experiment."""
     return driver_at_least(0, 7, 0) and module_param("surround_96k") == "1"
+
+
+def surround_max():
+    """The highest rate 5.1 plays at: 192 kHz with the driver's surround_192k
+    option on (0.9.4+), 96 kHz with a stable surround_96k (0.7.0+), else 48."""
+    if not surround_96k_stable():
+        return 48000
+    return 192000 if module_param("surround_192k") == "1" else 96000
+
+
+def plays_cd_rates():
+    """The driver can play 44.1 and 88.2 kHz (0.9.4+, its dac_441 option)."""
+    return module_param("dac_441") is not None
+
+
+def restarts_stream_on_direct():
+    """Drivers with surround_192k (0.9.4+) restart a playing stream when
+    Direct Mode turns on, so no pause and play is needed."""
+    return module_param("surround_192k") is not None

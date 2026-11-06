@@ -45,11 +45,15 @@ class Context(QObject):
         self.card.connection_changed.connect(self._on_card_rate)
         self.pw.updated.connect(self._on_pw_rate)
 
-    def rate_cap(self):
+    def rate_set(self):
+        """The rates the card plays right now (Direct Mode, 5.1, driver options)."""
         direct = bool(self.card.get(C.DIRECT, True)) if self.card.present else True
         surround = self.pw.nodes.stream_layout() == "surround"
-        return pipewire.max_rate(direct, surround, C.module_param("pcm_rates") != "0",
-                                 C.surround_96k_stable())
+        return pipewire.playable_rates(direct, surround, C.module_param("pcm_rates") or "1",
+                                       C.surround_max())
+
+    def rate_cap(self):
+        return max(self.rate_set())
 
     def dragons_available(self):
         """5.1 at 96 kHz on drivers before 0.7.0: experimental, only when the
@@ -61,12 +65,15 @@ class Context(QObject):
                 and C.module_param("pcm_rates") != "0"
                 and C.module_param("surround_96k") == "1")
 
-    def active_cap(self):
-        """The cap in force now: 96 kHz on 5.1 only while the user's own
-        experimental pick is live, else rate_cap()."""
+    def active_rates(self):
+        """The rates in force now: 48 and 96 kHz on 5.1 only while the user's
+        own experimental pick is live, else rate_set()."""
         if self._dragons and not self.dragons_available():
             self._dragons = False
-        return 96000 if self._dragons else self.rate_cap()
+        return [48000, 96000] if self._dragons else self.rate_set()
+
+    def active_cap(self):
+        return max(self.active_rates())
 
     def apply_rate(self, user=False, startup=False):
         """Write PipeWire's rate for the app's own pick, capped to what the
@@ -85,7 +92,7 @@ class Context(QObject):
             self._dragons = mode == 96000 and self.dragons_available()
         if not mode and not user:
             return
-        eff = pipewire.effective_rate(mode or 0, self.active_cap())
+        eff = pipewire.effective_rate(mode or 0, self.active_rates())
         want = (eff, pipewire.QUANTUM.get(eff, 0))
         if not user:
             now = (pipewire.current_force_rate(), pipewire.current_quantum())
@@ -101,7 +108,7 @@ class Context(QObject):
                 return   # re-checked when the current change has settled
 
         def run():
-            pipewire.set_rate_mode(eff)
+            pipewire.set_rate_mode(eff, pipewire.allowed_rates(C.module_param("pcm_rates")))
             self._rate_written = want
 
         def settled():
@@ -213,6 +220,7 @@ class Context(QObject):
         is in: before it, a 5.1 profile isn't known yet and the cap would be
         too high (6 ch above 48 kHz falls apart). With "Reload last rate on
         start" off the app only shows what PipeWire is running."""
+        pipewire.update_allowed_rates(pipewire.allowed_rates(C.module_param("pcm_rates")))
         if not self.settings["rate_mode"] or not self.settings["restore_rate_on_start"]:
             return
         if self.pw.nodes.device or self.pw.nodes.sink:
