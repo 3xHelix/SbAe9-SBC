@@ -108,6 +108,40 @@ def rgba(hex_color, alpha):
     return f"rgba({int(h[0:2], 16)},{int(h[2:4], 16)},{int(h[4:6], 16)},{alpha})"
 
 
+# Glass: the window's backgrounds (title and bottom bars, sidebar, pages, the
+# EQ graph) become see-through, on top of whichever palette is active; text
+# and controls stay solid. KDE blurs what's behind when the app runs through
+# XWayland (see __main__.use_xwayland and MainWindow.showEvent).
+GLASS = False
+GLASS_OPACITY = 0.70          # how solid the glass is (0.3 - 0.95)
+GLASS_RANGE = (30, 95)        # percent, for the Settings slider
+
+
+def clamp_glass(pct):
+    try:
+        pct = int(round(int(pct) / 5) * 5)
+    except (TypeError, ValueError):
+        return 70
+    return max(GLASS_RANGE[0], min(GLASS_RANGE[1], pct))
+
+
+def surface(hex_color, depth=1.0):
+    """A window background colour: as is, or see-through with Glass on.
+    depth < 1 makes that surface a little clearer than the others."""
+    if not GLASS:
+        return hex_color
+    return rgba(hex_color, round(max(0.0, min(1.0, GLASS_OPACITY * depth)), 3))
+
+
+def surface_q(hex_color, depth=1.0):
+    """surface() as a QColor, for widgets that paint their own background."""
+    from PySide6.QtGui import QColor
+    c = QColor(hex_color)
+    if GLASS:
+        c.setAlphaF(max(0.0, min(1.0, GLASS_OPACITY * depth)))
+    return c
+
+
 # Warnings use one red in every palette, so they always look the same.
 DANGER = "#e2505c"
 
@@ -125,28 +159,35 @@ apply("command")
 
 
 def _qss():
+    # thin light edges where glass panes meet, like light catching an edge
+    edge = rgba(OVERLAY, 0.14)
+    GLASS_EDGE_BOTTOM = f" border-bottom: 1px solid {edge};" if GLASS else ""
+    GLASS_EDGE_TOP = f" border-top: 1px solid {edge};" if GLASS else ""
+    GLASS_EDGE_RIGHT = f" border-right: 1px solid {edge};" if GLASS else ""
     return f"""
 * {{
     font-family: "Roboto Condensed", "Barlow Semi Condensed", "Noto Sans", "DejaVu Sans Condensed", sans-serif;
     color: {TEXT};
     font-size: 14px;
 }}
-QMainWindow, #root {{ background: {MAIN_TOP}; }}
-#titleBar {{ background: {TITLE_BG}; }}
+QMainWindow, #root {{ background: {"transparent" if GLASS else MAIN_TOP}; }}
+#titleBar {{ background: {surface(TITLE_BG)};{GLASS_EDGE_BOTTOM} }}
 #winButton, #winClose {{ background: transparent; border: none; border-radius: 3px; }}
 #winButton:hover {{ background: {rgba(OVERLAY, 0.10)}; }}
 #winClose:hover {{ background: {DANGER}; }}
 #appTitle {{ font-size: 16px; color: {TEXT}; }}
 #deviceName {{ font-size: 17px; font-weight: 700; color: {ACCENT}; }}
 #sidebar {{
-    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 {SIDEBAR_TOP}, stop:1 {SIDEBAR_BOTTOM});
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 {surface(SIDEBAR_TOP)},
+                                stop:1 {surface(SIDEBAR_BOTTOM)});{GLASS_EDGE_RIGHT}
 }}
 #sideCaption {{ color: {MUTED}; font-size: 13px; padding-left: 18px; }}
 #sideSep {{ background: {rgba(OVERLAY, 0.13)}; max-height: 1px; min-height: 1px; margin: 4px 10px; }}
 #content {{
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 {MAIN_TOP}, stop:1 {MAIN_BOTTOM});
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 {surface(MAIN_TOP, 0.85)},
+                                stop:1 {surface(MAIN_BOTTOM, 0.85)});
 }}
-#bottomBar {{ background: {BOTTOM_BG}; }}
+#bottomBar {{ background: {surface(BOTTOM_BG)};{GLASS_EDGE_TOP} }}
 #pageTitle {{ font-size: 23px; font-weight: 700; }}
 #sectionTitle {{ font-size: 15px; font-weight: 700; }}
 #subTitle {{ font-size: 16px; font-weight: 700; }}

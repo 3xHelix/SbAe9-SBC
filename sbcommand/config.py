@@ -64,7 +64,9 @@ DEFAULTS = {
     "tabs": {},              # page title -> last tab shown
     "palette": "command",    # see theme.PALETTES
     "frameless": True,       # the app's own title bar instead of the desktop's frame
-    "ui_scale": 100,         # percent, see theme.SCALES
+    "ui_scale": 100,
+    "glass": False,          # see-through backgrounds on any palette
+    "glass_opacity": 70,     # percent, see theme.GLASS_RANGE         # percent, see theme.SCALES
 }
 
 

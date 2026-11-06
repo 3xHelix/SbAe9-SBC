@@ -34,7 +34,7 @@ os.environ["XDG_CACHE_HOME"] = os.path.join(_TMP, "cache")
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 sys.path.insert(0, ROOT)
 
-from PySide6.QtCore import QCoreApplication, QEvent, QProcess  # noqa: E402
+from PySide6.QtCore import QCoreApplication, QEvent, QProcess, Qt  # noqa: E402,F401
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
 app = QApplication.instance() or QApplication([])

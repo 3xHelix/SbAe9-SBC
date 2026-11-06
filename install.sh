@@ -4,9 +4,17 @@
 # The app runs from this folder; re-run after moving it.
 set -e
 HERE="$(dirname "$(readlink -f "$0")")"
-mkdir -p ~/.local/bin ~/.local/share/applications ~/.local/share/icons/hicolor/scalable/apps
+ICONS=~/.local/share/icons/hicolor
+mkdir -p ~/.local/bin ~/.local/share/applications
 ln -sf "$HERE/sbae9-sbc" ~/.local/bin/sbae9-sbc
-cp "$HERE/sbae9-sbc.svg" ~/.local/share/icons/hicolor/scalable/apps/sbae9-sbc.svg
+for png in "$HERE"/appicon/sbae9-sbc-*.png; do
+    size=$(basename "$png" .png); size=${size##*-}
+    mkdir -p "$ICONS/${size}x${size}/apps"
+    cp "$png" "$ICONS/${size}x${size}/apps/sbae9-sbc.png"
+done
+rm -f "$ICONS/scalable/apps/sbae9-sbc.svg"     # the old icon, so it doesn't win
+touch "$ICONS"
+gtk-update-icon-cache -f -t "$ICONS" 2>/dev/null || true
 cat > ~/.local/share/applications/sbae9-sbc.desktop <<DESK
 [Desktop Entry]
 Type=Application

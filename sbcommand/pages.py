@@ -603,8 +603,28 @@ class PlaybackPage(Page):
         self._stream_pending = None
         left.addWidget(w)
         w, g, self.hp_sub = out_row(self.r_hp, "headphones", "Headphones")
-        left.addWidget(w)
+        # auto switch on the head unit's 3.5 mm headphone plug (newer drivers)
+        self.hp_auto_row = QWidget()
+        ar = QHBoxLayout(self.hp_auto_row)
+        ar.setContentsMargins(0, 4, 0, 0)
+        ar.setSpacing(10)
+        self.hp_auto = ToggleSwitch()
+        self.hp_auto.toggled.connect(lambda on: self.card.set(C.HU_AUTO, on))
+        ar.addWidget(self.hp_auto)
+        ar.addWidget(label("Auto switch on headphone plug (3.5 mm jack)", "muted"))
+        ar.addWidget(info_button(
+            "Plug headphones into the head unit's 3.5 mm jack and the card switches to "
+            "headphones; unplug and it goes back to speakers, about a second and a half "
+            "after the plug settles. Same switch as holding the knob, and each output keeps "
+            "its own volume.\n\n"
+            "It acts once per plug change: switch back yourself afterwards and it stays that "
+            "way until the next plug or unplug.\n\n"
+            "Only the 3.5 mm jack is reported. The 6.3 mm jack can't switch outputs by itself."))
+        ar.addStretch()
+        g.addWidget(self.hp_auto_row, 2, 2, 1, 3)
+        self.hp_auto_row.setVisible(False)
         self.hp_sub.setText("Head unit headphone jack")
+        left.addWidget(w)
 
         left.addSpacing(6)
         dm = QHBoxLayout()
@@ -900,6 +920,13 @@ class PlaybackPage(Page):
             return
         out = self.card.get(C.OUTPUT, 0)
         (self.r_hp if out == 1 else self.r_spk).setChecked(True)
+        hp = "Head unit headphone jack"
+        if self.card.has(C.HU_PHONES):
+            hp += " · 3.5 mm plugged in" if self.card.get(C.HU_PHONES) else " · nothing in the 3.5 mm jack"
+        self.hp_sub.setText(hp)
+        self.hp_auto_row.setVisible(self.card.has(C.HU_AUTO))
+        if self.card.has(C.HU_AUTO):
+            self.hp_auto.setCheckedSilently(bool(self.card.get(C.HU_AUTO)))
         cfg = self.card.get_item(C.SPEAKER_CFG) or "2.1"
         if self.spk_cfg.count() != len(self.card.items(C.SPEAKER_CFG)):
             self.spk_cfg.clear()
@@ -1153,6 +1180,9 @@ class RecordingPage(Page):
         self.lay.addWidget(label(
             "Phantom power (48V) is the button on the head unit's front panel. The XLR / TRS "
             "jack and the head unit's 3.5 mm line-in share this input.", "hint", wrap=True))
+        self.line_in = label("", "muted")
+        self.line_in.setVisible(False)
+        self.lay.addWidget(self.line_in)
 
         self.lay.addStretch()
 
@@ -1316,6 +1346,10 @@ class RecordingPage(Page):
             _, muted = pipewire.get_volume(n.source["id"])
         if not self.card.present:
             return
+        self.line_in.setVisible(self.card.has(C.HU_LINE_IN))
+        if self.card.has(C.HU_LINE_IN):
+            self.line_in.setText("Head unit 3.5 mm line-in: " + (
+                "plugged in" if self.card.get(C.HU_LINE_IN) else "nothing plugged in"))
         raw = self.card.get(C.MIC, 0)
         self.mic.set_state(raw / 99, muted, "muted" if raw == 0 else f"{C.mic_raw_to_db(raw):+d} dB")
         self.xlr.set_value(str(self.card.get(C.XLR_GAIN, 1)))
@@ -1603,6 +1637,37 @@ class SettingsPage(Page):
         self.frameless.toggled.connect(self._frameless)
         self.lay.addWidget(self.frameless)
 
+        # Glass: see-through backgrounds on whichever palette is active
+        grow = QHBoxLayout()
+        grow.setSpacing(12)
+        self.glass = QCheckBox("Glass")
+        self.glass.setToolTip("See-through backgrounds on any palette (the window reopens)")
+        self.glass.setChecked(T.GLASS)
+        self.glass.toggled.connect(self._glass)
+        grow.addWidget(self.glass)
+        grow.addSpacing(18)
+        grow.addWidget(QLabel("Opacity"))
+        self.glass_opacity = QSlider(Qt.Horizontal)
+        self.glass_opacity.setRange(*T.GLASS_RANGE)
+        self.glass_opacity.setSingleStep(5)
+        self.glass_opacity.setPageStep(10)
+        self.glass_opacity.setFixedWidth(200)
+        self.glass_opacity.setValue(round(T.GLASS_OPACITY * 100))
+        self.glass_opacity.setEnabled(T.GLASS)
+        self.glass_opacity.valueChanged.connect(self._glass_moved)
+        self.glass_opacity.sliderReleased.connect(self._glass_save)
+        grow.addWidget(self.glass_opacity)
+        self.glass_lbl = label("", "bigValue")
+        self.glass_lbl.setMinimumWidth(50)
+        grow.addWidget(self.glass_lbl)
+        grow.addStretch()
+        self.lay.addLayout(grow)
+        self.lay.addWidget(label(
+            "Makes the window's backgrounds see-through, whatever the palette; text and "
+            "controls stay solid. On KDE, what's behind is frosted (the app runs through "
+            "XWayland for that). Switching Glass on or off reopens the window.", "hint", wrap=True))
+        self._glass_label(self.glass_opacity.value())
+
         self.lay.addWidget(label("Start-up", "sectionTitle"))
         self.autostart = QCheckBox("Start Sound Blaster Command when you log in")
         self.autostart.setToolTip("Adds the app to your desktop's autostart "
@@ -1673,6 +1738,28 @@ class SettingsPage(Page):
             return
         self.scale_lbl.setText(f"{v}%")
         self.scale_apply.setEnabled(v != T.SCALE)
+
+    def _glass(self, on):
+        self.ctx.settings["glass"] = on
+        self.ctx.restart_requested.emit()
+
+    def _glass_moved(self, v):
+        snapped = T.clamp_glass(v)
+        if snapped != v:
+            self.glass_opacity.setValue(snapped)
+            return
+        self._glass_label(v)
+        if not self.glass_opacity.isSliderDown():   # keyboard / wheel: apply now
+            self._glass_save()
+
+    def _glass_label(self, v):
+        self.glass_lbl.setText(f"{v}%")
+
+    def _glass_save(self):
+        v = self.glass_opacity.value()
+        T.GLASS_OPACITY = v / 100
+        self.ctx.settings["glass_opacity"] = v
+        self.ctx.restyle_requested.emit()
 
     def _frameless(self, on):
         self.ctx.settings["frameless"] = on

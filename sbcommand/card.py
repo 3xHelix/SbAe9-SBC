@@ -22,6 +22,9 @@ XLR_GAIN = "XLR Gain Capture Volume"   # 0/1/2 = 0/+10/+20 dB
 DAC_FILTER = "DAC Filter"              # Default / Fast / Slow
 DIRECT = "Direct Mode Switch"
 SBX = "SBX Switch"
+HU_AUTO = "Head Unit Auto Switch"              # newer drivers: 3.5 mm headphone plug switches outputs
+HU_PHONES = "Head Unit Phones Plugged"         # read-only: 3.5 mm headphone jack
+HU_LINE_IN = "Head Unit Line In Plugged"       # read-only: 3.5 mm line-in jack
 OPTICAL_OUT = "Optical Out Playback Switch"   # newer drivers: optical plays what the main output plays
 BIT_DEPTH = "PCM Bit Depth"
 CAP_BIT_DEPTH = "Capture Bit Depth"       # 24-bit / 32-bit recording (newer drivers), next open             # 24-bit / 32-bit (newer drivers), next stream open

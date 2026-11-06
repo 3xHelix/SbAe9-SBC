@@ -7,7 +7,7 @@ import signal
 import sys
 
 from PySide6.QtCore import QProcess, QTimer
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QWidget
 
 from . import __version__, config, pipewire, profiles, theme
 from .window import Context, MainWindow
@@ -33,7 +33,7 @@ def parse_args(argv):
 BASE_ENV = "SBAE9_SBC_BASE_SCALE_FACTOR"
 
 
-def set_scale(pct, env=os.environ):
+def set_scale(pct, env=os.environ, glass=False):
     """Ask Qt to draw everything at pct percent (on top of any factor the
     user's environment set). Must run before QApplication exists."""
     theme.SCALE = theme.clamp_scale(pct)
@@ -46,13 +46,14 @@ def set_scale(pct, env=os.environ):
         env.pop("QT_SCALE_FACTOR", None)
     else:
         env["QT_SCALE_FACTOR"] = f"{factor:g}"
-    use_xwayland(theme.SCALE != 100, env)
+    use_xwayland(theme.SCALE != 100 or glass, env)
 
 
 # Qt on Wayland puts popups (dropdown lists, menus) in the wrong place when
 # QT_SCALE_FACTOR isn't 1. Through XWayland they line up, so a scaled UI runs
-# there; at 100% the app stays native Wayland. A QT_QPA_PLATFORM the user set
-# is left alone.
+# there. Glass runs there too: KDE only blurs behind X11 windows for apps
+# without KDE's own libraries. Otherwise the app stays native Wayland. A
+# QT_QPA_PLATFORM the user set is left alone.
 QPA_MARK = "SBAE9_SBC_SET_QPA"
 
 
@@ -88,7 +89,10 @@ def relaunch_args(argv):
 
 def main():
     args, qt_args = parse_args(sys.argv)
-    set_scale(args.scale if args.scale else config.Settings()["ui_scale"])
+    saved = config.Settings()
+    theme.GLASS = bool(saved["glass"])
+    theme.GLASS_OPACITY = theme.clamp_glass(saved["glass_opacity"]) / 100
+    set_scale(args.scale if args.scale else saved["ui_scale"], glass=theme.GLASS)
     app = QApplication(sys.argv[:1] + qt_args)
     app.setApplicationName("Sound Blaster Command")
     app.setApplicationVersion(__version__)
@@ -131,6 +135,14 @@ def main():
             app.quit()
 
     ctx.restart_requested.connect(restart)
+
+    def restyle():
+        app.setStyleSheet(theme.stylesheet())
+        win.update()
+        for wdg in win.findChildren(QWidget):
+            wdg.update()
+
+    ctx.restyle_requested.connect(restyle)
 
     # let Ctrl+C in a terminal close the app
     signal.signal(signal.SIGINT, lambda *_: app.quit())

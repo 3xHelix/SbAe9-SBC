@@ -44,5 +44,23 @@ class FrameTest(S.AppTestCase):
         self.assertTrue(w.windowState() & Qt.WindowMinimized)
 
 
+class AppIconTest(S.AppTestCase):
+    def test_window_uses_the_png_icon_in_every_size(self):
+        from sbcommand import window
+        ic = window.app_icon()
+        sizes = sorted(sz.width() for sz in ic.availableSizes())
+        self.assertEqual(sizes, [16, 24, 32, 48, 64, 128, 256, 512])
+        self.assertFalse(self.window().windowIcon().isNull())
+
+    def test_falls_back_to_the_wave_without_pngs(self):
+        from sbcommand import window
+        old = window.APPICON_DIR
+        window.APPICON_DIR = "/nonexistent"
+        try:
+            self.assertFalse(window.app_icon().isNull())
+        finally:
+            window.APPICON_DIR = old
+
+
 if __name__ == "__main__":
     unittest.main()

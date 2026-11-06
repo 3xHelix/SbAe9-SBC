@@ -93,7 +93,7 @@ doesn't support these yet.
 
 ```sh
 ./sbae9-sbc            # run from this folder
-./install.sh           # adds a menu entry + ~/.local/bin/sbae9-sbc
+./install.sh           # adds a menu entry, the app icon + ~/.local/bin/sbae9-sbc
 ./sbae9-sbc --palette helix   # one launch in the Helix palette (saved choice unchanged)
 ./sbae9-sbc --scale 80        # one launch at 80% size (saved UI scale unchanged)
 ```

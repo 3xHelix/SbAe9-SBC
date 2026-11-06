@@ -3,6 +3,36 @@
 Sound Blaster Command for Linux: the UI for the Creative Sound Blaster AE-9
 driver ([SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv)).
 
+## 0.8.0 (2026-11-06)
+
+Looks round. A new icon, and Glass: frosted see-through backgrounds on any
+palette, with KDE blurring whatever's behind. Plus the app is ready for the
+head unit's plug detection, which lands with the next driver. Works with
+[SbAe9-Drv v0.9.2](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.9.2)
+and older; anything a driver doesn't have stays hidden.
+
+### Added
+
+- **Glass** (Settings → Application): the window's backgrounds go
+  see-through on whichever palette you're using, with an Opacity slider
+  from 95% down to 30% that works live. Text, dials, sliders and the EQ
+  curve stay solid. On KDE what's behind gets properly frosted: with Glass
+  on, the app runs through XWayland, where KDE's blur works for it.
+  Elsewhere it's clear glass.
+  Switching Glass on or off reopens the window (a second).
+- **New app icon**: a neon mixer tile in purple and orange, for the menu,
+  taskbar and the window itself, in every size from 16 to 512 px. Re-run
+  `./install.sh` to pick it up. (`tools/make_icons.py` rebuilds the sizes
+  from the artwork.)
+- **Auto switch on headphone plug** (Playback, under Headphones): plug
+  headphones into the head unit's 3.5 mm jack and the card switches to them,
+  unplug and it's back to speakers. Off unless you turn it on. Only the
+  3.5 mm jack is reported, so the 6.3 mm one can't do this. Shows up with
+  the next driver release (after v0.9.2).
+- Plugged-in indicators: Playback shows whether something's in the head
+  unit's 3.5 mm headphone jack, Recording whether the 3.5 mm line-in is in
+  use. They follow the plugs live. Hidden on drivers that don't report them.
+
 ## 0.7.0 (2026-11-06)
 
 More stuff, more tabs. Playback, Recording and Settings now have tabs across

@@ -423,7 +423,7 @@ class EqGraph(QWidget):
         pts, pre, main = self._points()
         line = QColor(T.EQ_LINE if self._active else T.IDLE)
         for rect, plot, grid in ((self._pre_rect(), pre, False), (self._main_rect(), main, True)):
-            p.fillRect(rect, QColor(T.GRAPH_BG))
+            p.fillRect(rect, T.surface_q(T.GRAPH_BG))
             f = p.font()
             f.setPixelSize(13)
             p.setFont(f)
@@ -535,7 +535,7 @@ class ProfileCard(QWidget):
         icons.paint(p, ic, QRectF(art.center().x() - s / 2, art.center().y() - s / 2, s, s), "#ffffff")
         p.setOpacity(1.0)
         cap = QRectF(r.left(), art.bottom(), r.width(), r.bottom() - art.bottom())
-        p.fillRect(cap, QColor(T.CARD_CAP))
+        p.fillRect(cap, T.surface_q(T.CARD_CAP, 1.2))
         f = p.font()
         f.setPixelSize(17 if self.selected else 15)
         f.setBold(True)

@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: GPL-2.0-only
 """Main window: sidebar navigation, page stack and the bottom status bar."""
 
+import os
+
 from PySide6.QtCore import QEvent, QObject, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QIcon, QPainter
 from PySide6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QMainWindow, QPushButton, QStackedWidget,
@@ -18,6 +20,7 @@ class Context(QObject):
     profile_changed = Signal()
     palette_requested = Signal(str)
     restart_requested = Signal()
+    restyle_requested = Signal()      # same window, new style sheet (glass opacity)
 
     def __init__(self):
         super().__init__()
@@ -299,6 +302,38 @@ class StatusDot(QWidget):
         p.drawEllipse(2, 2, 12, 12)
 
 
+APPICON_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "appicon")
+
+
+def app_icon():
+    """The app icon (appicon/sbae9-sbc-<size>.png, every size), or the wave
+    symbol if the PNGs are missing."""
+    ic = QIcon()
+    try:
+        names = os.listdir(APPICON_DIR)
+    except OSError:
+        names = []
+    for name in sorted(names):
+        if name.startswith("sbae9-sbc-") and name.endswith(".png"):
+            ic.addFile(os.path.join(APPICON_DIR, name))
+    return ic if not ic.isNull() else QIcon(icons.pixmap("wave", T.ACCENT_HI, 64))
+
+
+def blur_behind(win):
+    """Ask KDE to blur what's behind a glass window. Works for X11 windows
+    (the app runs through XWayland with Glass on); elsewhere it's a no-op
+    and the glass is just clear."""
+    from PySide6.QtCore import QProcess
+    from PySide6.QtGui import QGuiApplication
+    import shutil
+    if QGuiApplication.platformName() != "xcb" or not shutil.which("xprop"):
+        return False
+    # an empty region (a single 0) means "the whole window" to KWin
+    prop = "_KDE_NET_WM_BLUR_BEHIND_REGION"
+    return QProcess.startDetached("xprop", ["-id", str(int(win.winId())),
+                                           "-f", prop, "32c", "-set", prop, "0"])[0]
+
+
 class TitleBar(QFrame):
     """The AE-9 header. Without the desktop's frame it is the window's
     handle: drag to move, double-click to maximize."""
@@ -369,7 +404,7 @@ class MainWindow(QMainWindow):
         self.ctx = ctx
         self.card = ctx.card
         self.setWindowTitle("Sound Blaster Command — AE-9")
-        self.setWindowIcon(QIcon(icons.pixmap("wave", T.ACCENT_HI, 64)))
+        self.setWindowIcon(app_icon())
         self.resize(1180, 760)
         self.setMinimumSize(1000, 660)
 
@@ -381,7 +416,7 @@ class MainWindow(QMainWindow):
         v.setSpacing(0)
 
         # title strip
-        title = TitleBar()
+        title = self.title_bar = TitleBar()
         th = QHBoxLayout(title)
         th.setContentsMargins(18, 8, 10, 6)
         th.setSpacing(4)
@@ -414,7 +449,7 @@ class MainWindow(QMainWindow):
         mid.setSpacing(0)
         v.addLayout(mid, 1)
 
-        side = QFrame()
+        side = self.sidebar = QFrame()
         side.setObjectName("sidebar")
         side.setFixedWidth(232)
         side.setStyleSheet(nav_qss().replace("QPushButton", "#sidebar QPushButton"))
@@ -453,7 +488,7 @@ class MainWindow(QMainWindow):
         mid.addWidget(self.stack, 1)
 
         # bottom bar
-        bottom = QFrame()
+        bottom = self.bottom_bar = QFrame()
         bottom.setObjectName("bottomBar")
         bottom.setFixedHeight(56)
         bl = QHBoxLayout(bottom)
@@ -506,6 +541,9 @@ class MainWindow(QMainWindow):
         if ctx.applier.busy:
             self.applying.set_busy(True)
 
+        if T.GLASS:
+            # see-through backgrounds; must be set before the window is created
+            self.setAttribute(Qt.WA_TranslucentBackground, True)
         self.grips = [EdgeGrip(edges, self) for edges in EdgeGrip.CURSORS]
         self.set_frameless(bool(ctx.settings["frameless"]))
 
@@ -529,6 +567,11 @@ class MainWindow(QMainWindow):
             g.setVisible(on)
             if on:
                 g.place(self.width(), self.height())
+
+    def showEvent(self, e):
+        super().showEvent(e)
+        if T.GLASS:
+            blur_behind(self)
 
     def resizeEvent(self, e):
         super().resizeEvent(e)
