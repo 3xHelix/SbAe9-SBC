@@ -39,6 +39,18 @@ switches and adjusts them.
 Shown in the Helix palette, on a 5.1 setup. Regenerate them with
 `python3 tools/screenshots.py [palette]`.
 
+**Glass** (Settings → Application): frosted, see-through backgrounds on any
+palette, here Helix at 70% and 50% over a Cyberpunk 2077 wallpaper.
+
+<table>
+  <tr>
+    <td><img src="docs/glass-sbx.png" alt="SBX Profile page in Glass mode"><br><sub>SBX Profile, Glass 70%</sub></td>
+    <td><img src="docs/glass-equalizer.png" alt="Equalizer page in Glass mode"><br><sub>Equalizer, Glass 50%</sub></td>
+  </tr>
+</table>
+
+Regenerate them on a KDE desktop with `python3 tools/glass_screenshots.py BACKDROP.png`.
+
 Volume, mute and output changes made with the head-unit knob, `alsamixer` or the
 desktop slider show up in the app immediately (it listens to ALSA control events).
 
