@@ -19,7 +19,7 @@ switches and adjusts them.
 | **SBX Profile** | SBX on/off; Surround, Crystalizer, Bass, Smart Volume (Night/Normal/Loud), Dialog+; built-in and personal profiles | card DSP (ALSA `SBX Switch`, `FX …`) |
 | **Equalizer** | 10-band EQ + pre-gain, Creative's 20 presets, your own saved curves | card DSP (`EQ …`) |
 | **Playback** | Speakers / headphones, speaker config (2.0 – 5.1) with matching stereo / 5.1 stream, Direct Mode, DAC filter, sample rate and bit depth, default device, spoken speaker test; **Digital** tab: optical out | ALSA + PipeWire |
-| **Recording** | Head unit mic (XLR/TRS or 3.5 mm mic jack): level, mic gain (0/+10/+20 dB), live input meter, mute, "listen to mic", sample rate (48 / 96 kHz), default device; **Other Input** tab: optical in, What U Hear | ALSA + PipeWire |
+| **Recording** | Head unit mic (XLR/TRS or 3.5 mm mic jack): level, mic gain (0/+10/+20 dB), phantom power 48V (asks first), live input meter, mute, "listen to mic", sample rate (48 / 96 kHz), default device; **Other Input** tab: optical in, What U Hear (48 / 96 kHz) | ALSA + PipeWire |
 | **Scout Mode** | Creative's Scout Mode (footstep EQ + Smart Volume) | card DSP |
 | **Mixer** | Output volume (same as the head-unit knob), mute, per-channel levels (Front Left / Right, …), mic level | ALSA + PipeWire |
 | **Settings** | **Application** tab: colour palette (Command, Helix, Albino or Wololo), UI scale (70–150%), own title bar or the desktop frame, start at login; **Device** tab: driver/device info, every ALSA control (including inactive ones), reset | ALSA |
@@ -89,8 +89,7 @@ and 7.1 output. The driver doesn't support these yet.
 - For 44.1 and 88.2 kHz (stereo, Direct Mode), 5.1 at 192 kHz and 96 kHz
   with Direct Mode off: driver
   [v0.9.4](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.9.4) or newer
-  (options `pcm_rates=2`, `surround_192k=1` and `dsp_96k=Y`, all the default).
-  This release pairs with SbAe9-Drv v0.9.4. With it, switching Direct Mode on while playing no
+  (options `pcm_rates=2`, `surround_192k=1` and `dsp_96k=Y`, all the default). With it, switching Direct Mode on while playing no
   longer needs a pause and play.
 - For recording at 96 kHz and 32-bit: driver
   [v0.9.1](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.9.1) or newer.
@@ -101,6 +100,10 @@ and 7.1 output. The driver doesn't support these yet.
 - For What U Hear: driver
   [v0.9.0](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.9.0) or newer, with its
   `config/ae9-what-u-hear.conf` in the same folder.
+- For switching phantom power (48V) from the app and What U Hear at 96 kHz:
+  driver [v0.9.5](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.9.5)
+  or newer (`wuh_96k=Y`, the default). This release pairs with SbAe9-Drv
+  v0.9.5.
 - For the head unit's plug indicators (3.5 mm headphone and mic jacks), the
   auto switch on headphone plug and the "Mic Gain" control name: driver
   [v0.9.3](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.9.3) or newer.

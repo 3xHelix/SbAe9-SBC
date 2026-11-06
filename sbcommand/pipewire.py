@@ -30,6 +30,8 @@ RATES_CONF = os.path.expanduser("~/.config/pipewire/pipewire.conf.d/90-sbae9-sbc
 # (written only when you pick a rate; Automatic removes it).
 MIC_CONF = os.path.expanduser("~/.config/wireplumber/wireplumber.conf.d/91-sbae9-sbc-mic.conf")
 MIC_RATES = (48000, 96000)
+# Where the driver's own PipeWire configs for optical in and What U Hear go
+PW_CONF_DIR = os.path.expanduser("~/.config/pipewire/pipewire.conf.d")
 
 
 def _run(*args, timeout=3):
@@ -482,6 +484,59 @@ def set_mic_rate(source_name, rate):
         except FileNotFoundError:
             return
     _run("systemctl", "--user", "restart", "wireplumber", timeout=10)
+
+
+# --- What U Hear (and other extra inputs) rate ------------------------------------
+# These sources are defined by the driver's PipeWire configs (context.objects),
+# whose audio.rate fixes the rate they record at. The driver's README says to
+# change that line for 96 kHz, so the app does just that and restarts PipeWire.
+_RATE_LINE = re.compile(r"^(\s*audio\.rate\s*=\s*)(\d+)", re.M)
+
+
+def input_conf(device, card_id="AE9"):
+    """The user's PipeWire config that defines hw:<card>,<device>, or None."""
+    pat = re.compile(r'api\.alsa\.path\s*=\s*"hw:%s,%d"' % (re.escape(card_id), device))
+    try:
+        names = sorted(os.listdir(PW_CONF_DIR))
+    except OSError:
+        return None
+    for name in names:
+        path = os.path.join(PW_CONF_DIR, name)
+        if not name.endswith(".conf"):
+            continue
+        try:
+            with open(path) as f:
+                if pat.search(f.read()):
+                    return path
+        except OSError:
+            continue
+    return None
+
+
+def input_conf_rate(path):
+    """The rate set in that config (audio.rate), or None."""
+    try:
+        with open(path) as f:
+            m = _RATE_LINE.search(f.read())
+    except (OSError, TypeError):
+        return None
+    return int(m.group(2)) if m else None
+
+
+def set_input_conf_rate(path, rate):
+    """Set audio.rate in that config and restart PipeWire, which re-creates
+    the source: audio on every device drops for a moment."""
+    with open(path) as f:
+        text = f.read()
+    new = _RATE_LINE.sub(lambda m: f"{m.group(1)}{int(rate)}", text, count=1)
+    if new == text:
+        return False
+    tmp = path + ".new"
+    with open(tmp, "w") as f:
+        f.write(new)
+    os.replace(tmp, path)
+    _run("systemctl", "--user", "restart", "pipewire", timeout=15)
+    return True
 
 
 # --- test tone ----------------------------------------------------------------

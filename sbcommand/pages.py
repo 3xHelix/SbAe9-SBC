@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: GPL-2.0-only
 """The app's pages, one per sidebar entry."""
 
+import errno
+import os
 import subprocess
 import time
 
@@ -1038,6 +1040,38 @@ def mic_name(node):
 DEVICE_PARAMS = ("pcm_rates", "pcm_bits", "dac_441", "surround", "surround_96k", "surround_192k",
                   "dsp_96k")
 
+INPUT_RATES = (48000, 96000)   # What U Hear: 48, or 96 kHz with the driver's wuh_96k
+
+
+def confirm_pipewire_restart(parent, what):
+    return QMessageBox.question(
+        parent, f"Change the {what} sample rate?",
+        "This restarts PipeWire, so audio on every device drops for a moment "
+        "(music, calls, everything).\n\nChange it now?") == QMessageBox.Yes
+
+
+PHANTOM_TIP = ("48 V phantom power for the head unit's XLR/TRS jack, for condenser mics "
+               "that need it. The head unit's own button switches it too.")
+PHANTOM_ARM_MS = 3000      # two-click mode: how long the first click stays armed
+PHANTOM_ERRORS = {
+    errno.EBUSY: "Phantom power can't be switched on yet (card just started); "
+                 "try again in a few seconds.",
+    errno.EAGAIN: "The head unit hasn't reported in yet; try again in a moment.",
+}
+
+
+def confirm_phantom(parent):
+    """The warning before phantom power goes on (the default)."""
+    box = QMessageBox(QMessageBox.Warning, "Phantom power",
+                      "Phantom power puts 48 V on the head unit's XLR/TRS jack. It can damage "
+                      "some equipment (ribbon mics, some line-level sources). Only turn it on for "
+                      "condenser mics that need it.\n\nTurn on?", QMessageBox.NoButton, parent)
+    yes = box.addButton("Turn on", QMessageBox.AcceptRole)
+    box.setDefaultButton(box.addButton(QMessageBox.Cancel))
+    box.exec()
+    return box.clickedButton() is yes
+
+
 HEADPHONES_TIP = ("The head unit's headphone jacks, 3.5 mm and 1/4\". "
                   "\"Plugged In\" is the 3.5 mm jack; the 1/4\" doesn't report plugs.")
 STREAM_TIP = ("Channels PipeWire sends to the card (its card profile). Picking 4.0, 4.1 or 5.1 "
@@ -1066,10 +1100,10 @@ class InputSection(QWidget):
     """One of the AE-9's extra recording devices (Recording → Other Input):
     its PipeWire source with Set Default, or how to set it up."""
 
-    def __init__(self, key, title, default_name, device, about, conf):
+    def __init__(self, key, title, default_name, device, about, conf, rate_choice=False):
         super().__init__()
         self.key, self.default_name, self.device = key, default_name, device
-        self.about, self.conf = about, conf
+        self.about, self.conf, self.title = about, conf, title
         lay = QVBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 10)
         lay.setSpacing(6)
@@ -1085,10 +1119,57 @@ class InputSection(QWidget):
         row.addWidget(self.set_default)
         row.addWidget(self.ok)
         lay.addLayout(row)
+        # sample rate: set in the driver's PipeWire config for this input
+        self.rate_row = QWidget()
+        rr = QHBoxLayout(self.rate_row)
+        rr.setContentsMargins(0, 0, 0, 0)
+        rr.setSpacing(10)
+        rr.addWidget(label("Sample rate"))
+        self.rate = QComboBox()
+        self.rate.setMinimumWidth(130)
+        for r in INPUT_RATES:
+            self.rate.addItem(f"{r / 1000:g} kHz", r)
+        self.rate.activated.connect(self._pick_rate)
+        rr.addWidget(self.rate)
+        rr.addStretch()
+        lay.addWidget(self.rate_row)
+        self.rate_row.setVisible(False)
+        self.rate_choice = rate_choice
+        self.conf_path = None
         self.note = label("", "hint", wrap=True)
         lay.addWidget(self.note)
         self.node = None
         self.setVisible(False)
+
+    def _pick_rate(self, i):
+        rate = self.rate.itemData(i)
+        path = self.conf_path
+        if not path or rate == pipewire.input_conf_rate(path):
+            return
+        ctx = getattr(self.window(), "ctx", None)
+        if ctx is None or not confirm_pipewire_restart(self.window(), self.title):
+            self._refresh_rate()
+            return
+        ctx.set_input_rate(self.key, path, rate, self.title)
+
+    def _refresh_rate(self):
+        self.conf_path = pipewire.input_conf(self.device)
+        cur = pipewire.input_conf_rate(self.conf_path) if self.conf_path else None
+        offered = INPUT_RATES if C.wuh_96k() else INPUT_RATES[:1]
+        model = self.rate.model()
+        for k in range(self.rate.count()):
+            r = self.rate.itemData(k)
+            model.item(k).setEnabled(r in offered)
+            model.item(k).setToolTip("" if r in offered else "Needs driver 0.9.5 or newer")
+        i = self.rate.findData(cur)
+        self.rate.setCurrentIndex(i if i >= 0 else 0)
+        self.rate.setEnabled(cur is not None and len(offered) > 1)
+        if cur is None:
+            self.rate.setToolTip(f"Set by a PipeWire config outside {pipewire.PW_CONF_DIR}; "
+                                 f"change audio.rate in {self.conf} there")
+        else:
+            self.rate.setToolTip("Restarts PipeWire to apply: audio on every device drops for a "
+                                 "moment" if len(offered) > 1 else "96 kHz needs driver 0.9.5 or newer")
 
     def _make_default(self):
         if self.node:
@@ -1112,6 +1193,9 @@ class InputSection(QWidget):
                           else "Not set up in PipeWire")
         self.set_default.setVisible(found)
         self.ok.setVisible(found)
+        self.rate_row.setVisible(found and self.rate_choice)
+        if found and self.rate_choice:
+            self._refresh_rate()
         if found:
             default = n.is_default_source(self.node)
             self.set_default.setEnabled(not default)
@@ -1217,12 +1301,41 @@ class RecordingPage(Page):
         g.addLayout(qr, 5, 1, 1, 2)
         self.mic_now = label("", "muted")
         g.addWidget(self.mic_now, 6, 1, 1, 2)
+        # Phantom power: a button on drivers that can switch it, else just its state.
+        # Always the live state: the app never turns it on by itself.
+        self.phantom_lbl = label("Phantom")
+        g.addWidget(self.phantom_lbl, 7, 0)
+        pr = QHBoxLayout()
+        pr.setSpacing(12)
+        self.phantom_btn = QPushButton("Phantom Power 48V")
+        self.phantom_btn.setObjectName("phantomButton")
+        self.phantom_btn.setMinimumWidth(190)
+        self.phantom_btn.setToolTip(PHANTOM_TIP)
+        self.phantom_btn.clicked.connect(self._phantom_click)
+        pr.addWidget(self.phantom_btn)
+        self.phantom = label("", "muted")
+        self.phantom.setToolTip(PHANTOM_TIP)
+        pr.addWidget(self.phantom)
+        pr.addStretch()
+        g.addLayout(pr, 7, 1, 1, 2)
+        self.phantom_note = label("", "muted", wrap=True)
+        self.phantom_note.setStyleSheet(f"color:{T.DANGER};")
+        g.addWidget(self.phantom_note, 8, 1, 1, 2)
+        for w in (self.phantom_lbl, self.phantom_btn, self.phantom, self.phantom_note):
+            w.setVisible(False)
+        self._phantom_armed = False
+        self._arm_timer = QTimer(self, singleShot=True, interval=PHANTOM_ARM_MS)
+        self._arm_timer.timeout.connect(self._phantom_disarm)
+        self._blink = QTimer(self, interval=400)
+        self._blink.timeout.connect(self._phantom_blink)
+        self._blink_on = False
+        self._note_timer = QTimer(self, singleShot=True, interval=8000)
+        self._note_timer.timeout.connect(lambda: self._phantom_say(""))
         g.setColumnStretch(1, 1)
         self.lay.addLayout(g)
         self.lay.addSpacing(8)
-        self.lay.addWidget(label(
-            "Phantom power (48V) is the button on the head unit. Its XLR/TRS and 3.5 mm mic "
-            "jacks share this input.", "hint", wrap=True))
+        self.mic_hint = label("", "hint", wrap=True)
+        self.lay.addWidget(self.mic_hint)
         self.mic_jack = label("", "muted")
         self.mic_jack.setVisible(False)
         self.lay.addWidget(self.mic_jack)
@@ -1238,10 +1351,10 @@ class RecordingPage(Page):
                          "ae9-optical-in.conf"),
             InputSection("what_u_hear", "What U Hear", "AE-9 What U Hear", 2,
                          "Records what the card plays: games, music, calls, all of it, at "
-                         "48 kHz. Handy for streaming or capturing the card's own output. With "
-                         "SBX on you get the effects too; with SBX off it's the stream exactly "
-                         "as sent.",
-                         "ae9-what-u-hear.conf"),
+                         "48 or 96 kHz (96 kHz with driver 0.9.5+). Handy for streaming or "
+                         "capturing the card's own output. With SBX on you get the effects too; "
+                         "with SBX off it's the stream exactly as sent.",
+                         "ae9-what-u-hear.conf", rate_choice=True),
         ]
         for sec in self.inputs:
             other.addWidget(sec)
@@ -1258,6 +1371,81 @@ class RecordingPage(Page):
         if n.source:
             pipewire.set_default(n.source["id"])
             self.ctx.pw.refresh()
+
+    # --- phantom power ------------------------------------------------------
+    def _refresh_phantom(self):
+        has = self.card.has(C.HU_PHANTOM)
+        writable = has and self.card.writable(C.HU_PHANTOM)
+        on = bool(self.card.get(C.HU_PHANTOM)) if has else False
+        self.phantom_lbl.setVisible(has)
+        self.phantom.setVisible(has)
+        self.phantom_btn.setVisible(writable)
+        if not writable or on:
+            self._phantom_disarm(restyle=False)
+        if writable:
+            self.phantom.setText("On — 48 V on the XLR/TRS jack" if on else "Off")
+        else:
+            self.phantom.setText(("On" if on else "Off") + " — switched by the head unit's button")
+        self._phantom_style(on)
+        jacks = "The head unit's XLR/TRS and 3.5 mm mic jacks share this input."
+        self.mic_hint.setText(jacks if writable else
+                              "Phantom power (48V) is the button on the head unit. " + jacks)
+
+    def _phantom_style(self, on):
+        b = self.phantom_btn
+        if self._phantom_armed:
+            edge = T.DANGER if self._blink_on else "transparent"
+            b.setText("Click again to turn on")
+            b.setStyleSheet(f"QPushButton#phantomButton {{ background: {T.PANEL}; "
+                            f"border: 2px solid {edge}; color: {T.DANGER}; font-weight: 700; }}")
+        else:
+            b.setText("Phantom Power 48V")
+            b.setStyleSheet(f"QPushButton#phantomButton {{ background: {T.DANGER}; color: #ffffff; "
+                            "font-weight: 700; }" if on else "")
+
+    def _phantom_click(self):
+        if bool(self.card.get(C.HU_PHANTOM)):
+            self._phantom_disarm()
+            self._phantom_write(False)           # off: always one click
+        elif self.ctx.settings["phantom_confirm"] == "two_click":
+            if self._phantom_armed:
+                self._phantom_disarm()
+                self._phantom_write(True)
+            else:
+                self._phantom_armed = True
+                self._blink_on = True
+                self._arm_timer.start()
+                self._blink.start()
+                self._phantom_style(False)
+        elif confirm_phantom(self.window()):
+            self._phantom_write(True)
+
+    def _phantom_disarm(self, restyle=True):
+        was = self._phantom_armed
+        self._phantom_armed = False
+        self._arm_timer.stop()
+        self._blink.stop()
+        if was and restyle:
+            self._phantom_style(bool(self.card.get(C.HU_PHANTOM)))
+
+    def _phantom_blink(self):
+        self._blink_on = not self._blink_on
+        self._phantom_style(False)
+
+    def _phantom_write(self, on):
+        # The state shown follows the head unit's report (the change event), not the write.
+        err = self.card.write(C.HU_PHANTOM, on)
+        if err:
+            self._phantom_say(PHANTOM_ERRORS.get(err) or
+                              f"Couldn't switch phantom power ({os.strerror(err)}).")
+        else:
+            self._phantom_say("")
+
+    def _phantom_say(self, text):
+        self.phantom_note.setText(text)
+        self.phantom_note.setVisible(bool(text))
+        if text:
+            self._note_timer.start()
 
     def _mute(self, muted):
         n = self.ctx.pw.nodes
@@ -1388,6 +1576,7 @@ class RecordingPage(Page):
             _, muted = pipewire.get_volume(n.source["id"])
         if not self.card.present:
             return
+        self._refresh_phantom()
         self.mic_jack.setVisible(self.card.has(C.HU_MIC))
         if self.card.has(C.HU_MIC):
             self.mic_jack.setText("3.5 mm mic: " + (
@@ -1760,6 +1949,27 @@ class SettingsPage(Page):
         self.rates_banner.button.clicked.connect(self._enable_rates)
         self.lay.addWidget(self.rates_banner)
 
+        # how the Recording page's phantom power button turns on (drivers that can switch it)
+        self.phantom_box = QWidget()
+        pl = QVBoxLayout(self.phantom_box)
+        pl.setContentsMargins(0, 0, 0, 0)
+        pl.addWidget(label("Phantom power", "sectionTitle"))
+        row = QHBoxLayout()
+        self.phantom_mode = QComboBox()
+        for text, key in (("Ask first (warning)", "popup"),
+                          ("Two clicks turn on, one turns off", "two_click")):
+            self.phantom_mode.addItem(text, key)
+        self.phantom_mode.setCurrentIndex(max(0, self.phantom_mode.findData(ctx.settings["phantom_confirm"])))
+        self.phantom_mode.activated.connect(
+            lambda i: ctx.settings.__setitem__("phantom_confirm", self.phantom_mode.itemData(i)))
+        row.addWidget(self.phantom_mode)
+        row.addStretch()
+        pl.addLayout(row)
+        pl.addWidget(label("How Recording → Phantom Power 48V turns on. Turning it off is always "
+                           "one click. The app never turns it on by itself.", "hint", wrap=True))
+        self.phantom_box.setVisible(False)
+        self.lay.addWidget(self.phantom_box)
+
         self.lay.addWidget(label("Reset to defaults", "sectionTitle"))
         self.lay.addWidget(label("Puts SBX and the EQ back to the driver's defaults. Your saved "
                                  "profiles and EQ presets stay.", "hint", wrap=True))
@@ -1877,6 +2087,12 @@ class SettingsPage(Page):
             w.setRange(c.min, c.max)
             w.setKeyboardTracking(False)
             w.valueChanged.connect(lambda v, n=c.name: self.card.set(n, v))
+        if c.name == C.HU_PHANTOM:
+            w.setEnabled(False)          # 48 V: only through the Recording page's button
+            w.setToolTip("Switch it on the Recording page" if c.writable else
+                         "Switched by the head unit's button")
+        elif not c.writable:
+            w.setEnabled(False)          # the driver reports it; it can't be set
         return w
 
     def refresh(self):
@@ -1901,6 +2117,7 @@ class SettingsPage(Page):
         ]
         self.info.setText("<br>".join(lines))
         self.rates_banner.setVisible(rates == "0")
+        self.phantom_box.setVisible(self.card.has(C.HU_PHANTOM) and self.card.writable(C.HU_PHANTOM))
         ctrls = self.card.all_controls()
         if self.table.rowCount() != len(ctrls):
             self.table.setRowCount(len(ctrls))

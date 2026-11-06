@@ -66,6 +66,7 @@ DEFAULTS = {
     "frameless": True,       # the app's own title bar instead of the desktop's frame
     "ui_scale": 100,
     "glass": False,          # see-through backgrounds on any palette
+    "phantom_confirm": "popup",  # turning phantom power on: "popup" warning or "two_click"
     "glass_opacity": 70,     # percent, see theme.GLASS_RANGE         # percent, see theme.SCALES
 }
 

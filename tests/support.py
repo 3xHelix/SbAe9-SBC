@@ -210,6 +210,7 @@ pipewire.card_stream = lambda card_id="AE9": PW.stream
 pipewire.capture_stream = lambda card_id="AE9": PW.capture
 pipewire.RATES_CONF = os.path.join(_TMP, "pipewire", "90-sbae9-sbc-rates.conf")
 pipewire.MIC_CONF = os.path.join(_TMP, "wireplumber", "91-sbae9-sbc-mic.conf")
+pipewire.PW_CONF_DIR = os.path.join(_TMP, "pipewire")
 C.module_param = lambda name: PARAMS.get(name)
 C.module_version = lambda: PARAMS.get("version")
 PCMS = set()   # extra capture devices the fake driver has (1 = optical in, 2 = What U Hear)

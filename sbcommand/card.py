@@ -6,6 +6,7 @@ desktop volume slider) arrives as an ALSA event and is re-emitted as
 `changed(name)`, so the UI never has to poll the card.
 """
 
+import errno
 import math
 import os
 
@@ -26,6 +27,7 @@ SBX = "SBX Switch"
 HU_AUTO = "Head Unit Auto Switch"              # newer drivers: the 3.5 mm headphone plug switches outputs
 HU_PHONES = "Head Unit 3.5mm Phones Plugged"   # read-only: head unit's 3.5 mm headphone jack
 HU_MIC = "Head Unit 3.5mm Mic Plugged"         # read-only: head unit's 3.5 mm mic jack
+HU_PHANTOM = "Head Unit Phantom Power"         # 48 V on the XLR/TRS jack; writable on newer drivers
 # Older names of renamed controls: released drivers' (kept for good) and some
 # test builds' (until every build in use has the new ones).
 ALIASES = {
@@ -206,6 +208,22 @@ class AE9(QObject):
         except OSError:
             return False
 
+    def write(self, name, value):
+        """Write a control and say why it failed: 0, or the error number
+        (e.g. EBUSY: phantom power right after the card started)."""
+        name = self._name(name)
+        if not self.has(name):
+            return errno.ENOENT
+        try:
+            self.mixer.set(name, value)
+            return 0
+        except OSError as e:
+            return e.errno or errno.EIO
+
+    def writable(self, name):
+        c = self.control(name)
+        return bool(c and c.writable)
+
     def control(self, name):
         return self.mixer.controls.get(self._name(name)) if self.mixer else None
 
@@ -304,6 +322,12 @@ def dsp_96k():
     """DSP mode (Direct Mode off) takes 96 kHz as well as 48 (driver 0.9.4+,
     its dsp_96k option, on by default)."""
     return module_param("dsp_96k") in ("Y", "1")
+
+
+def wuh_96k():
+    """What U Hear can record at 96 kHz as well as 48 (driver 0.9.5+, its
+    wuh_96k option, on by default)."""
+    return module_param("wuh_96k") in ("Y", "1")
 
 
 def plays_cd_rates():

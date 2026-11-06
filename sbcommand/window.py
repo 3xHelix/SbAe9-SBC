@@ -204,6 +204,19 @@ class Context(QObject):
             "mic_rate", text, lambda: pipewire.set_mic_rate(src["name"], rate), 5000, settled,
             lambda: pipewire.mic_rate_setting() != rate))
 
+    def set_input_rate(self, key, path, rate, title):
+        """Record an extra input (What U Hear) at `rate`: its PipeWire config's
+        audio.rate, then a PipeWire restart, which re-creates the nodes."""
+
+        def settled():
+            n = self.pw.nodes
+            return getattr(n, key) is not None and self._sink_ok()
+
+        self.applier.submit(Change(
+            key + "_rate", f"{title} sample rate: {rate / 1000:g} kHz",
+            lambda: pipewire.set_input_conf_rate(path, rate), 8000, settled,
+            lambda: pipewire.input_conf_rate(path) != rate))
+
     def set_capture_depth(self, k):
         items = self.card.items(C.CAP_BIT_DEPTH)
         name = items[k] if 0 <= k < len(items) else str(k)

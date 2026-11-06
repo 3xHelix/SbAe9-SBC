@@ -3,6 +3,38 @@
 Sound Blaster Command for Linux: the UI for the Creative Sound Blaster AE-9
 driver ([SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv)).
 
+## 0.11.0 (2026-11-06)
+
+Phantom power from the app, and What U Hear at 96 kHz. Pairs with
+[SbAe9-Drv v0.9.5](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.9.5).
+Older drivers still work: phantom power shows as an indicator (or not at
+all) and What U Hear stays at 48 kHz.
+
+### Added
+
+- Phantom power (48 V on the head unit's XLR/TRS jack) on Recording →
+  Microphone. With a driver that can switch it, a "Phantom Power 48V"
+  button that lights red when on; with one that only reports it, its state
+  ("On/Off — switched by the head unit's button"); hidden on older drivers.
+  It always shows the live state and follows the head unit's own button.
+  Needs SbAe9-Drv v0.9.5 ("Head Unit Phantom Power").
+- Turning it on asks first: a warning that 48 V can damage some equipment
+  (ribbon mics, some line-level sources), Cancel or Turn on. Settings →
+  Device can switch that to "Two clicks turn on, one turns off": the first
+  click arms the button (blinking red outline, "Click again to turn on",
+  3 s), the second turns it on. Turning off is always one click.
+- If the card just started and refuses 48 V for a few seconds, or the head
+  unit hasn't reported in yet, the app says so under the button.
+- What U Hear's sample rate on Recording → Other Input: 48 or 96 kHz (96
+  kHz with driver 0.9.5+, `wuh_96k`). It sets `audio.rate` in your copy of
+  the driver's `ae9-what-u-hear.conf` and restarts PipeWire (asks first).
+
+### Changed
+
+- The app never turns phantom power on by itself: it isn't saved in
+  settings or profiles, and Settings → Device's control table shows it
+  greyed out. Read-only driver controls there are greyed out too.
+
 ## 0.10.0 (2026-11-06)
 
 Every rate the card plays, CD rates included. Pairs with

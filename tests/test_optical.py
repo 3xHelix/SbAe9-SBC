@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: GPL-2.0-only
 """Optical (S/PDIF) and What U Hear: Playback → Digital, Recording → Other Input."""
 
+import os
 import unittest
 
 import support as S
@@ -110,6 +111,98 @@ class OtherInputTest(S.AppTestCase):
         pg, secs = self.other()
         self.assertFalse(any(s.isVisible() for s in secs.values()))
         self.assertTrue(pg.other_none.isVisible())
+
+
+WUH_CONF = """# AE-9 What U Hear (copy of the driver's config)
+# 48 or 96 kHz (driver 0.9.5+; set audio.rate = 96000 below for 96 kHz).
+context.objects = [
+    { factory = adapter
+        args = {
+            factory.name     = api.alsa.pcm.source
+            node.name        = "alsa_input.ae9_what_u_hear"
+            api.alsa.path    = "hw:AE9,2"
+            audio.rate       = 48000
+            audio.channels   = 2
+        }
+    }
+]
+"""
+
+
+class WhatUHearRateTest(S.AppTestCase):
+    def setUp(self):
+        super().setUp()
+        os.makedirs(pipewire.PW_CONF_DIR, exist_ok=True)
+        self.path = os.path.join(pipewire.PW_CONF_DIR, "ae9-what-u-hear.conf")
+        with open(self.path, "w") as f:
+            f.write(WUH_CONF)
+        self.addCleanup(os.remove, self.path)
+        S.PARAMS["wuh_96k"] = "Y"
+        S.PW.add_what_u_hear()
+        self.answer = True
+        old = pages.confirm_pipewire_restart
+        pages.confirm_pipewire_restart = lambda parent, what: self.answer
+        self.addCleanup(setattr, pages, "confirm_pipewire_restart", old)
+
+    def section(self):
+        self.snapshot()
+        pg = self.page(pages.RecordingPage)
+        pg.show_tab(1)
+        S.process(20)
+        return {sec.key: sec for sec in pg.inputs}["what_u_hear"]
+
+    def pick(self, sec, rate):
+        sec._pick_rate(sec.rate.findData(rate))
+        self.settle()
+
+    def test_finds_the_config_and_shows_its_rate(self):
+        sec = self.section()
+        self.assertTrue(sec.rate_row.isVisible())
+        self.assertEqual(sec.conf_path, self.path)
+        self.assertEqual(sec.rate.currentData(), 48000)
+        self.assertTrue(sec.rate.isEnabled())
+
+    def test_96_rewrites_audio_rate_only_and_restarts_pipewire(self):
+        sec = self.section()
+        S.PW.calls.clear()
+        self.pick(sec, 96000)
+        with open(self.path) as f:
+            text = f.read()
+        self.assertIn("audio.rate       = 96000", text)
+        self.assertIn("set audio.rate = 96000 below", text)      # the comment is left alone
+        self.assertEqual(text.replace("= 96000\n", "= 48000\n", 1), WUH_CONF)
+        self.assertIn(("systemctl", "--user", "restart", "pipewire"), S.PW.calls)
+
+    def test_cancel_changes_nothing(self):
+        self.answer = False
+        sec = self.section()
+        S.PW.calls.clear()
+        self.pick(sec, 96000)
+        self.assertEqual(pipewire.input_conf_rate(self.path), 48000)
+        self.assertNotIn(("systemctl", "--user", "restart", "pipewire"), S.PW.calls)
+        self.assertEqual(sec.rate.currentData(), 48000)
+
+    def test_older_driver_offers_48_only(self):
+        del S.PARAMS["wuh_96k"]
+        sec = self.section()
+        self.assertFalse(sec.rate.isEnabled())
+        self.assertFalse(sec.rate.model().item(sec.rate.findData(96000)).isEnabled())
+
+    def test_config_elsewhere_greys_it_out(self):
+        os.remove(self.path)
+        self.addCleanup(open(self.path, "w").close)               # for the cleanup's remove
+        sec = self.section()
+        self.assertTrue(sec.rate_row.isVisible())
+        self.assertFalse(sec.rate.isEnabled())
+        self.assertIn("ae9-what-u-hear.conf", sec.rate.toolTip())
+
+    def test_optical_in_has_no_rate_row(self):
+        S.PW.add_optical_in()
+        self.snapshot()
+        pg = self.page(pages.RecordingPage)
+        pg.show_tab(1)
+        S.process(20)
+        self.assertFalse({s.key: s for s in pg.inputs}["optical_in"].rate_row.isVisible())
 
 
 if __name__ == "__main__":

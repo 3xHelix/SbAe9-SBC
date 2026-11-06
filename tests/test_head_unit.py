@@ -5,6 +5,7 @@ import unittest
 
 import support as S
 from sbcommand import card as C, pages
+from sbcommand import theme as T
 
 
 class HeadUnitTest(S.AppTestCase):
@@ -25,6 +26,7 @@ class HeadUnitTest(S.AppTestCase):
         self.assertEqual(pg.hp_sub.text(), "Head unit")
         rec = self.page(pages.RecordingPage)
         self.assertFalse(rec.mic_jack.isVisible())
+        self.assertFalse(rec.phantom.isVisible())
 
     def test_auto_switch_off_by_default_and_drives_the_control(self):
         self.add_all()
@@ -107,6 +109,120 @@ class MicGainTest(S.AppTestCase):
         self.assertEqual(self.ctx.card.get(C.MIC_GAIN), 1)
         pg.xlr.selected.emit("0")
         self.assertEqual(self.mixer.writes[-1], (C.MIC_GAIN, 0))
+
+
+class PhantomPowerTest(S.AppTestCase):
+    def rec(self, on=False, writable=True):
+        self.mixer.add_bool(C.HU_PHANTOM, on, writable=writable)
+        pg = self.page(pages.RecordingPage)
+        pg.show_tab(0)
+        pg.refresh()
+        return pg
+
+    def phantom_writes(self):
+        return [w for w in self.mixer.writes if w[0] == C.HU_PHANTOM]
+
+    def answer(self, yes):
+        asked = []
+        old = pages.confirm_phantom
+        pages.confirm_phantom = lambda parent: asked.append(1) or yes
+        self.addCleanup(setattr, pages, "confirm_phantom", old)
+        return asked
+
+    def test_hidden_without_the_control(self):
+        pg = self.page(pages.RecordingPage)
+        pg.show_tab(0)
+        pg.refresh()
+        self.assertFalse(pg.phantom.isVisible())
+        self.assertFalse(pg.phantom_btn.isVisible())
+
+    def test_read_only_driver_shows_state_without_a_button(self):
+        pg = self.rec(writable=False)
+        self.assertTrue(pg.phantom.isVisible())
+        self.assertFalse(pg.phantom_btn.isVisible())
+        self.assertEqual(pg.phantom.text(), "Off — switched by the head unit's button")
+        self.mixer.external(C.HU_PHANTOM, True)     # the button on the head unit
+        S.process(20)
+        self.assertTrue(pg.phantom.text().startswith("On"))
+
+    def test_warning_first_cancel_writes_nothing(self):
+        pg = self.rec()
+        self.assertTrue(pg.phantom_btn.isVisible())
+        asked = self.answer(False)
+        pg.phantom_btn.click()
+        self.assertEqual(asked, [1])
+        self.assertEqual(self.phantom_writes(), [])
+
+    def test_warning_then_turn_on_lights_red_and_one_click_off(self):
+        pg = self.rec()
+        self.answer(True)
+        pg.phantom_btn.click()
+        self.assertEqual(self.phantom_writes(), [(C.HU_PHANTOM, True)])
+        S.process(20)                                # the change event
+        self.assertIn("On", pg.phantom.text())
+        self.assertIn(T.DANGER, pg.phantom_btn.styleSheet())
+        asked = self.answer(True)
+        pg.phantom_btn.click()                       # off: no question
+        self.assertEqual(asked, [])
+        self.assertEqual(self.phantom_writes()[-1], (C.HU_PHANTOM, False))
+        S.process(20)
+        self.assertEqual(pg.phantom.text(), "Off")
+        self.assertNotIn(T.DANGER, pg.phantom_btn.styleSheet())
+
+    def test_two_click_mode_arms_then_turns_on_without_a_popup(self):
+        self.ctx.settings["phantom_confirm"] = "two_click"
+        pg = self.rec()
+        asked = self.answer(True)
+        pg.phantom_btn.click()
+        self.assertEqual(self.phantom_writes(), [])
+        self.assertEqual(pg.phantom_btn.text(), "Click again to turn on")
+        pg.phantom_btn.click()
+        self.assertEqual(self.phantom_writes(), [(C.HU_PHANTOM, True)])
+        self.assertEqual(asked, [])
+        S.process(20)
+        self.assertEqual(pg.phantom_btn.text(), "Phantom Power 48V")
+
+    def test_two_click_arm_times_out(self):
+        self.ctx.settings["phantom_confirm"] = "two_click"
+        old = pages.PHANTOM_ARM_MS
+        pg = self.rec()
+        pg._arm_timer.setInterval(50)
+        pg.phantom_btn.click()
+        S.process(150)
+        self.assertEqual(pg.phantom_btn.text(), "Phantom Power 48V")
+        pg.phantom_btn.click()                       # armed again, not on
+        self.assertEqual(self.phantom_writes(), [])
+        pages.PHANTOM_ARM_MS = old
+
+    def test_ebusy_and_eagain_say_why(self):
+        import errno
+        from sbae9kit.mixer import AlsaError
+        pg = self.rec()
+        self.answer(True)
+        for err, text in ((errno.EBUSY, "can't be switched on yet"), (errno.EAGAIN, "hasn't reported")):
+            def fail(name, value, err=err):
+                raise AlsaError(err, "write")
+            self.mixer.set = fail
+            pg.phantom_btn.click()
+            self.assertIn(text, pg.phantom_note.text())
+            self.assertTrue(pg.phantom_note.isVisible())
+            self.assertEqual(pg.phantom.text(), "Off")
+
+    def test_never_turned_on_at_start(self):
+        self.mixer.add_bool(C.HU_PHANTOM, False)
+        self.ctx.settings["restore_on_start"] = True
+        self.window()
+        S.process(50)
+        self.assertEqual(self.phantom_writes(), [])
+        self.assertNotIn("phantom", " ".join(k for k in self.ctx.settings.data if k != "phantom_confirm"))
+
+    def test_device_table_cannot_switch_it(self):
+        self.mixer.add_bool(C.HU_PHANTOM, False)
+        pg = self.page(pages.SettingsPage)
+        pg.refresh()
+        self.assertFalse(pg._editors[C.HU_PHANTOM].isEnabled())
+        self.assertFalse(pg.phantom_box.isHidden())
+        self.assertEqual(pg.phantom_mode.currentData(), "popup")
 
 
 if __name__ == "__main__":
