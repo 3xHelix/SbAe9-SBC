@@ -721,8 +721,9 @@ class PlaybackPage(Page):
         fh.addWidget(label("Filters", "sectionTitle"))
         fh.addStretch()
         fh.addWidget(info_button(
-            "The ES9038 DAC's digital filter. Fast roll-off is flatter up to 20 kHz; "
-            "slow roll-off rings less. Default keeps the filter Windows starts with."))
+            "The ES9038Q2M's digital filter. Seven modes: linear or minimum phase, "
+            "fast or slow roll-off, apodizing and brick wall. Apodizing Fast is the "
+            "filter Windows starts with."))
         fl.addLayout(fh)
         self.filter = QComboBox()
         self.filter.activated.connect(lambda i: self.card.set(C.DAC_FILTER, self.filter.itemData(i)))
@@ -979,8 +980,20 @@ class PlaybackPage(Page):
         self.direct_lbl.setText("On — DSP bypassed" if direct else "Off — SBX / EQ active")
         self._refresh_optical(layout)
         self.setup.refresh()
-        names = {"Default": "Default (Windows startup filter)", "Fast": "Fast Roll Off",
-                 "Slow": "Slow Roll Off"}
+        names = {
+            # driver 0.10.0+: the seven ES9038Q2M modes
+            "Linear Phase Fast Roll Off": "Linear Phase Fast Roll Off",
+            "Linear Phase Slow Roll Off": "Linear Phase Slow Roll Off",
+            "Minimum Phase Fast Roll Off": "Minimum Phase Fast Roll Off",
+            "Minimum Phase Slow Roll Off": "Minimum Phase Slow Roll Off",
+            "Apodizing Fast Roll Off": "Apodizing Fast Roll Off (Windows default)",
+            "Corrected Minimum Phase Fast Roll Off": "Corrected Minimum Phase Fast Roll Off",
+            "Brick Wall": "Brick Wall",
+            # older drivers with the three-filter control
+            "Default": "Default (Windows startup filter)",
+            "Fast": "Fast Roll Off",
+            "Slow": "Slow Roll Off",
+        }
         if self.filter.count() != len(self.card.items(C.DAC_FILTER)):
             self.filter.clear()
             for k, it in enumerate(self.card.items(C.DAC_FILTER)):
