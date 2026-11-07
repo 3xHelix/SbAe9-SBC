@@ -3,6 +3,19 @@
 Sound Blaster Command for Linux: the UI for the Creative Sound Blaster AE-9
 driver ([SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv)).
 
+## 0.11.2 (2026-11-06)
+
+Voice-chat node fix. Pairs with
+[SbAe9-Drv v0.9.8](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.9.8).
+
+### Fixed
+
+- With the driver's optional WebRTC voice config installed, the app took
+  its "AE-9 Voice Chat Playback" and "AE-9 Voice (WebRTC)" nodes for the
+  card's own output and mic (rates, Set Default, volume and the mic rate
+  went to the wrong node). Virtual nodes named after the card are skipped
+  now (kit 0.3.5).
+
 ## 0.11.1 (2026-11-06)
 
 176.4 kHz. Pairs with

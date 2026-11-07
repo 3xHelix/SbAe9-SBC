@@ -103,7 +103,7 @@ and 7.1 output. The driver doesn't support these yet.
   `config/ae9-what-u-hear.conf` in the same folder.
 - For 176.4 kHz (stereo, Direct Mode): driver
   [v0.9.7](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.9.7) or newer
-  (`pcm_176k4=Y`). This release pairs with SbAe9-Drv v0.9.7.
+  (`pcm_176k4=Y`). This release pairs with SbAe9-Drv v0.9.8.
 - For switching phantom power (48V) from the app and What U Hear at 96 kHz:
   driver [v0.9.5](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.9.5)
   or newer (`wuh_96k=Y`, the default).
