@@ -18,7 +18,7 @@ switches and adjusts them.
 |---|---|---|
 | **SBX Profile** | SBX on/off; Surround, Crystalizer, Bass, Smart Volume (Night/Normal/Loud), Dialog+; built-in and personal profiles | card DSP (ALSA `SBX Switch`, `FX …`) |
 | **Equalizer** | 10-band EQ + pre-gain, Creative's 20 presets, your own saved curves | card DSP (`EQ …`) |
-| **Playback** | Speakers / headphones, speaker config (2.0 – 5.1) with matching stereo / 5.1 stream, Direct Mode, DAC filter, sample rate and bit depth, default device, spoken speaker test; **Speaker Setup** tab: bass redirect (Speaker Type / crossover, sub gain), level and distance per speaker; **Digital** tab: optical out | ALSA + PipeWire |
+| **Playback** | Speakers / headphones, speaker config (2.0 – 5.1) with matching stereo / 5.1 stream, Direct Mode, DAC filter, sample rate and bit depth, default device, spoken speaker test; Headphone Profile (Creative's EQ curve per headphone model); **Speaker Setup** tab: bass redirect (Speaker Type / crossover, sub gain), level and distance per speaker; **Digital** tab: optical out | ALSA + PipeWire |
 | **Recording** | Head unit mic (XLR/TRS or 3.5 mm mic jack): level, mic gain (0/+10/+20 dB), phantom power 48V (asks first), live input meter, mute, "listen to mic", sample rate (48 / 96 kHz), default device; **Other Input** tab: optical in, What U Hear (48 / 96 kHz) | ALSA + PipeWire |
 | **Scout Mode** | Creative's Scout Mode (footstep EQ + Smart Volume) | card DSP |
 | **Mixer** | Output volume (same as the head-unit knob), mute, per-channel levels (Front Left / Right, …), mic level | ALSA + PipeWire |
@@ -103,7 +103,14 @@ and 7.1 output. The driver doesn't support these yet.
   `config/ae9-what-u-hear.conf` in the same folder.
 - For 176.4 kHz (stereo, Direct Mode): driver
   [v0.9.7](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.9.7) or newer
-  (`pcm_176k4=Y`). This release pairs with SbAe9-Drv v0.9.8.
+  (`pcm_176k4=Y`).
+- For Speaker Setup (bass redirect, speaker levels and distances) and the
+  Headphone Profile picker: driver
+  [v0.10.0](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.10.0) or newer.
+  The headphone profiles also need Creative's curves, which the driver's
+  `sudo ae9-get-firmware AECMDMasterInstaller_3.4.92.00.exe` installs from
+  Creative's Sound Blaster Command installer. This release pairs with
+  SbAe9-Drv v0.10.0.
 - For switching phantom power (48V) from the app and What U Hear at 96 kHz:
   driver [v0.9.5](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.9.5)
   or newer (`wuh_96k=Y`, the default).

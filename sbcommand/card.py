@@ -61,6 +61,23 @@ SPEAKER_TYPES = {"Tower": 80, "Desktop": 120}     # Windows sets the crossover f
 CM_DELAY_MS = 0.0293867                           # the driver's delay per cm (sound at 340.29 m/s)
 
 
+HP_PROFILE = "Headphone Profile"   # Off + SB Command's headphone models (newer drivers)
+# where ae9-get-firmware puts Creative's headphone curves (it checks the same)
+HP_DIRS = ("/etc/firmware", "/lib/firmware", "/usr/lib/firmware")
+
+
+def headphone_curves():
+    """How many headphone curves are installed (0: the profiles stay off)."""
+    for d in HP_DIRS:
+        try:
+            n = sum(1 for f in os.listdir(os.path.join(d, "creative-ae9", "hp")) if f.endswith(".bin"))
+        except OSError:
+            continue
+        if n:
+            return n
+    return 0
+
+
 def speaker_level(ch):
     return f"Speaker Level {ch} Volume"           # dB, -12..+12
 

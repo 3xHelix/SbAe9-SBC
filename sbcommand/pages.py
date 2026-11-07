@@ -628,6 +628,22 @@ class PlaybackPage(Page):
         ar.addStretch()
         g.addWidget(self.hp_auto_row, 2, 2, 1, 3)
         self.hp_auto_row.setVisible(False)
+        # headphone profile: Creative's EQ curve per headphone model (newer drivers)
+        self.hp_prof_row = QWidget()
+        pr = QGridLayout(self.hp_prof_row)
+        pr.setContentsMargins(0, 4, 0, 0)
+        pr.setHorizontalSpacing(10)
+        pr.addWidget(label("Headphone Profile", "muted"), 0, 0)
+        self.hp_prof = QComboBox()
+        self.hp_prof.setMinimumWidth(230)
+        self.hp_prof.activated.connect(lambda i: self.card.set(C.HP_PROFILE, i))
+        pr.addWidget(self.hp_prof, 0, 1)
+        pr.addWidget(info_button(HP_PROFILE_TIP), 0, 2)
+        pr.setColumnStretch(3, 1)
+        self.hp_prof_note = label("", "hint", wrap=True)
+        pr.addWidget(self.hp_prof_note, 1, 0, 1, 4)
+        g.addWidget(self.hp_prof_row, 3, 2, 1, 3)
+        self.hp_prof_row.setVisible(False)
         self.hp_sub.setText("Head unit")
         self.hp_sub.setToolTip(HEADPHONES_TIP)
         left.addWidget(w)
@@ -936,6 +952,7 @@ class PlaybackPage(Page):
         self.hp_auto_row.setVisible(self.card.has(C.HU_AUTO))
         if self.card.has(C.HU_AUTO):
             self.hp_auto.setCheckedSilently(bool(self.card.get(C.HU_AUTO)))
+        self._refresh_hp_profile(out)
         cfg = self.card.get_item(C.SPEAKER_CFG) or "2.1"
         if self.spk_cfg.count() != len(self.card.items(C.SPEAKER_CFG)):
             self.spk_cfg.clear()
@@ -969,6 +986,36 @@ class PlaybackPage(Page):
             for k, it in enumerate(self.card.items(C.DAC_FILTER)):
                 self.filter.addItem(names.get(it, it), k)
         self.filter.setCurrentIndex(self.card.get(C.DAC_FILTER, 0) or 0)
+
+    def _refresh_hp_profile(self, out):
+        has = self.card.has(C.HP_PROFILE)
+        self.hp_prof_row.setVisible(has)
+        if not has:
+            return
+        items = self.card.items(C.HP_PROFILE)
+        if [self.hp_prof.itemText(k) for k in range(self.hp_prof.count())] != items:
+            self.hp_prof.clear()
+            self.hp_prof.addItems(items)
+        k = self.card.get(C.HP_PROFILE, 0) or 0
+        self.hp_prof.setCurrentIndex(k)
+        curves = C.headphone_curves()
+        direct = bool(self.card.get(C.DIRECT, True)) or self.card.inactive(C.HP_PROFILE)
+        self.hp_prof.setEnabled(bool(curves) and not direct)
+        live = pipewire.card_stream()
+        if not curves:
+            note = ("Needs Creative's headphone curves: run sudo ae9-get-firmware "
+                    "AECMDMasterInstaller_3.4.92.00.exe (Creative's Sound Blaster Command "
+                    "installer for the AE-9).")
+        elif direct:
+            note = "Works with Direct Mode off."
+        elif k and out != 1:
+            note = "Acts when the output is Headphones."
+        elif k and live and live[0] != 48000:
+            note = f"Acts at 48 kHz; the card is playing at {live[0] / 1000:g} kHz now."
+        else:
+            note = ""
+        self.hp_prof_note.setText(note)
+        self.hp_prof_note.setVisible(bool(note))
 
     def optical_silent_because(self, layout):
         """Why optical out is silent right now, though switched on: the
@@ -1075,6 +1122,13 @@ def confirm_phantom(parent):
     return box.clickedButton() is yes
 
 
+HP_PROFILE_TIP = ("Creative's EQ correction for your headphone model, the same curves as "
+                  "Sound Blaster Command on Windows.\n\n"
+                  "It acts with Direct Mode off, on Headphones, while the card plays at 48 kHz. "
+                  "On speakers it rests, and comes back when you switch to headphones.\n\n"
+                  "The curves are Creative's and aren't shipped with the driver: "
+                  "ae9-get-firmware installs them from Creative's installer "
+                  "(AECMDMasterInstaller_3.4.92.00.exe).")
 HEADPHONES_TIP = ("The head unit's headphone jacks, 3.5 mm and 1/4\". "
                   "\"Plugged In\" is the 3.5 mm jack; the 1/4\" doesn't report plugs.")
 STREAM_TIP = ("Channels PipeWire sends to the card (its card profile). Picking 4.0, 4.1 or 5.1 "

@@ -211,6 +211,7 @@ pipewire.capture_stream = lambda card_id="AE9": PW.capture
 pipewire.RATES_CONF = os.path.join(_TMP, "pipewire", "90-sbae9-sbc-rates.conf")
 pipewire.MIC_CONF = os.path.join(_TMP, "wireplumber", "91-sbae9-sbc-mic.conf")
 pipewire.PW_CONF_DIR = os.path.join(_TMP, "pipewire")
+C.HP_DIRS = (os.path.join(_TMP, "firmware"),)   # headphone curves; tests add them
 C.module_param = lambda name: PARAMS.get(name)
 C.module_version = lambda: PARAMS.get("version")
 PCMS = set()   # extra capture devices the fake driver has (1 = optical in, 2 = What U Hear)
@@ -239,6 +240,7 @@ def reset():
     PARAMS.update({"pcm_rates": "1", "pcm_bits": "24", "surround": "1", "surround_96k": "0",
                    "version": "0.6.8"})
     shutil.rmtree(os.environ["XDG_CONFIG_HOME"], ignore_errors=True)
+    shutil.rmtree(C.HP_DIRS[0], ignore_errors=True)
     for f in (pipewire.RATES_CONF, pipewire.MIC_CONF):
         if os.path.exists(f):
             os.remove(f)

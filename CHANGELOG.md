@@ -7,13 +7,18 @@ driver ([SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv)).
 
 ### Added
 
-- Playback → Speaker Setup tab (needs a driver with the speaker-setup
-  controls; older drivers show a note): Bass Redirect with a Speaker Type
+- Playback → Speaker Setup tab (driver 0.10.0+; older drivers show a
+  note): Bass Redirect with a Speaker Type
   picker as on Windows (Tower 80 Hz, Desktop 120 Hz, or a custom crossover
   from 50 to 200 Hz) and Sub Gain, and Speaker Calibration: a level
   (-12 to +12 dB) and a distance (0 to 500 cm, a delay of about 0.29 ms
   per 10 cm) for each speaker in the Speaker Config. Works with Direct
   Mode off; in Direct Mode it's greyed out with a button to turn it off.
+- Headphone Profile under Headphones (driver 0.10.0+): Creative's EQ
+  correction for 32 headphone models, read from the driver. It acts with
+  Direct Mode off, on Headphones, at 48 kHz, and says when it's resting.
+  Greyed out, with how to install them, when Creative's curves are missing
+  (`ae9-get-firmware`).
 - A DSP / Direct Mode switch in the bottom bar, next to the
   headphones / speakers one and styled the same.
 
