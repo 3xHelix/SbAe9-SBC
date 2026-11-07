@@ -30,8 +30,8 @@ def tool(icon_name, tip, size=24):
     return b
 
 
-def info_button(text):
-    b = tool("info", text, 18)
+def info_button(text, tip=None):
+    b = tool("info", tip or text, 18)
     b.clicked.connect(lambda: QMessageBox.information(b.window(), "About this setting", text))
     return b
 
@@ -720,10 +720,7 @@ class PlaybackPage(Page):
         fh = QHBoxLayout()
         fh.addWidget(label("Filters", "sectionTitle"))
         fh.addStretch()
-        fh.addWidget(info_button(
-            "The ES9038Q2M's digital filter. Seven modes: linear or minimum phase, "
-            "fast or slow roll-off, apodizing and brick wall. Apodizing Fast is the "
-            "filter Windows starts with."))
+        fh.addWidget(info_button(DAC_FILTER_TIP, "About the DAC filter"))
         fl.addLayout(fh)
         self.filter = QComboBox()
         self.filter.activated.connect(lambda i: self.card.set(C.DAC_FILTER, self.filter.itemData(i)))
@@ -980,20 +977,9 @@ class PlaybackPage(Page):
         self.direct_lbl.setText("On — DSP bypassed" if direct else "Off — SBX / EQ active")
         self._refresh_optical(layout)
         self.setup.refresh()
-        names = {
-            # driver 0.10.0+: the seven ES9038Q2M modes
-            "Linear Phase Fast Roll Off": "Linear Phase Fast Roll Off",
-            "Linear Phase Slow Roll Off": "Linear Phase Slow Roll Off",
-            "Minimum Phase Fast Roll Off": "Minimum Phase Fast Roll Off",
-            "Minimum Phase Slow Roll Off": "Minimum Phase Slow Roll Off",
-            "Apodizing Fast Roll Off": "Apodizing Fast Roll Off (Windows default)",
-            "Corrected Minimum Phase Fast Roll Off": "Corrected Minimum Phase Fast Roll Off",
-            "Brick Wall": "Brick Wall",
-            # older drivers with the three-filter control
-            "Default": "Default (Windows startup filter)",
-            "Fast": "Fast Roll Off",
-            "Slow": "Slow Roll Off",
-        }
+        # The driver already uses the seven ESS names; only the default
+        # needs a note.
+        names = {"Apodizing Fast Roll Off": "Apodizing Fast Roll Off (Windows default)"}
         if self.filter.count() != len(self.card.items(C.DAC_FILTER)):
             self.filter.clear()
             for k, it in enumerate(self.card.items(C.DAC_FILTER)):
@@ -1145,6 +1131,25 @@ HP_PROFILE_TIP = ("Creative's EQ correction for your headphone model, the same c
                   "The curves are Creative's and aren't shipped with the driver: "
                   "ae9-get-firmware installs them from Creative's installer "
                   "(AECMDMasterInstaller_3.4.92.00.exe).")
+DAC_FILTER_TIP = (
+    "The ES9038Q2M's digital interpolation filter. It runs in the DAC, so it "
+    "applies in Direct Mode too; it is not an SBX effect.\n\n"
+    "• Linear Phase Fast Roll Off — flat to 20 kHz, constant phase, steep "
+    "cutoff. Accurate, but the most ringing.\n"
+    "• Linear Phase Slow Roll Off — linear phase, gentler roll-off and less "
+    "ringing; a slightly softer top end.\n"
+    "• Minimum Phase Fast Roll Off — no pre-ringing, steep cutoff; punchy "
+    "transients, a little post-ringing.\n"
+    "• Minimum Phase Slow Roll Off — the gentlest roll-off and the least "
+    "ringing; smooth and relaxed.\n"
+    "• Apodizing Fast Roll Off — removes the DAC's pre-ringing; the "
+    "Windows/Creative startup filter and a good all-rounder.\n"
+    "• Corrected Minimum Phase Fast Roll Off — minimum phase with a corrected "
+    "impulse; fast roll-off and reduced ringing.\n"
+    "• Brick Wall — very steep cutoff and maximum alias rejection; more "
+    "ringing, useful for testing.\n\n"
+    "Fast/slow and phase differences are subtle: pick by ear."
+)
 HEADPHONES_TIP = ("The head unit's headphone jacks, 3.5 mm and 1/4\". "
                   "\"Plugged In\" is the 3.5 mm jack; the 1/4\" doesn't report plugs.")
 STREAM_TIP = ("Channels PipeWire sends to the card (its card profile). Picking 4.0, 4.1 or 5.1 "
