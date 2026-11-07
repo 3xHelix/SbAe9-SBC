@@ -538,7 +538,9 @@ class PlaybackPage(Page):
     def __init__(self, ctx):
         super().__init__(ctx)
         self.header("Playback")
-        self.lay, digital = self.add_tabs(["Speakers/Headphones", "Digital"])
+        self.lay, setup, digital = self.add_tabs(["Speakers/Headphones", "Speaker Setup", "Digital"])
+        self.setup = SpeakerSetup(ctx)
+        setup.addWidget(self.setup)
 
         grid = QGridLayout()
         grid.setHorizontalSpacing(30)
@@ -597,8 +599,8 @@ class PlaybackPage(Page):
         # profile set; usable in Direct Mode too, where Speaker Config is greyed.
         self.stream = QComboBox()
         self.stream.setMinimumWidth(150)
-        self.stream.addItem("Stereo stream", False)
-        self.stream.addItem("5.1 stream", True)
+        self.stream.addItem("Stereo Stream", False)
+        self.stream.addItem("5.1 Stream", True)
         self.stream.setToolTip(STREAM_TIP)
         self.stream.activated.connect(lambda i: self._switch_stream(self.stream.itemData(i)))
         g.addWidget(self.stream, 1, 4)
@@ -945,7 +947,7 @@ class PlaybackPage(Page):
         # In Direct Mode the DSP (and Speaker Config) is bypassed: the stream's
         # channels go straight to the outputs.
         shown = ("5.1" if layout == "surround" else "2.0") if direct else cfg
-        stream_txt = "6-ch stream" if layout == "surround" else "stereo stream" if layout else ""
+        stream_txt = "5.1 Stream" if layout == "surround" else "Stereo Stream" if layout else ""
         self.spk_sub.setText(" · ".join(x for x in (
             SPEAKER_TEXT.get(shown, shown), stream_txt) if x))
         self.spk_sub.setToolTip(SPEAKER_JACKS.get(shown, ""))
@@ -959,6 +961,7 @@ class PlaybackPage(Page):
         self.direct.setCheckedSilently(direct)
         self.direct_lbl.setText("On — DSP bypassed" if direct else "Off — SBX / EQ active")
         self._refresh_optical(layout)
+        self.setup.refresh()
         names = {"Default": "Default (Windows startup filter)", "Fast": "Fast Roll Off",
                  "Slow": "Slow Roll Off"}
         if self.filter.count() != len(self.card.items(C.DAC_FILTER)):
@@ -1094,6 +1097,249 @@ SPEAKER_JACKS = {
     "4.1": "The card's RCA out, 3.5 mm C/Sub out and 3.5 mm Rear out",
     "5.1": "The card's RCA out, 3.5 mm C/Sub out and 3.5 mm Rear out",
 }
+
+
+BASS_REDIRECT_TIP = (
+    "Bass Redirect sends the low end of every speaker to the subwoofer, below the "
+    "crossover frequency. It's meant for x.1 setups: on speakers without a sub it just "
+    "thins the sound.\n\n"
+    "Speaker Type sets the crossover as Sound Blaster Command does on Windows: Tower "
+    "speakers keep their bass down to 80 Hz, Desktop speakers hand it over below 120 Hz. "
+    "Custom picks any frequency from 50 to 200 Hz.\n\n"
+    "Sub Gain raises or lowers the redirected bass.")
+CALIBRATION_TIP = (
+    "Level raises or lowers one speaker, from -12 to +12 dB, to even out a setup where "
+    "some speakers are louder than others.\n\n"
+    "Distance delays a speaker by the time sound takes to travel that far (10 cm is about "
+    "0.29 ms). Set it on the speakers that are closer to you than the farthest one, by the "
+    "difference, so everything reaches you at the same time.\n\n"
+    "Only the speakers in your Speaker Config can be set. The DSP does this, so it works "
+    "with Direct Mode off (SBX on or off).")
+# the speakers each Speaker Config plays on
+CONFIG_CHANNELS = {
+    "2.0": ("Front L", "Front R"),
+    "2.1": ("Front L", "Front R", "Sub"),
+    "4.0": ("Front L", "Front R", "Rear L", "Rear R"),
+    "4.1": ("Front L", "Front R", "Sub", "Rear L", "Rear R"),
+    "5.1": tuple(C.SPEAKER_CHANNELS),
+}
+CHANNEL_LABELS = {"Front L": "Front Left", "Front R": "Front Right", "Center": "Center",
+                  "Sub": "Subwoofer", "Rear L": "Rear Left", "Rear R": "Rear Right"}
+
+
+def db_text(db):
+    return f"{db:+d} dB" if db else "0 dB"
+
+
+class SpeakerSetup(QWidget):
+    """Playback → Speaker Setup: bass redirect and per-speaker level and
+    distance (driver controls; the DSP does them, so not in Direct Mode)."""
+
+    def __init__(self, ctx):
+        super().__init__()
+        self.ctx, self.card = ctx, ctx.card
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(10)
+
+        self.direct_banner = Banner("Speaker setup is done by the DSP, so it works with "
+                                    "Direct Mode off. Your settings are kept for then.",
+                                    "Turn Direct Mode off")
+        self.direct_banner.button.clicked.connect(lambda: self.ctx.set_direct(False))
+        lay.addWidget(self.direct_banner)
+
+        self.box = QWidget()
+        bl = QVBoxLayout(self.box)
+        bl.setContentsMargins(0, 0, 0, 0)
+        bl.setSpacing(10)
+
+        # bass redirect
+        h = QHBoxLayout()
+        self.redirect = ToggleSwitch()
+        self.redirect.toggled.connect(lambda on: self.card.set(C.BASS_REDIRECT, on))
+        h.addWidget(self.redirect)
+        h.addWidget(label("Bass Redirect", "sectionTitle"))
+        h.addWidget(info_button(BASS_REDIRECT_TIP))
+        h.addStretch()
+        bl.addLayout(h)
+        self.redirect_note = label("", "hint", wrap=True)
+        bl.addWidget(self.redirect_note)
+        g = QGridLayout()
+        g.setHorizontalSpacing(14)
+        g.setVerticalSpacing(8)
+        g.addWidget(label("Speaker Type", "muted"), 0, 0)
+        self.spk_type = QComboBox()
+        for name, hz in C.SPEAKER_TYPES.items():
+            self.spk_type.addItem(f"{name} ({hz} Hz)", hz)
+        self.spk_type.addItem("Custom", None)
+        self.spk_type.setMinimumWidth(170)
+        self.spk_type.activated.connect(self._pick_type)
+        g.addWidget(self.spk_type, 0, 1)
+        g.addWidget(label("Crossover", "muted"), 1, 0)
+        self.xover = QSlider(Qt.Horizontal)
+        self.xover.setRange(5, 20)          # in 10 Hz steps
+        self.xover.setPageStep(1)
+        self.xover.valueChanged.connect(self._xover_moved)
+        self._xover_set = Throttle(lambda hz: self.card.set(C.BASS_XOVER, hz), 60)
+        g.addWidget(self.xover, 1, 1)
+        self.xover_val = label("", "muted")
+        self.xover_val.setMinimumWidth(66)
+        g.addWidget(self.xover_val, 1, 2)
+        g.addWidget(label("Sub Gain", "muted"), 2, 0)
+        self.sub_gain = QSlider(Qt.Horizontal)
+        self.sub_gain.setRange(-12, 12)
+        self.sub_gain.setPageStep(1)
+        sub_set = Throttle(lambda db: self.card.set(C.BASS_SUB_GAIN, db), 60)
+        self.sub_gain.valueChanged.connect(lambda v: (self.sub_val.setText(db_text(v)), sub_set(v)))
+        g.addWidget(self.sub_gain, 2, 1)
+        self.sub_val = label("", "muted")
+        g.addWidget(self.sub_val, 2, 2)
+        g.setColumnStretch(1, 1)
+        g.setColumnStretch(3, 1)
+        self.redirect_grid = QWidget()
+        self.redirect_grid.setLayout(g)
+        bl.addWidget(self.redirect_grid)
+
+        # calibration
+        bl.addSpacing(8)
+        h = QHBoxLayout()
+        h.addWidget(label("Speaker Calibration", "sectionTitle"))
+        h.addWidget(info_button(CALIBRATION_TIP))
+        h.addStretch()
+        self.reset = QPushButton("Reset")
+        self.reset.setToolTip("Every speaker back to 0 dB and 0 cm")
+        self.reset.clicked.connect(self._reset)
+        h.addWidget(self.reset)
+        bl.addLayout(h)
+        cg = QGridLayout()
+        cg.setHorizontalSpacing(14)
+        cg.setVerticalSpacing(6)
+        cg.addWidget(label("Level", "muted"), 0, 1, 1, 2)
+        cg.addWidget(label("Distance", "muted"), 0, 3, 1, 2)
+        self.rows = {}
+        for r, ch in enumerate(C.SPEAKER_CHANNELS, 1):
+            name = label(CHANNEL_LABELS[ch])
+            lvl = QSlider(Qt.Horizontal)
+            lvl.setRange(-12, 12)
+            lvl.setPageStep(1)
+            lvl.setMinimumWidth(160)
+            lvl_val = label("", "muted")
+            lvl_val.setMinimumWidth(56)
+            lvl_set = Throttle(lambda db, ch=ch: self.card.set(C.speaker_level(ch), db), 60)
+            lvl.valueChanged.connect(lambda v, t=lvl_val, f=lvl_set: (t.setText(db_text(v)), f(v)))
+            dist = QSpinBox()
+            dist.setRange(0, 500)
+            dist.setSingleStep(10)
+            dist.setSuffix(" cm")
+            dist.setKeyboardTracking(False)
+            dist.setMinimumWidth(100)
+            delay = label("", "muted")
+            delay.setMinimumWidth(70)
+
+            def dist_changed(v, ch=ch, t=delay):
+                t.setText(self._delay_text(v))
+                self.card.set(C.speaker_distance(ch), v)
+            dist.valueChanged.connect(dist_changed)
+            for c, w in enumerate((name, lvl, lvl_val, dist, delay)):
+                cg.addWidget(w, r, c)
+            self.rows[ch] = (name, lvl, lvl_val, dist, delay)
+        cg.setColumnStretch(1, 1)
+        bl.addLayout(cg)
+        self.layout_note = label("", "hint", wrap=True)
+        bl.addWidget(self.layout_note)
+        lay.addWidget(self.box)
+
+        self.missing = label("Speaker setup (bass redirect, speaker levels and distances) "
+                             "needs a newer SbAe9-Drv.", "muted", wrap=True)
+        lay.addWidget(self.missing)
+        lay.addStretch()
+        self.refresh()
+
+    @staticmethod
+    def _delay_text(cm):
+        return f"{cm * C.CM_DELAY_MS:.2f} ms" if cm else ""
+
+    def available(self):
+        return self.card.present and self.card.has(C.BASS_REDIRECT)
+
+    def _pick_type(self, i):
+        hz = self.spk_type.itemData(i)
+        if hz is not None:
+            self.card.set(C.BASS_XOVER, hz)
+            self.refresh()
+
+    def _xover_moved(self, v):
+        hz = v * 10
+        self.xover_val.setText(f"{hz} Hz")
+        k = self.spk_type.findData(hz)
+        self.spk_type.setCurrentIndex(k if k >= 0 else self.spk_type.count() - 1)
+        self._xover_set(hz)
+
+    def _reset(self):
+        for ch in C.SPEAKER_CHANNELS:
+            self.card.set(C.speaker_level(ch), 0)
+            self.card.set(C.speaker_distance(ch), 0)
+        self.refresh()
+
+    @staticmethod
+    def _show(widget, value):
+        """Set a slider or spin box without writing it back to the card (and
+        leave a slider alone while it's being dragged)."""
+        if isinstance(widget, QSlider) and widget.isSliderDown():
+            return
+        widget.blockSignals(True)
+        widget.setValue(value)
+        widget.blockSignals(False)
+
+    def refresh(self):
+        has = self.available()
+        self.box.setVisible(has)
+        self.missing.setVisible(not has)
+        if not has:
+            self.direct_banner.setVisible(False)
+            return
+        card = self.card
+        # the driver greys these out in Direct Mode; go by that, and by
+        # Direct Mode itself for a driver that doesn't
+        live = not card.get(C.DIRECT, True) and not card.inactive(C.BASS_REDIRECT)
+        self.direct_banner.setVisible(not live)
+        self.box.setEnabled(live)
+
+        cfg = card.get_item(C.SPEAKER_CFG) or "2.1"
+        on = bool(card.get(C.BASS_REDIRECT))
+        self.redirect.setCheckedSilently(on)
+        self.redirect_grid.setEnabled(on)
+        self.redirect_note.setText(
+            "" if cfg.endswith(".1") else
+            f"Your Speaker Config is {cfg} (no sub): Bass Redirect would just thin the sound.")
+        self.redirect_note.setVisible(bool(self.redirect_note.text()))
+        hz = card.get(C.BASS_XOVER, 80) or 80
+        self._show(self.xover, round(hz / 10))
+        self.xover_val.setText(f"{hz} Hz")
+        k = self.spk_type.findData(hz)
+        self.spk_type.setCurrentIndex(k if k >= 0 else self.spk_type.count() - 1)
+        sub = card.get(C.BASS_SUB_GAIN, 0) or 0
+        self._show(self.sub_gain, sub)
+        self.sub_val.setText(db_text(sub))
+
+        used = CONFIG_CHANNELS.get(cfg, C.SPEAKER_CHANNELS)
+        for ch, (name, lvl, lvl_val, dist, delay) in self.rows.items():
+            present = card.has(C.speaker_level(ch))
+            for w in (name, lvl, lvl_val, dist, delay):
+                w.setVisible(present)
+                w.setEnabled(ch in used)
+            tip = "" if ch in used else f"Not in your {cfg} Speaker Config"
+            name.setToolTip(tip)
+            db = card.get(C.speaker_level(ch), 0) or 0
+            self._show(lvl, db)
+            lvl_val.setText(db_text(db))
+            cm = card.get(C.speaker_distance(ch), 0) or 0
+            self._show(dist, cm)
+            delay.setText(self._delay_text(cm))
+        self.layout_note.setText(f"Speakers outside your {cfg} Speaker Config are greyed out; "
+                                 "change it on the Speakers/Headphones tab."
+                                 if len(used) < len(C.SPEAKER_CHANNELS) else "")
+        self.layout_note.setVisible(bool(self.layout_note.text()))
 
 
 class InputSection(QWidget):

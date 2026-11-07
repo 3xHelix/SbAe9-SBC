@@ -15,7 +15,7 @@ class OpticalOutTest(S.AppTestCase):
 
     def digital(self):
         pg = self.page(pages.PlaybackPage)
-        pg.show_tab(1)
+        pg.show_tab(2)
         S.process(20)
         return pg
 
@@ -23,7 +23,7 @@ class OpticalOutTest(S.AppTestCase):
         pg = self.page(pages.PlaybackPage)
         pg.show_tab(0)
         self.assertFalse(pg.optical_box.isVisible())
-        pg.show_tab(1)
+        pg.show_tab(2)
         self.assertTrue(pg.optical_box.isVisible())
         self.assertFalse(pg.optical_missing.isVisible())
 

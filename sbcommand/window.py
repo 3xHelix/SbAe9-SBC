@@ -171,7 +171,7 @@ class Context(QObject):
             return (n.stream_layout() == want and n.sink is not None and self._sink_ok()
                     and (live is None or live[1] == chans))
 
-        self.applier.submit(Change("profile", "5.1 stream" if surround else "Stereo stream",
+        self.applier.submit(Change("profile", "5.1 Stream" if surround else "Stereo Stream",
                                    run, 5000, settled,
                                    lambda: bool(pipewire.layout_profile(self.pw.nodes, surround))))
         return True
@@ -275,37 +275,76 @@ QPushButton:checked {{ color: {T.ACCENT_HI}; border-left: 3px solid {T.ACCENT}; 
 """
 
 
-class OutputSwitch(QWidget):
-    """Headphones / speakers pill in the bottom bar (Head Unit Output)."""
+class PillSwitch(QWidget):
+    """Two-way pill in the bottom bar: an icon each side, the knob on the
+    one in use. `right()` says which; `toggle()` switches."""
 
-    def __init__(self, card, parent=None):
+    def __init__(self, card, control, left_icon, right_icon, tip, parent=None):
         super().__init__(parent)
-        self.card = card
+        self.card, self.control = card, control
+        self.icons = (left_icon, right_icon)
         self.setFixedSize(58, 30)
         self.setCursor(Qt.PointingHandCursor)
-        self.setToolTip("Switch between speakers (the card's RCA out) and headphones "
-                        "(the head unit's headphone jacks)")
+        self.setToolTip(tip)
         card.changed.connect(self._on_change)
 
     def _on_change(self, name):
-        if name == C.OUTPUT:
+        if name == self.control:
             self.update()
 
+    def right(self):
+        return False
+
+    def toggle(self):
+        pass
+
     def mouseReleaseEvent(self, e):
-        if self.card.present:
-            self.card.set(C.OUTPUT, 0 if self.card.get(C.OUTPUT) == 1 else 1)
+        if self.card.present and self.rect().contains(e.position().toPoint()):
+            self.toggle()
 
     def paintEvent(self, _):
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
-        hp = self.card.get(C.OUTPUT) == 1
+        right = self.right()
         p.setPen(Qt.NoPen)
         p.setBrush(QColor(T.PANEL))
         p.drawRoundedRect(self.rect(), 15, 15)
         p.setBrush(QColor(T.ACCENT))
-        p.drawEllipse(2 if hp else 30, 2, 26, 26)
-        icons.paint(p, "headphones", self.rect().adjusted(6, 7, -36, -7), T.ACCENT_TEXT if hp else T.MUTED)
-        icons.paint(p, "speaker", self.rect().adjusted(35, 7, -7, -7), T.ACCENT_TEXT if not hp else T.MUTED)
+        p.drawEllipse(30 if right else 2, 2, 26, 26)
+        icons.paint(p, self.icons[0], self.rect().adjusted(6, 7, -36, -7), T.MUTED if right else T.ACCENT_TEXT)
+        icons.paint(p, self.icons[1], self.rect().adjusted(35, 7, -7, -7), T.ACCENT_TEXT if right else T.MUTED)
+
+
+class OutputSwitch(PillSwitch):
+    """Headphones / speakers (Head Unit Output)."""
+
+    def __init__(self, card, parent=None):
+        super().__init__(card, C.OUTPUT, "headphones", "speaker",
+                         "Switch between speakers (the card's RCA out) and headphones "
+                         "(the head unit's headphone jacks)", parent)
+
+    def right(self):
+        return self.card.get(C.OUTPUT) != 1
+
+    def toggle(self):
+        self.card.set(C.OUTPUT, 0 if self.card.get(C.OUTPUT) == 1 else 1)
+
+
+class DirectSwitch(PillSwitch):
+    """DSP / Direct Mode, through the app's Direct Mode change (as the
+    Playback page's switch)."""
+
+    def __init__(self, ctx, parent=None):
+        super().__init__(ctx.card, C.DIRECT, "chip", "direct",
+                         "Switch between the DSP (SBX, EQ, speaker setup) and Direct Mode "
+                         "(straight to the DAC, up to 384 kHz)", parent)
+        self.ctx = ctx
+
+    def right(self):
+        return bool(self.card.get(C.DIRECT, True))
+
+    def toggle(self):
+        self.ctx.set_direct(not self.right())
 
 
 class StatusDot(QWidget):
@@ -441,7 +480,10 @@ class MainWindow(QMainWindow):
         bl = QHBoxLayout(bottom)
         bl.setContentsMargins(18, 0, 22, 0)
         bl.setSpacing(16)
-        bl.addWidget(OutputSwitch(self.card))
+        self.output_switch = OutputSwitch(self.card)
+        bl.addWidget(self.output_switch)
+        self.direct_switch = DirectSwitch(self.ctx)
+        bl.addWidget(self.direct_switch)
         self.dot = StatusDot()
         bl.addWidget(self.dot)
         self.sbx_logo = label("SBX", "sbxLogo")

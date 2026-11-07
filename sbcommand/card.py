@@ -51,6 +51,23 @@ EQ_BANDS = ["31Hz", "62Hz", "125Hz", "250Hz", "500Hz", "1kHz", "2kHz", "4kHz", "
 EQ_BAND_LABELS = ["31", "62", "125", "250", "500", "1k", "2k", "4k", "8k", "16k"]
 EQ_PREGAIN = "EQ Pre-gain Volume"
 
+# Speaker setup (newer drivers): bass redirect and per-speaker calibration,
+# done by the DSP, so inactive in Direct Mode. Raw values are the units.
+BASS_REDIRECT = "Bass Redirect Switch"
+BASS_XOVER = "Bass Redirect Crossover"            # Hz, 50..200 in 10s
+BASS_SUB_GAIN = "Bass Redirect Sub Gain Volume"   # dB, -12..+12
+SPEAKER_CHANNELS = ["Front L", "Front R", "Center", "Sub", "Rear L", "Rear R"]
+SPEAKER_TYPES = {"Tower": 80, "Desktop": 120}     # Windows sets the crossover from these
+CM_DELAY_MS = 0.0293867                           # the driver's delay per cm (sound at 340.29 m/s)
+
+
+def speaker_level(ch):
+    return f"Speaker Level {ch} Volume"           # dB, -12..+12
+
+
+def speaker_distance(ch):
+    return f"Speaker Distance {ch}"               # cm, 0..500: delays that speaker
+
 
 def fx_switch(effect):
     return f"FX {effect} Switch"

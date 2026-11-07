@@ -5,12 +5,12 @@ import os
 import unittest
 
 import support as S
-from sbcommand import config, pages
+from sbcommand import card as C, config, pages
 
 
 class TabsTest(S.AppTestCase):
     def test_tab_names(self):
-        for cls, names in ((pages.PlaybackPage, ["Speakers/Headphones", "Digital"]),
+        for cls, names in ((pages.PlaybackPage, ["Speakers/Headphones", "Speaker Setup", "Digital"]),
                            (pages.RecordingPage, ["Microphone", "Other Input"]),
                            (pages.SettingsPage, ["Application", "Device"])):
             pg = self.page(cls)
@@ -28,6 +28,32 @@ class TabsTest(S.AppTestCase):
         self.assertEqual(again.tab_stack.currentIndex(), 1)
         self.assertEqual(again.tab_bar.current(), 1)
         self.assertEqual(self.page(pages.PlaybackPage).tab_stack.currentIndex(), 0)
+
+
+class BottomBarSwitchTest(S.AppTestCase):
+    def click(self, w):
+        from PySide6.QtTest import QTest
+        QTest.mouseClick(w, S.Qt.LeftButton)
+        S.process(20)
+
+    def test_direct_switch_follows_and_drives_direct_mode(self):
+        self.mixer.external(C.DIRECT, True)
+        w = self.window()
+        sw = w.direct_switch
+        self.assertTrue(sw.right())
+        self.click(sw)
+        self.settle()
+        self.assertFalse(self.card(C.DIRECT))
+        self.assertFalse(sw.right())
+        self.mixer.external(C.DIRECT, True)          # the Playback page, alsamixer
+        S.process(20)
+        self.assertTrue(sw.right())
+
+    def test_output_switch_still_switches(self):
+        w = self.window()
+        before = self.card(C.OUTPUT)
+        self.click(w.output_switch)
+        self.assertNotEqual(self.card(C.OUTPUT), before)
 
 
 class AutostartTest(S.AppTestCase):

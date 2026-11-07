@@ -98,7 +98,7 @@ class OverlayTest(S.AppTestCase):
         busy.clear()
         pg._speaker_cfg(pg.spk_cfg.findData(4))      # 5.1 speakers
         self.settle()
-        self.assertEqual(steps, ["Speakers: 5.1", "5.1 stream", "Sample rate: 48 kHz"])
+        self.assertEqual(steps, ["Speakers: 5.1", "5.1 Stream", "Sample rate: 48 kHz"])
         self.assertEqual(busy, [True, False])
 
     def test_direct_mode_pick_that_changes_nothing_is_free(self):

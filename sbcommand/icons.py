@@ -46,6 +46,7 @@ PATHS = {
     "refresh": f'<path {_S} d="M20 11a8 8 0 1 0-2.3 5.7"/><path {_S} d="M20 4v7h-7"/>',
     "chip": f'<rect {_S} x="6" y="6" width="12" height="12" rx="2"/><path {_S} d="M9 2.5V6M15 2.5V6M9 18v3.5M15 18v3.5M2.5 9H6M2.5 15H6M18 9h3.5M18 15h3.5"/>',
     "save": f'<path {_S} d="M5 3h11l4 4v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a1 1 0 0 1 1-1z"/><path {_S} d="M8 3v5h7V3M8 21v-7h8v7"/>',
+    "direct": f'<path {_S} d="M3 12h17M14.5 6.5 20 12l-5.5 5.5"/>',
     "power": f'<path {_S} d="M12 3v8"/><path {_S} d="M6.3 6.8a8 8 0 1 0 11.4 0"/>',
 }
 

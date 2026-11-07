@@ -56,7 +56,7 @@ class PlaybackSyncTest(S.AppTestCase):
         self.pick_speakers("5.1")
         self.assertEqual(self.ctx.card.get_item(C.SPEAKER_CFG), "5.1")
         self.assertEqual(S.PW.profile(), S.SURROUND)
-        self.assertEqual(self.pg.stream.currentText(), "5.1 stream")
+        self.assertEqual(self.pg.stream.currentText(), "5.1 Stream")
 
     def test_4_0_needs_the_6_channel_stream_too(self):
         self.pick_speakers("4.0")
@@ -66,7 +66,7 @@ class PlaybackSyncTest(S.AppTestCase):
         self.pick_speakers("5.1")
         self.pick_speakers("2.1")
         self.assertEqual(S.PW.profile(), S.STEREO)
-        self.assertEqual(self.pg.stream.currentText(), "Stereo stream")
+        self.assertEqual(self.pg.stream.currentText(), "Stereo Stream")
 
     def test_driver_changing_speaker_config_does_not_switch_the_profile(self):
         self.mixer.external(C.SPEAKER_CFG, "5.1")   # the driver follows the stream itself
@@ -79,7 +79,7 @@ class PlaybackSyncTest(S.AppTestCase):
         S.PW.set_profile(S.SURROUND)
         self.snapshot()
         self.pg.refresh()
-        self.assertEqual(self.pg.stream.currentText(), "5.1 stream")
+        self.assertEqual(self.pg.stream.currentText(), "5.1 Stream")
 
     def test_stream_switch_works_in_direct_mode(self):
         self.mixer.external(C.DIRECT, True)

@@ -3,6 +3,24 @@
 Sound Blaster Command for Linux: the UI for the Creative Sound Blaster AE-9
 driver ([SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv)).
 
+## Unreleased
+
+### Added
+
+- Playback → Speaker Setup tab (needs a driver with the speaker-setup
+  controls; older drivers show a note): Bass Redirect with a Speaker Type
+  picker as on Windows (Tower 80 Hz, Desktop 120 Hz, or a custom crossover
+  from 50 to 200 Hz) and Sub Gain, and Speaker Calibration: a level
+  (-12 to +12 dB) and a distance (0 to 500 cm, a delay of about 0.29 ms
+  per 10 cm) for each speaker in the Speaker Config. Works with Direct
+  Mode off; in Direct Mode it's greyed out with a button to turn it off.
+- A DSP / Direct Mode switch in the bottom bar, next to the
+  headphones / speakers one and styled the same.
+
+### Changed
+
+- The stream picker on Playback reads "Stereo Stream" / "5.1 Stream".
+
 ## 0.11.2 (2026-11-06)
 
 Voice-chat node fix. Pairs with
