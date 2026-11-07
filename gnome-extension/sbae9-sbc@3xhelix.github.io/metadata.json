@@ -1,0 +1,16 @@
+{
+  "uuid": "sbae9-sbc@3xhelix.github.io",
+  "name": "Sound Blaster AE-9",
+  "description": "Creative Sound Blaster AE-9 in the top bar: DSP / Direct Mode, SBX, sample rate, bit depth, PipeWire quantum and phantom power. Needs Sound Blaster Command for Linux (sbae9-sbc) and the SbAe9-Drv driver.",
+  "shell-version": [
+    "45",
+    "46",
+    "47",
+    "48",
+    "49",
+    "50"
+  ],
+  "url": "https://github.com/3xHelix/SbAe9-SBC",
+  "version-name": "1.0",
+  "settings-schema": "org.gnome.shell.extensions.sbae9-sbc"
+}

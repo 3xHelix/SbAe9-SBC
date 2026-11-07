@@ -1126,6 +1126,9 @@ HP_PROFILE_TIP = ("Creative's EQ correction for your headphone model, the same c
                   "Sound Blaster Command on Windows.\n\n"
                   "It acts with Direct Mode off, on Headphones, while the card plays at 48 kHz. "
                   "On speakers it rests, and comes back when you switch to headphones.\n\n"
+                  "The card loads a curve about a second after you stop on it (driver 0.10.1+). "
+                  "If loading fails, that profile's EQ stays off, so audio stays clean, and the "
+                  "kernel log says why.\n\n"
                   "The curves are Creative's and aren't shipped with the driver: "
                   "ae9-get-firmware installs them from Creative's installer "
                   "(AECMDMasterInstaller_3.4.92.00.exe).")
@@ -1160,7 +1163,7 @@ BASS_REDIRECT_TIP = (
     "Speaker Type sets the crossover as Sound Blaster Command does on Windows: Tower "
     "speakers keep their bass down to 80 Hz, Desktop speakers hand it over below 120 Hz. "
     "Custom picks any frequency from 50 to 200 Hz.\n\n"
-    "Sub Gain raises or lowers the redirected bass.")
+    "Subwoofer boost turns up the redirected bass (Creative's subwoofer boost, on or off).")
 CALIBRATION_TIP = (
     "Level raises or lowers one speaker, from -12 to +12 dB, to even out a setup where "
     "some speakers are louder than others.\n\n"
@@ -1239,15 +1242,9 @@ class SpeakerSetup(QWidget):
         self.xover_val = label("", "muted")
         self.xover_val.setMinimumWidth(66)
         g.addWidget(self.xover_val, 1, 2)
-        g.addWidget(label("Sub Gain", "muted"), 2, 0)
-        self.sub_gain = QSlider(Qt.Horizontal)
-        self.sub_gain.setRange(-12, 12)
-        self.sub_gain.setPageStep(1)
-        sub_set = Throttle(lambda db: self.card.set(C.BASS_SUB_GAIN, db), 60)
-        self.sub_gain.valueChanged.connect(lambda v: (self.sub_val.setText(db_text(v)), sub_set(v)))
-        g.addWidget(self.sub_gain, 2, 1)
-        self.sub_val = label("", "muted")
-        g.addWidget(self.sub_val, 2, 2)
+        self.sub_boost = QCheckBox("Subwoofer boost")
+        self.sub_boost.toggled.connect(self._set_sub_boost)
+        g.addWidget(self.sub_boost, 2, 0, 1, 2)
         g.setColumnStretch(1, 1)
         g.setColumnStretch(3, 1)
         self.redirect_grid = QWidget()
@@ -1329,6 +1326,17 @@ class SpeakerSetup(QWidget):
         self.spk_type.setCurrentIndex(k if k >= 0 else self.spk_type.count() - 1)
         self._xover_set(hz)
 
+    def _set_sub_boost(self, on):
+        if self.card.has(C.BASS_SUB_BOOST):
+            self.card.set(C.BASS_SUB_BOOST, on)
+        else:
+            self.card.set(C.BASS_SUB_GAIN_OLD, C.SUB_BOOST_OLD_ON if on else 0)
+
+    def _sub_boost_on(self):
+        if self.card.has(C.BASS_SUB_BOOST):
+            return bool(self.card.get(C.BASS_SUB_BOOST))
+        return bool(self.card.get(C.BASS_SUB_GAIN_OLD, 0))
+
     def _reset(self):
         for ch in C.SPEAKER_CHANNELS:
             self.card.set(C.speaker_level(ch), 0)
@@ -1372,9 +1380,10 @@ class SpeakerSetup(QWidget):
         self.xover_val.setText(f"{hz} Hz")
         k = self.spk_type.findData(hz)
         self.spk_type.setCurrentIndex(k if k >= 0 else self.spk_type.count() - 1)
-        sub = card.get(C.BASS_SUB_GAIN, 0) or 0
-        self._show(self.sub_gain, sub)
-        self.sub_val.setText(db_text(sub))
+        self.sub_boost.setVisible(card.has(C.BASS_SUB_BOOST) or card.has(C.BASS_SUB_GAIN_OLD))
+        self.sub_boost.blockSignals(True)
+        self.sub_boost.setChecked(self._sub_boost_on())
+        self.sub_boost.blockSignals(False)
 
         used = CONFIG_CHANNELS.get(cfg, C.SPEAKER_CHANNELS)
         for ch, (name, lvl, lvl_val, dist, delay) in self.rows.items():
@@ -1655,11 +1664,18 @@ class RecordingPage(Page):
                          "capturing the card's own output. With SBX on you get the effects too; "
                          "with SBX off it's the stream exactly as sent.",
                          "ae9-what-u-hear.conf", rate_choice=True),
+            InputSection("rear_rca", "Head unit rear RCA", "AE-9 Rear RCA In", 3,
+                         "The RCA L/R jacks on the back of the head unit (Creative calls this "
+                         "input Aux). Records alongside the mic, as its own device, at 44.1 to "
+                         "192 kHz. There's no level control yet, and the level is low: about "
+                         "-45 dBFS for a -20 dBFS source.",
+                         "ae9-rear-rca-in.conf"),
         ]
         for sec in self.inputs:
             other.addWidget(sec)
         self.other_none = label("No other inputs on this driver yet: optical in needs v0.8.0 or "
-                                "newer, What U Hear v0.9.0 or newer.", "muted", wrap=True)
+                                "newer, What U Hear v0.9.0 or newer, the head unit rear RCA "
+                                "v0.10.1 or newer.", "muted", wrap=True)
         other.addWidget(self.other_none)
         other.addStretch()
         ctx.meter.levels.connect(self._levels)

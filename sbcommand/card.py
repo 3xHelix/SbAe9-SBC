@@ -55,15 +55,21 @@ EQ_PREGAIN = "EQ Pre-gain Volume"
 # done by the DSP, so inactive in Direct Mode. Raw values are the units.
 BASS_REDIRECT = "Bass Redirect Switch"
 BASS_XOVER = "Bass Redirect Crossover"            # Hz, 50..200 in 10s
-BASS_SUB_GAIN = "Bass Redirect Sub Gain Volume"   # dB, -12..+12
+BASS_SUB_BOOST = "Bass Redirect Sub Boost Switch"  # on/off (driver 0.10.1+)
+# Driver 0.10.0 had the boost as a -12..+12 dB int by mistake (Creative's
+# BassManagement_SubwooferBoost is a bool): 0 = off, SUB_BOOST_OLD_ON = on.
+BASS_SUB_GAIN_OLD = "Bass Redirect Sub Gain Volume"
+SUB_BOOST_OLD_ON = 6
 SPEAKER_CHANNELS = ["Front L", "Front R", "Center", "Sub", "Rear L", "Rear R"]
 SPEAKER_TYPES = {"Tower": 80, "Desktop": 120}     # Windows sets the crossover from these
 CM_DELAY_MS = 0.0293867                           # the driver's delay per cm (sound at 340.29 m/s)
 
 
 HP_PROFILE = "Headphone Profile"   # Off + SB Command's headphone models (newer drivers)
-# where ae9-get-firmware puts Creative's headphone curves (it checks the same)
-HP_DIRS = ("/etc/firmware", "/lib/firmware", "/usr/lib/firmware")
+# where ae9-get-firmware puts Creative's headphone curves (it checks the same);
+# firmware/updates/ first, as the kernel does (Arch installs there: AE-5/AE-7 clash)
+HP_DIRS = ("/etc/firmware", "/lib/firmware/updates", "/usr/lib/firmware/updates",
+           "/lib/firmware", "/usr/lib/firmware")
 
 
 def headphone_curves():
@@ -325,7 +331,8 @@ def module_param(name):
 
 
 def has_capture_pcm(device, card_id="AE9"):
-    """The driver offers capture device `device` (1 = optical in, 2 = What U Hear)."""
+    """The driver offers capture device `device` (1 = optical in, 2 = What U Hear,
+    3 = head unit rear RCA)."""
     return ae9.has_capture_pcm(device, card_id)
 
 

@@ -93,7 +93,7 @@ class Context(QObject):
         if not mode and not user:
             return
         eff = pipewire.effective_rate(mode or 0, self.active_rates())
-        want = (eff, pipewire.QUANTUM.get(eff, 0))
+        want = (eff, pipewire.quantum_for(eff, self.settings["quantum"] or 0))
         if not user:
             now = (pipewire.current_force_rate(), pipewire.current_quantum())
             if self._rate_written is None and now == want:
@@ -108,7 +108,8 @@ class Context(QObject):
                 return   # re-checked when the current change has settled
 
         def run():
-            pipewire.set_rate_mode(eff, pipewire.allowed_rates(C.module_param("pcm_rates"), C.plays_176k4()))
+            pipewire.set_rate_mode(eff, pipewire.allowed_rates(C.module_param("pcm_rates"), C.plays_176k4()),
+                                   self.settings["quantum"] or 0)
             self._rate_written = want
 
         def settled():
@@ -331,20 +332,22 @@ class OutputSwitch(PillSwitch):
 
 
 class DirectSwitch(PillSwitch):
-    """DSP / Direct Mode, through the app's Direct Mode change (as the
+    """Direct Mode / DSP, through the app's Direct Mode change (as the
     Playback page's switch)."""
 
     def __init__(self, ctx, parent=None):
-        super().__init__(ctx.card, C.DIRECT, "chip", "direct",
+        super().__init__(ctx.card, C.DIRECT, "direct", "chip",
                          "Switch between the DSP (SBX, EQ, speaker setup) and Direct Mode "
                          "(straight to the DAC, up to 384 kHz)", parent)
         self.ctx = ctx
 
     def right(self):
-        return bool(self.card.get(C.DIRECT, True))
+        # Direct on the left, DSP on the right: the order you switch things
+        # on (DSP, then SBX), as in the panel widgets
+        return not self.card.get(C.DIRECT, True)
 
     def toggle(self):
-        self.ctx.set_direct(not self.right())
+        self.ctx.set_direct(self.right())
 
 
 class StatusDot(QWidget):

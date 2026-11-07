@@ -107,6 +107,26 @@ class OtherInputTest(S.AppTestCase):
         self.assertIn("ae9-what-u-hear.conf", secs["what_u_hear"].note.text())
         self.assertFalse(secs["what_u_hear"].set_default.isVisible())
 
+    def test_rear_rca_listed_with_set_default(self):
+        S.PW.add_rear_rca(alsa_props=True)
+        n = pipewire.Nodes(S.PW.objects)
+        self.assertEqual(n.rear_rca["name"], "alsa_input.ae9_rear_rca")
+        self.assertNotEqual(n.source["name"], "alsa_input.ae9_rear_rca")   # never taken for the mic
+        pg, secs = self.other()
+        sec = secs["rear_rca"]
+        self.assertTrue(sec.isVisible())
+        self.assertEqual(sec.name.text(), "AE-9 Rear RCA In")
+        S.PW.calls.clear()
+        sec.set_default.click()
+        self.assertTrue(any(c[:2] == ("wpctl", "set-default") and c[2] == "997" for c in S.PW.calls))
+
+    def test_rear_rca_setup_hint(self):
+        S.PCMS.update({3})
+        pg, secs = self.other()
+        self.assertTrue(secs["rear_rca"].isVisible())
+        self.assertIn("ae9-rear-rca-in.conf", secs["rear_rca"].note.text())
+        self.assertFalse(secs["optical_in"].isVisible())
+
     def test_nothing_on_an_older_driver(self):
         pg, secs = self.other()
         self.assertFalse(any(s.isVisible() for s in secs.values()))

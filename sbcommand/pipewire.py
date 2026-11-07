@@ -65,7 +65,7 @@ OPTICAL_IN = EXTRA_INPUTS["optical_in"][0]
 
 
 def _extra_input(props):
-    """"optical_in" / "what_u_hear" for those AE-9 sources, None for the mic."""
+    """"optical_in" / "what_u_hear" / "rear_rca" for those AE-9 sources, None for the mic."""
     kind = ae9.input_kind(props)
     return None if kind == "mic" else kind
 
@@ -76,7 +76,7 @@ class Nodes:
     def __init__(self, objs=None):
         objs = dump() if objs is None else objs
         self.sink = self.source = self.device = None
-        self.optical_in = self.what_u_hear = None
+        self.optical_in = self.what_u_hear = self.rear_rca = None
         self.default_sink = self.default_source = None
         for o in objs:
             info = o.get("info") or {}
@@ -341,20 +341,36 @@ def effective_rate(mode, rates):
     return min(up) if up else max(rates)
 
 
-def set_rate_mode(mode, rates=None):
+QUANTA = (64, 128, 256, 512, 1024, 2048)   # quantum picks offered (0 = PipeWire decides)
+QUANTUM_MIN, QUANTUM_MAX = 8, 8192         # any pick in this range (the widgets' own lists)
+
+
+def quantum_for(rate, pick=0):
+    """The quantum to force at `rate`: the user's pick, but never below what
+    the rate needs to play without crackles (QUANTUM)."""
+    need = QUANTUM.get(rate, 0)
+    return max(need, pick) if pick else need
+
+
+def set_quantum(q):
+    _run("pw-metadata", "-n", "settings", "0", "clock.force-quantum", str(q))
+
+
+def set_rate_mode(mode, rates=None, quantum=0):
     """mode 0 = follow the source, else force that rate (with its quantum).
 
     Only the forced rate is capped by the caller. allowed-rates, live and in
     the drop-in, always lists the card's full set: PipeWire treats it as the
     rates the device may open at, so a short list would make it resample.
     `rates` is that set (allowed_rates()); 48-384 kHz if not given.
+    `quantum` is the user's quantum pick (0 = none), see quantum_for().
     The drop-in keeps PipeWire from falling back to 44.1/48 kHz-only after a
     restart; the forced rate is restored by the app at start.
     """
     rates = rates or RATES
     _run("pw-metadata", "-n", "settings", "0", "clock.allowed-rates", _rate_list(rates))
     _run("pw-metadata", "-n", "settings", "0", "clock.force-rate", str(mode))
-    _run("pw-metadata", "-n", "settings", "0", "clock.force-quantum", str(QUANTUM.get(mode, 0)))
+    set_quantum(quantum_for(mode, quantum))
     _write_rates_conf(rates)
 
 

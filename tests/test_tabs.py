@@ -40,14 +40,14 @@ class BottomBarSwitchTest(S.AppTestCase):
         self.mixer.external(C.DIRECT, True)
         w = self.window()
         sw = w.direct_switch
-        self.assertTrue(sw.right())
+        self.assertFalse(sw.right())                 # Direct: knob on the left
         self.click(sw)
         self.settle()
         self.assertFalse(self.card(C.DIRECT))
-        self.assertFalse(sw.right())
+        self.assertTrue(sw.right())                  # DSP: knob on the right
         self.mixer.external(C.DIRECT, True)          # the Playback page, alsamixer
         S.process(20)
-        self.assertTrue(sw.right())
+        self.assertFalse(sw.right())
 
     def test_output_switch_still_switches(self):
         w = self.window()

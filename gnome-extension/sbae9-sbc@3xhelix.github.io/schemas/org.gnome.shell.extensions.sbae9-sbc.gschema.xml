@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: GPL-2.0-only -->
+<schemalist>
+  <schema id="org.gnome.shell.extensions.sbae9-sbc" path="/org/gnome/shell/extensions/sbae9-sbc/">
+    <key name="sample-rates" type="ai">
+      <default>[44100, 48000, 88200, 96000, 176400, 192000, 384000]</default>
+      <summary>Sample rates the menu lists</summary>
+      <description>The driver's own list is the limit; Auto is always there.</description>
+    </key>
+    <key name="quantum-values" type="ai">
+      <default>[64, 128, 256, 512, 1024, 2048]</default>
+      <summary>Quantum values the menu lists (8 to 8192)</summary>
+    </key>
+    <key name="quick-rate" type="i">
+      <default>0</default>
+      <summary>Quick preset: sample rate (0 = no preset)</summary>
+    </key>
+    <key name="quick-quantum" type="i">
+      <default>0</default>
+      <summary>Quick preset: quantum (0 = Auto)</summary>
+    </key>
+    <key name="toggle-direct" type="as">
+      <default>[]</default>
+      <summary>Shortcut: toggle Direct Mode / DSP</summary>
+    </key>
+    <key name="toggle-output" type="as">
+      <default>[]</default>
+      <summary>Shortcut: toggle Speakers / Headphones</summary>
+    </key>
+    <key name="toggle-sbx" type="as">
+      <default>[]</default>
+      <summary>Shortcut: toggle SBX (needs Direct Mode off)</summary>
+    </key>
+  </schema>
+</schemalist>

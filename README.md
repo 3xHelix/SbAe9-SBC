@@ -18,8 +18,8 @@ switches and adjusts them.
 |---|---|---|
 | **SBX Profile** | SBX on/off; Surround, Crystalizer, Bass, Smart Volume (Night/Normal/Loud), Dialog+; built-in and personal profiles | card DSP (ALSA `SBX Switch`, `FX …`) |
 | **Equalizer** | 10-band EQ + pre-gain, Creative's 20 presets, your own saved curves | card DSP (`EQ …`) |
-| **Playback** | Speakers / headphones, speaker config (2.0 – 5.1) with matching stereo / 5.1 stream, Direct Mode, DAC filter, sample rate and bit depth, default device, spoken speaker test; Headphone Profile (Creative's EQ curve per headphone model); **Speaker Setup** tab: bass redirect (Speaker Type / crossover, sub gain), level and distance per speaker; **Digital** tab: optical out | ALSA + PipeWire |
-| **Recording** | Head unit mic (XLR/TRS or 3.5 mm mic jack): level, mic gain (0/+10/+20 dB), phantom power 48V (asks first), live input meter, mute, "listen to mic", sample rate (48 / 96 kHz), default device; **Other Input** tab: optical in, What U Hear (48 / 96 kHz) | ALSA + PipeWire |
+| **Playback** | Speakers / headphones, speaker config (2.0 – 5.1) with matching stereo / 5.1 stream, Direct Mode, DAC filter, sample rate and bit depth, default device, spoken speaker test; Headphone Profile (Creative's EQ curve per headphone model); **Speaker Setup** tab: bass redirect (Speaker Type / crossover, subwoofer boost), level and distance per speaker; **Digital** tab: optical out | ALSA + PipeWire |
+| **Recording** | Head unit mic (XLR/TRS or 3.5 mm mic jack): level, mic gain (0/+10/+20 dB), phantom power 48V (asks first), live input meter, mute, "listen to mic", sample rate (48 / 96 kHz), default device; **Other Input** tab: optical in, What U Hear (48 / 96 kHz), head unit rear RCA | ALSA + PipeWire |
 | **Scout Mode** | Creative's Scout Mode (footstep EQ + Smart Volume) | card DSP |
 | **Mixer** | Output volume (same as the head-unit knob), mute, per-channel levels (Front Left / Right, …), mic level | ALSA + PipeWire |
 | **Settings** | **Application** tab: colour palette (Command, Helix, Albino or Wololo), UI scale (70–150%), own title bar or the desktop frame, start at login; **Device** tab: driver/device info, every ALSA control (including inactive ones), reset | ALSA |
@@ -101,6 +101,9 @@ and 7.1 output. The driver doesn't support these yet.
 - For What U Hear: driver
   [v0.9.0](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.9.0) or newer, with its
   `config/ae9-what-u-hear.conf` in the same folder.
+- For the head unit's rear RCA input and the subwoofer boost switch: driver
+  [v0.10.1](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.10.1) or newer, with its
+  `config/ae9-rear-rca-in.conf` in the same folder.
 - For 176.4 kHz (stereo, Direct Mode): driver
   [v0.9.7](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.9.7) or newer
   (`pcm_176k4=Y`).
@@ -109,8 +112,10 @@ and 7.1 output. The driver doesn't support these yet.
   [v0.10.0](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.10.0) or newer.
   The headphone profiles also need Creative's curves, which the driver's
   `sudo ae9-get-firmware AECMDMasterInstaller_3.4.92.00.exe` installs from
-  Creative's Sound Blaster Command installer. This release pairs with
-  SbAe9-Drv v0.10.0.
+  Creative's Sound Blaster Command installer (the app looks in
+  `firmware/creative-ae9/hp` and `firmware/updates/creative-ae9/hp`).
+  This release pairs with
+  [SbAe9-Drv v0.10.1](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.10.1).
 - For switching phantom power (48V) from the app and What U Hear at 96 kHz:
   driver [v0.9.5](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.9.5)
   or newer (`wuh_96k=Y`, the default).
@@ -123,6 +128,28 @@ and 7.1 output. The driver doesn't support these yet.
 - Python 3, PySide6 (`sudo dnf install python3-pyside6`), PipeWire tools
   (`pw-dump`, `wpctl`, `pw-metadata`, `pw-play`, `pw-record`, `pw-loopback`),
   and `libasound`. All of these come with Fedora's standard desktop install.
+
+## Panel widget (KDE Plasma 6) and top bar extension (GNOME)
+
+`install.sh` also installs a panel widget, **Sound Blaster AE-9**: right-click
+the panel > Add Widgets. It shows the running rate on the panel. Its popup has
+DSP / Direct Mode, SBX (with Direct Mode off, as in the app), sample rate, bit
+depth, PipeWire quantum (with the latency) and phantom power 48V (after a
+warning). It works through `sbae9-sbc ctl`, the app's command line, so it
+follows the same rules; the app doesn't need to be open. Its settings
+(right-click > Configure) pick the sample rates and quantum values it lists
+and an optional quick preset button.
+
+Keyboard shortcuts (KDE): Toggle Direct Mode / DSP, Toggle Speakers /
+Headphones and Toggle SBX, with no keys set. Set them in System Settings >
+Keyboard > Shortcuts > Sound Blaster Command.
+
+On GNOME (45 to 50), `install.sh` installs the same thing as a Shell
+extension, **Sound Blaster AE-9** in the top bar: turn it on in the Extensions
+app after logging out and back in, or with
+`gnome-extensions enable sbae9-sbc@3xhelix.github.io`. Its preferences (the
+Extensions app, or `gnome-extensions prefs sbae9-sbc@3xhelix.github.io`) have
+the same lists and quick preset, and the keyboard shortcuts.
 
 ## Run / install
 

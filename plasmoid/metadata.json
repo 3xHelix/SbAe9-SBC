@@ -1,0 +1,20 @@
+{
+    "KPackageStructure": "Plasma/Applet",
+    "KPlugin": {
+        "Authors": [
+            {
+                "Email": "86426476+3xHelix@users.noreply.github.com",
+                "Name": "3xHelix"
+            }
+        ],
+        "Category": "Multimedia",
+        "Description": "Creative Sound Blaster AE-9: DSP / Direct Mode, SBX, sample rate, bit depth, quantum and phantom power",
+        "Icon": "audio-card",
+        "Id": "com.github.3xhelix.sbae9-sbc",
+        "License": "GPL-2.0-only",
+        "Name": "Sound Blaster AE-9",
+        "Version": "1.0",
+        "Website": "https://github.com/3xHelix/SbAe9-SBC"
+    },
+    "X-Plasma-API-Minimum-Version": "6.0"
+}

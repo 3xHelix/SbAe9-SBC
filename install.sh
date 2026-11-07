@@ -44,8 +44,65 @@ Terminal=false
 Categories=AudioVideo;Audio;Mixer;Settings;
 Keywords=Creative;Sound Blaster;AE-9;SBX;Equalizer;
 StartupWMClass=sbae9-sbc
+Actions=ToggleDirect;ToggleOutput;ToggleSbx;
+
+[Desktop Action ToggleDirect]
+Name=Toggle Direct Mode / DSP
+Exec=$BIN/sbae9-sbc ctl direct toggle --notify
+
+[Desktop Action ToggleOutput]
+Name=Toggle Speakers / Headphones
+Exec=$BIN/sbae9-sbc ctl output toggle --notify
+
+[Desktop Action ToggleSbx]
+Name=Toggle SBX
+Exec=$BIN/sbae9-sbc ctl sbx toggle --notify
 DESK
 update-desktop-database "$APPS" 2>/dev/null || true
+
+# KDE global shortcuts: the actions above, no keys by default (System
+# Settings > Keyboard > Shortcuts > Sound Blaster Command)
+if command -v kpackagetool6 >/dev/null 2>&1; then
+    mkdir -p "$HOME/.local/share/kglobalaccel"
+    ln -sf "$APPS/sbae9-sbc.desktop" "$HOME/.local/share/kglobalaccel/sbae9-sbc.desktop"
+    # tell the running shortcut service now (it reads the folder at login)
+    if command -v gdbus >/dev/null 2>&1; then
+        for a in "_launch|Sound Blaster Command" "ToggleDirect|Toggle Direct Mode / DSP" \
+                 "ToggleOutput|Toggle Speakers / Headphones" "ToggleSbx|Toggle SBX"; do
+            gdbus call --session --dest org.kde.kglobalaccel --object-path /kglobalaccel \
+                --method org.kde.KGlobalAccel.doRegister \
+                "['sbae9-sbc.desktop', '${a%%|*}', 'Sound Blaster Command', '${a#*|}']" \
+                >/dev/null 2>&1 || true
+        done
+    fi
+fi
+
+# the GNOME Shell extension ("Sound Blaster AE-9" in the top bar), if GNOME is here
+GNOME=""
+UUID="sbae9-sbc@3xhelix.github.io"
+if command -v gnome-shell >/dev/null 2>&1; then
+    EXT="$HOME/.local/share/gnome-shell/extensions/$UUID"
+    rm -rf "$EXT"
+    mkdir -p "$EXT"
+    cp -r "$HERE/gnome-extension/$UUID"/. "$EXT/"
+    rm -f "$EXT/schemas/gschemas.compiled"
+    glib-compile-schemas "$EXT/schemas"         # its settings (rates, quanta, shortcuts)
+    GNOME=1
+fi
+
+# the KDE Plasma panel widget ("Sound Blaster AE-9"), if Plasma 6 is here
+WIDGET=""
+if command -v kpackagetool6 >/dev/null 2>&1; then
+    if kpackagetool6 -t Plasma/Applet --upgrade "$HERE/plasmoid" >/dev/null 2>&1 ||
+       kpackagetool6 -t Plasma/Applet --install "$HERE/plasmoid" >/dev/null 2>&1; then
+        WIDGET=1
+    fi
+fi
 gtk-update-icon-cache -f -t "$ICONS" 2>/dev/null || true
 echo "Installed $(cat "$APP/BUILD") to $APP."
 echo "Launch 'Sound Blaster Command' from the menu or run: sbae9-sbc"
+[ -n "$GNOME" ] && echo "GNOME extension: turn on 'Sound Blaster AE-9' in the Extensions app" \
+    "(after a first install or an update, log out and back in) or run: gnome-extensions enable $UUID"
+[ -n "$WIDGET" ] && echo "Panel widget: right-click the panel > Add Widgets > 'Sound Blaster AE-9'" \
+    "(after an update, it reloads at the next login or: plasmashell --replace &)"
+true

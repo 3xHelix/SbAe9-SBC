@@ -66,15 +66,34 @@ DEFAULTS = {
     "frameless": True,       # the app's own title bar instead of the desktop's frame
     "ui_scale": 100,
     "glass": False,          # see-through backgrounds on any palette
-    "phantom_confirm": "popup",  # turning phantom power on: "popup" warning or "two_click"
+    "phantom_confirm": "popup",
+    "quantum": 0,            # PipeWire quantum picked (0 = PipeWire decides); high rates raise it  # turning phantom power on: "popup" warning or "two_click"
     "glass_opacity": 70,     # percent, see theme.GLASS_RANGE         # percent, see theme.SCALES
 }
 
 
 class Settings:
+    """settings.json. The panel widget (sbae9-sbc ctl) writes it too, so a
+    change on disk is read back before the next read or write."""
+
     def __init__(self):
         self.path = os.path.join(config_dir(), "settings.json")
         self.data = copy.deepcopy(DEFAULTS)
+        self._mtime = None
+        self._load()
+
+    def _stamp(self):
+        try:
+            st = os.stat(self.path)
+            return (st.st_mtime_ns, st.st_size)
+        except OSError:
+            return None
+
+    def _load(self):
+        stamp = self._stamp()
+        if stamp == self._mtime:
+            return
+        self._mtime = stamp
         try:
             with open(self.path) as f:
                 stored = json.load(f)
@@ -84,14 +103,18 @@ class Settings:
             pass
 
     def __getitem__(self, key):
+        self._load()
         return self.data.get(key, DEFAULTS.get(key))
 
     def __setitem__(self, key, value):
+        self._load()
         self.data[key] = value
         self.save()
 
     def save(self):
+        os.makedirs(os.path.dirname(self.path), exist_ok=True)
         tmp = self.path + ".tmp"
         with open(tmp, "w") as f:
             json.dump(self.data, f, indent=2)
         os.replace(tmp, self.path)
+        self._mtime = self._stamp()

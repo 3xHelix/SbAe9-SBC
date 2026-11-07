@@ -1,5 +1,11 @@
 #!/bin/sh
 # SPDX-License-Identifier: GPL-2.0-only
 # Launch Sound Blaster Command for Linux from wherever this script lives.
+# `sbae9-sbc ctl ...` runs the command-line control (no window; the panel
+# widget uses it).
 HERE="$(dirname "$(readlink -f "$0")")"
+if [ "$1" = ctl ]; then
+    shift
+    exec python3 -c "import sys; sys.path.insert(0, sys.argv[1]); from sbcommand.ctl import main; sys.exit(main(sys.argv[2:]))" "$HERE" "$@"
+fi
 exec python3 -c "import sys; sys.path.insert(0, sys.argv[1]); from sbcommand.__main__ import main; sys.exit(main())" "$HERE" "$@"

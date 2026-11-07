@@ -9,7 +9,7 @@ from sbae9kit import mixer as alsa
 
 
 class SpeakerSetupTest(S.AppTestCase):
-    def add_controls(self):
+    def add_controls(self, old_gain=False):
         """The driver's speaker-setup controls (raw values are Hz, dB and cm)."""
         m = self.mixer
 
@@ -17,7 +17,10 @@ class SpeakerSetupTest(S.AppTestCase):
             m._add(name, value, type=alsa.TYPE_INTEGER, min=lo, max=hi, items=[])
         m.add_bool(C.BASS_REDIRECT, False)
         add_int(C.BASS_XOVER, 50, 200, 80)
-        add_int(C.BASS_SUB_GAIN, -12, 12, 0)
+        if old_gain:                    # driver 0.10.0
+            add_int(C.BASS_SUB_GAIN_OLD, -12, 12, 0)
+        else:
+            m.add_bool(C.BASS_SUB_BOOST, False)
         for ch in C.SPEAKER_CHANNELS:
             add_int(C.speaker_level(ch), -12, 12, 0)
             add_int(C.speaker_distance(ch), 0, 500, 0)
@@ -73,10 +76,23 @@ class SpeakerSetupTest(S.AppTestCase):
         S.process(100)
         self.assertEqual(self.card(C.BASS_XOVER), 150)
         self.assertEqual(st.spk_type.currentText(), "Custom")
-        st.sub_gain.setValue(-4)
-        S.process(100)
-        self.assertEqual(self.card(C.BASS_SUB_GAIN), -4)
-        self.assertEqual(st.sub_val.text(), "-4 dB")
+        st.sub_boost.setChecked(True)
+        self.assertTrue(self.card(C.BASS_SUB_BOOST))
+
+    def test_sub_boost_on_driver_0_10_0s_int_control(self):
+        self.add_controls(old_gain=True)
+        self.mixer.external(C.BASS_REDIRECT, True)
+        st = self.setup_tab()
+        self.assertTrue(st.sub_boost.isVisible())
+        self.assertFalse(st.sub_boost.isChecked())
+        st.sub_boost.setChecked(True)
+        self.assertEqual(self.card(C.BASS_SUB_GAIN_OLD), C.SUB_BOOST_OLD_ON)
+        st.sub_boost.setChecked(False)
+        self.assertEqual(self.card(C.BASS_SUB_GAIN_OLD), 0)
+        self.mixer.external(C.BASS_SUB_GAIN_OLD, -3)    # set as dB before: any non-zero is on
+        S.process(20)
+        st.refresh()
+        self.assertTrue(st.sub_boost.isChecked())
 
     def test_no_sub_warns_that_redirect_thins_the_sound(self):
         self.add_controls()

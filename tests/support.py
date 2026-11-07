@@ -133,6 +133,9 @@ class FakePipeWire:
     def add_what_u_hear(self, first=False, alsa_props=False):
         return self.add_input("alsa_input.ae9_what_u_hear", "AE-9 What U Hear", 2, 998, first, alsa_props)
 
+    def add_rear_rca(self, first=False, alsa_props=False):
+        return self.add_input("alsa_input.ae9_rear_rca", "AE-9 Rear RCA In", 3, 997, first, alsa_props)
+
     def add_input(self, name, desc, dev, node_id, first, alsa_props):
         props = {"node.name": name, "node.description": desc, "media.class": "Audio/Source",
                  "api.alsa.path": f"hw:AE9,{dev}", "priority.session": 100}

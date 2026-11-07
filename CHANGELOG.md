@@ -3,6 +3,56 @@
 Sound Blaster Command for Linux: the UI for the Creative Sound Blaster AE-9
 driver ([SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv)).
 
+## 0.13.0 (2026-11-07)
+
+Panel widgets for KDE Plasma and GNOME with keyboard shortcuts, the head
+unit's rear RCA input, and a subwoofer boost switch. Pairs with
+[SbAe9-Drv v0.10.1](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.10.1).
+
+### Added
+
+- A KDE Plasma 6 panel widget, "Sound Blaster AE-9" (install.sh installs
+  it): Direct Mode / DSP, SBX (two stages, as in the app: DSP first), sample
+  rate, bit depth, PipeWire quantum with the latency, and phantom power
+  (48V, after a warning). It runs the new `sbae9-sbc ctl`, so it follows
+  the app's rules (rate cap per mode, the quantum high rates need).
+- The KDE widget's settings: which sample rates and quantum values its
+  lists show (any quantum from 8 to 8192), and an optional quick preset
+  button (a rate and a quantum at once), as the pw widget has.
+- KDE global shortcuts, no keys by default: Toggle Direct Mode / DSP,
+  Toggle Speakers / Headphones and Toggle SBX (System Settings > Keyboard >
+  Shortcuts > Sound Blaster Command; the widget's settings link there). Each
+  shows a short notification. They're also in the app's launcher menu.
+- The same as a GNOME Shell extension (GNOME 45-50), "Sound Blaster AE-9"
+  in the top bar; install.sh installs it where GNOME is installed. Its
+  preferences (Extensions app) have the same rate and quantum lists and
+  quick preset, and three keyboard shortcuts (no keys by default) that show
+  what changed in GNOME's on-screen popup.
+- `sbae9-sbc ctl`: status as JSON and the same changes from the command
+  line (`sbae9-sbc ctl --help`), with `toggle` and `--notify` for shortcuts.
+- Recording > Other Input: the head unit's rear RCA jacks ("Head unit rear
+  RCA", Creative's Aux), driver 0.10.1+. Records alongside the mic as its own
+  device, with Set Default; it needs the driver's `config/ae9-rear-rca-in.conf`
+  in PipeWire's config folder. No level control yet (the driver doesn't have
+  one yet).
+- A quantum pick is kept across rate changes, but never below what a high
+  rate needs (1024 at 176.4/192 kHz, 2048 at 384 kHz).
+
+### Changed
+
+- Headphone profiles are also found in `/lib/firmware/updates/creative-ae9/hp`
+  and `/usr/lib/firmware/updates/...` (Arch installs there, since another
+  file clashes with linux-firmware's AE-5/AE-7 one). Thanks, Kaiba.
+- The Headphone Profile tip says how driver 0.10.1 loads curves: a moment
+  after you stop on one, and if loading fails that profile's EQ stays off.
+- Settings written by the widget are read back by an open app.
+- The bottom bar's mode switch reads Direct Mode / DSP (Direct on the
+  left), the order you switch things on, as in the panel widgets.
+- Speaker Setup: Sub Gain is now a "Subwoofer boost" on/off box. It was
+  never a dB level: Creative's setting is an on/off subwoofer boost. Uses
+  the driver's "Bass Redirect Sub Boost Switch" (0.10.1+); on driver 0.10.0
+  it writes the old gain control (0 off, 6 on).
+
 ## 0.12.0 (2026-11-07)
 
 Speaker Setup and headphone profiles. Pairs with
