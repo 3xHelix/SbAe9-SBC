@@ -3,7 +3,12 @@
 Sound Blaster Command for Linux: the UI for the Creative Sound Blaster AE-9
 driver ([SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv)).
 
-## Unreleased
+## 0.14.0 (2026-11-08)
+
+The seven DAC filters under Creative's names, optical in / What U Hear /
+rear RCA as the driver's own sources with a What U Hear rate picker, and a
+level meter for the rear RCA input. Pairs with
+[SbAe9-Drv v0.11.0](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.11.0).
 
 ### Added
 

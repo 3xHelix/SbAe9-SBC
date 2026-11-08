@@ -101,6 +101,11 @@ and 7.1 output. The driver doesn't support these yet.
 - For What U Hear: driver
   [v0.9.0](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.9.0) or newer, with its
   `config/ae9-what-u-hear.conf` in the same folder.
+- From driver [v0.11.0](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.11.0) the driver adds optical in, What U Hear and the
+  rear RCA input to PipeWire itself (its card profile, installed with its
+  packages): the copied `ae9-*.conf` files above aren't needed and make
+  each input show up twice, so delete them. It also has seven DAC filters
+  under Creative's names (older drivers: Default / Fast / Slow).
 - For the head unit's rear RCA input and the subwoofer boost switch: driver
   [v0.10.1](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.10.1) or newer, with its
   `config/ae9-rear-rca-in.conf` in the same folder.
@@ -115,7 +120,7 @@ and 7.1 output. The driver doesn't support these yet.
   Creative's Sound Blaster Command installer (the app looks in
   `firmware/creative-ae9/hp` and `firmware/updates/creative-ae9/hp`).
   This release pairs with
-  [SbAe9-Drv v0.10.1](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.10.1).
+  [SbAe9-Drv v0.11.0](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.11.0).
 - For switching phantom power (48V) from the app and What U Hear at 96 kHz:
   driver [v0.9.5](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.9.5)
   or newer (`wuh_96k=Y`, the default).
