@@ -129,6 +129,36 @@ class SeparateOpticalOutTest(S.AppTestCase):
         self.assertEqual(self.mixer.get_iec958(C.OPTICAL_IEC958)[0], 0x04)
         self.assertEqual(pg.pt_lbl.text(), "Off — PCM audio")
 
+    def test_mirror_switch_off_by_default(self):
+        """Driver 0.12.1: optical plays only its own stream unless mirroring is on."""
+        S.PW.add_optical_out()
+        self.mixer.add_bool(C.OPTICAL_MIRROR, False)
+        pg = self.digital()
+        self.assertTrue(pg.mirror_row.isVisible())
+        self.assertFalse(pg.mirror.isChecked())
+        self.assertEqual(pg.optical_lbl.text(), "On — waiting for AE-9 Optical Out")
+        self.assertIn("stays quiet", pg.oo_note.text())
+        self.assertIn("mirroring is off", pg.optical_quality_note.text())
+        pg.mirror.setChecked(True)
+        self.assertIn((C.OPTICAL_MIRROR, True), self.mixer.writes)
+        S.process(20)
+        pg.refresh()
+        self.assertNotIn("waiting", pg.optical_lbl.text())    # the mirror's own state now
+        self.assertIn("mirrors the main output", pg.oo_note.text())
+
+    def test_own_stream_says_where_it_goes_after(self):
+        S.PW.add_optical_out()
+        S.PW.optical_stream = (48000, 2, "S16_LE")
+        self.mixer.add_bool(C.OPTICAL_MIRROR, False)
+        pg = self.digital()
+        self.assertIn("goes quiet", pg.optical_note.text())
+
+    def test_no_mirror_switch_on_0_12_0(self):
+        S.PW.add_optical_out()
+        pg = self.digital()
+        self.assertFalse(pg.mirror_row.isVisible())
+        self.assertIn("mirrors the main output", pg.oo_note.text())
+
     def test_no_passthrough_row_without_the_control(self):
         S.PW.add_optical_out()
         pg = self.digital()

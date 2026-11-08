@@ -40,6 +40,10 @@ OPTICAL_OUT = "Optical Out Playback Switch"   # newer drivers: optical plays wha
 # channel status; AES0 bit 1 = non-audio (AC-3 / DTS passthrough), set by
 # ae9-optical-passthrough while it plays a file. Left on, PCM is noise.
 OPTICAL_IEC958 = "IEC958 Playback Default"
+# Driver 0.12.1: mirror the main output to optical while nothing plays to
+# hw:AE9,4 (default off: optical plays only its own stream). Older drivers
+# always mirror.
+OPTICAL_MIRROR = "Optical Out Mirror Switch"
 IEC958_NONAUDIO = 0x02
 OPTICAL_OUT_PCM = 4
 BIT_DEPTH = "PCM Bit Depth"

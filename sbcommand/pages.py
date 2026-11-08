@@ -703,6 +703,18 @@ class PlaybackPage(Page):
         sb.addLayout(srow)
         self.oo_note = label("", "hint", wrap=True)
         sb.addWidget(self.oo_note)
+        # driver 0.12.1: mirroring the main output is a choice (off by default)
+        self.mirror_row = QWidget()
+        mr = QHBoxLayout(self.mirror_row)
+        mr.setContentsMargins(0, 4, 0, 0)
+        mr.setSpacing(12)
+        self.mirror = ToggleSwitch()
+        self.mirror.toggled.connect(lambda on: self.card.set(C.OPTICAL_MIRROR, on))
+        mr.addWidget(self.mirror)
+        mr.addWidget(label("Mirror the main output when nothing plays to Optical Out"))
+        mr.addStretch()
+        self.mirror_row.setVisible(False)
+        sb.addWidget(self.mirror_row)
         # passthrough: shown, not switched (ae9-optical-passthrough sets it per file)
         self.pt_row = QWidget()
         pr = QHBoxLayout(self.pt_row)
@@ -1090,10 +1102,16 @@ class PlaybackPage(Page):
                              else "Not set up in PipeWire")
         self.oo_default.setVisible(bool(node))
         self.oo_ok.setVisible(bool(node))
+        has_mirror = self.card.has(C.OPTICAL_MIRROR)
+        self.mirror_row.setVisible(has_mirror)
+        if has_mirror:
+            self.mirror.setCheckedSilently(bool(self.card.get(C.OPTICAL_MIRROR)))
         about = ("Apps can play to optical on its own, as a second output: 44.1–192 kHz, "
-                 "16 or 24-bit stereo, with the main output carrying on as before. While "
-                 "nothing plays to it, optical mirrors the main output. The switch above "
-                 "turns both off.")
+                 "16 or 24-bit stereo, with the main output carrying on as before. "
+                 + ("While nothing plays to it, optical mirrors the main output. "
+                    if self._mirroring() else
+                    "While nothing plays to it, optical stays quiet (mirroring is off). ")
+                 + "The switch above turns optical off altogether.")
         if node:
             default = n.optical_out_is_default
             self.oo_default.setEnabled(not default)
@@ -1118,6 +1136,13 @@ class PlaybackPage(Page):
             self.pt_clear.setVisible(bool(pt))
         return pipewire.optical_out_stream()
 
+    def _mirroring(self):
+        """Optical copies the main output while nothing plays to it: always
+        before driver 0.12.1, then only with its Mirror switch on."""
+        if self.card.has(C.OPTICAL_MIRROR):
+            return bool(self.card.get(C.OPTICAL_MIRROR))
+        return True
+
     def _refresh_optical(self, layout):
         has = self.card.has(C.OPTICAL_OUT)
         self.optical_box.setVisible(has)
@@ -1135,6 +1160,12 @@ class PlaybackPage(Page):
             self.optical_quality_note.setText(
                 "Something plays to the optical output itself, at its own rate: it reaches "
                 "the jack bit for bit, without the DSP. Set the level on your receiver.")
+        elif not self._mirroring():
+            self.optical_quality.setText("Nothing playing")
+            self.optical_quality_note.setText(
+                "Optical plays only what apps send to AE-9 Optical Out (mirroring is off): "
+                "44.1–192 kHz, 16 or 24-bit stereo, bit for bit, without the DSP. Set the "
+                "level on your receiver.")
         else:
             if live:
                 ch = {1: "mono", 2: "stereo", 6: "5.1"}.get(live[1], f"{live[1]} ch")
@@ -1150,8 +1181,16 @@ class PlaybackPage(Page):
         self.optical.setCheckedSilently(on)
         if on and sep:
             self.optical_lbl.setText("On — playing its own stream")
-            self.optical_note.setText("An app plays to AE-9 Optical Out. When it stops, optical "
-                                      "goes back to mirroring the main output.")
+            self.optical_note.setText(
+                "An app plays to AE-9 Optical Out. When it stops, optical "
+                + ("goes back to mirroring the main output." if self._mirroring()
+                   else "goes quiet (mirroring is off)."))
+            self.optical_note.setStyleSheet("")
+            return
+        if on and not self._mirroring():
+            self.optical_lbl.setText("On — waiting for AE-9 Optical Out")
+            self.optical_note.setText("Plays only what apps send to AE-9 Optical Out. To hear the "
+                                      "main output here too, switch mirroring on below.")
             self.optical_note.setStyleSheet("")
             return
         why = self.optical_silent_because(layout) if on else []
@@ -1191,7 +1230,9 @@ OPTICAL_TIP = ("Optical (S/PDIF) out plays what the main output plays, so you ca
                "knob doesn't change it (app volume does): set the level on the receiver.\n\n"
                "With driver 0.12.0 it's also an output of its own, \"AE-9 Optical Out\": "
                "an app playing there gets the jack to itself, at its own rate; when it "
-               "stops, the mirror comes back.")
+               "stops, the mirror comes back.\n\n"
+               "From driver 0.12.1 mirroring is a switch, off by default: optical then "
+               "plays only what apps send to AE-9 Optical Out.")
 
 SURROUND_CFGS = ("4.0", "4.1", "5.1")
 MIC_NAME = "AE-9 Head Unit Mic / Aux"
@@ -2248,8 +2289,8 @@ class EncoderPage(Page):
             "To use an encoder:\n"
             "• Connect your receiver to the AE-9's optical out, and play to the AE-9 as usual "
             "(speakers or headphones): the encoder takes the card's own mix (What U Hear).\n"
-            "• While it runs, the optical jack carries only the encoded stream: the mirror "
-            "stops, and apps can't play to AE-9 Optical Out.\n"
+            "• While it runs, the optical jack carries only the encoded stream: apps can't "
+            "play to AE-9 Optical Out, and the mirror of the main output (if on) stops.\n"
             "• It adds a delay of about 0.1–0.2 s: fine for films and music, noticeable in "
             "games.\n"
             "• It keeps running with this app closed and starts again at login, until you "

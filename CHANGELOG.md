@@ -17,6 +17,9 @@ driver ([SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv)).
   starts again at login. Also `sbae9-sbc ctl encoder off|ac3|dts`. Needs
   driver 0.12.0 and ffmpeg; 5.1 needs the driver's 6-channel What U Hear
   (stereo until then).
+- Playback > Digital: driver 0.12.1's "Mirror the main output when nothing
+  plays to Optical Out" switch (off by default there: optical plays only
+  what apps send to AE-9 Optical Out). The page's text follows it.
 
 ### Fixed
 
