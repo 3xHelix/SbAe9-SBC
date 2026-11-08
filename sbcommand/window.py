@@ -218,6 +218,19 @@ class Context(QObject):
             lambda: pipewire.set_input_conf_rate(path, rate), 8000, settled,
             lambda: pipewire.input_conf_rate(path) != rate))
 
+    def set_input_rule_rate(self, key, rate, title):
+        """Record a card-profile input (What U Hear, driver 0.11.0+) at `rate`
+        (None = follow PipeWire): a WirePlumber rule and restart."""
+
+        def settled():
+            n = self.pw.nodes
+            return getattr(n, key) is not None and self._sink_ok()
+
+        text = f"{title} sample rate: " + (f"{rate / 1000:g} kHz" if rate else "automatic")
+        self.applier.submit(Change(
+            key + "_rate", text, lambda: pipewire.set_input_rule_rate(key, rate), 5000, settled,
+            lambda: pipewire.input_rule_rate(key) != rate))
+
     def set_capture_depth(self, k):
         items = self.card.items(C.CAP_BIT_DEPTH)
         name = items[k] if 0 <= k < len(items) else str(k)

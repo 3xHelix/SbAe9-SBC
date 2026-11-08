@@ -30,6 +30,13 @@ RATES_CONF = os.path.expanduser("~/.config/pipewire/pipewire.conf.d/90-sbae9-sbc
 # (written only when you pick a rate; Automatic removes it).
 MIC_CONF = os.path.expanduser("~/.config/wireplumber/wireplumber.conf.d/91-sbae9-sbc-mic.conf")
 MIC_RATES = (48000, 96000)
+# Driver 0.11.0 makes What U Hear a card-profile source (no copied config to
+# set its rate in): a WirePlumber rule pins it, as for the mic.
+INPUT_RULES = {
+    "what_u_hear": (os.path.expanduser(
+        "~/.config/wireplumber/wireplumber.conf.d/92-sbae9-sbc-what-u-hear.conf"),
+        "~alsa_input.pci-.*[.]what_u_hear", "What U Hear"),
+}
 # Where the driver's own PipeWire configs for optical in and What U Hear go
 PW_CONF_DIR = os.path.expanduser("~/.config/pipewire/pipewire.conf.d")
 
@@ -77,6 +84,8 @@ class Nodes:
         objs = dump() if objs is None else objs
         self.sink = self.source = self.device = None
         self.optical_in = self.what_u_hear = self.rear_rca = None
+        self.extra_count = {}     # how many sources PipeWire lists per extra input
+        self.profile_inputs = False   # the driver's card profile made one (0.11.0+)
         self.default_sink = self.default_source = None
         for o in objs:
             info = o.get("info") or {}
@@ -98,7 +107,15 @@ class Nodes:
                     "description": props.get("node.description"), "props": props,
                     "params": info.get("params") or {}}
             if extra:
-                setattr(self, extra, getattr(self, extra) or node)
+                # two of one input: a hand-copied driver config next to the
+                # 0.11.0 card profile's source. Show the profile's.
+                self.extra_count[extra] = self.extra_count.get(extra, 0) + 1
+                if node["name"] != EXTRA_INPUTS[extra][0]:
+                    self.profile_inputs = True
+                old = getattr(self, extra)
+                if not old or (old["name"] == EXTRA_INPUTS[extra][0]
+                               and node["name"] != EXTRA_INPUTS[extra][0]):
+                    setattr(self, extra, node)
             elif mc == "Audio/Sink" and not self.sink:
                 self.sink = node
             elif mc == "Audio/Source" and not self.source:
@@ -540,6 +557,40 @@ def input_conf_rate(path):
     except (OSError, TypeError):
         return None
     return int(m.group(2)) if m else None
+
+
+def input_rule_rate(key):
+    """The rate the app pinned for a card-profile input (None = it follows PipeWire)."""
+    try:
+        with open(INPUT_RULES[key][0]) as f:
+            m = re.search(r"audio\.rate\s*=\s*(\d+)", f.read())
+    except OSError:
+        return None
+    return int(m.group(1)) if m else None
+
+
+def set_input_rule_rate(key, rate):
+    """Record a card-profile input at `rate` (None = follow PipeWire): a
+    WirePlumber rule, then a WirePlumber restart (rule props apply when the
+    node is made), so audio on every device drops for a moment."""
+    path, pattern, title = INPUT_RULES[key]
+    if rate:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w") as f:
+            f.write(f"# Written by Sound Blaster Command (sbae9-sbc): the AE-9 {title}\n"
+                    "# sample rate. Pick Automatic in the app, or delete this file, to undo.\n"
+                    "monitor.alsa.rules = [\n"
+                    "  {\n"
+                    f'    matches = [ {{ node.name = "{pattern}" }} ]\n'
+                    f"    actions = {{ update-props = {{ audio.rate = {int(rate)} }} }}\n"
+                    "  }\n"
+                    "]\n")
+    else:
+        try:
+            os.remove(path)
+        except FileNotFoundError:
+            return
+    _run("systemctl", "--user", "restart", "wireplumber", timeout=10)
 
 
 def set_input_conf_rate(path, rate):

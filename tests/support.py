@@ -214,6 +214,8 @@ pipewire.capture_stream = lambda card_id="AE9": PW.capture
 pipewire.RATES_CONF = os.path.join(_TMP, "pipewire", "90-sbae9-sbc-rates.conf")
 pipewire.MIC_CONF = os.path.join(_TMP, "wireplumber", "91-sbae9-sbc-mic.conf")
 pipewire.PW_CONF_DIR = os.path.join(_TMP, "pipewire")
+pipewire.INPUT_RULES = {k: (os.path.join(_TMP, "wireplumber", os.path.basename(v[0])),) + v[1:]
+                       for k, v in pipewire.INPUT_RULES.items()}
 C.HP_DIRS = (os.path.join(_TMP, "firmware"),)   # headphone curves; tests add them
 C.module_param = lambda name: PARAMS.get(name)
 C.module_version = lambda: PARAMS.get("version")

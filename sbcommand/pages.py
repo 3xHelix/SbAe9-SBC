@@ -1094,6 +1094,13 @@ DEVICE_PARAMS = ("pcm_rates", "pcm_bits", "dac_441", "surround", "surround_96k",
 INPUT_RATES = (48000, 96000)   # What U Hear: 48, or 96 kHz with the driver's wuh_96k
 
 
+def confirm_wireplumber_restart(parent, what):
+    return QMessageBox.question(
+        parent, f"Change the {what} sample rate?",
+        "This restarts WirePlumber, so audio on every device drops for a moment "
+        "(music, calls, everything).\n\nChange it now?") == QMessageBox.Yes
+
+
 def confirm_pipewire_restart(parent, what):
     return QMessageBox.question(
         parent, f"Change the {what} sample rate?",
@@ -1127,9 +1134,10 @@ HP_PROFILE_TIP = ("Creative's EQ correction for your headphone model, the same c
                   "Sound Blaster Command on Windows.\n\n"
                   "It acts with Direct Mode off, on Headphones, while the card plays at 48 kHz. "
                   "On speakers it rests, and comes back when you switch to headphones.\n\n"
-                  "The card loads a curve about a second after you stop on it (driver 0.10.1+). "
-                  "If loading fails, that profile's EQ stays off, so audio stays clean, and the "
-                  "kernel log says why.\n\n"
+                  "The card loads a curve about a second after you stop on it (driver 0.10.1+); "
+                  "from driver 0.11.0 it waits until nothing is playing, so pick it, then "
+                  "start the music. If loading fails, that profile's EQ stays off, so audio "
+                  "stays clean, and the kernel log says why.\n\n"
                   "The curves are Creative's and aren't shipped with the driver: "
                   "ae9-get-firmware installs them from Creative's installer "
                   "(AECMDMasterInstaller_3.4.92.00.exe).")
@@ -1430,8 +1438,10 @@ class InputSection(QWidget):
     """One of the AE-9's extra recording devices (Recording → Other Input):
     its PipeWire source with Set Default, or how to set it up."""
 
-    def __init__(self, key, title, default_name, device, about, conf, rate_choice=False):
+    def __init__(self, key, title, default_name, device, about, conf, rate_choice=False,
+                 meter=False, profile=False):
         super().__init__()
+        self.profile = profile      # driver 0.11.0+'s card profile makes this source
         self.key, self.default_name, self.device = key, default_name, device
         self.about, self.conf, self.title = about, conf, title
         lay = QVBoxLayout(self)
@@ -1457,14 +1467,31 @@ class InputSection(QWidget):
         rr.addWidget(label("Sample rate"))
         self.rate = QComboBox()
         self.rate.setMinimumWidth(130)
-        for r in INPUT_RATES:
-            self.rate.addItem(f"{r / 1000:g} kHz", r)
+        self.rule_mode = None       # True: a WirePlumber rule sets the rate (0.11.0 source)
         self.rate.activated.connect(self._pick_rate)
         rr.addWidget(self.rate)
         rr.addStretch()
         lay.addWidget(self.rate_row)
         self.rate_row.setVisible(False)
         self.rate_choice = rate_choice
+        # input meter, as the mic's: the page runs it while this tab is on screen
+        self.meter_row = QWidget()
+        mr = QHBoxLayout(self.meter_row)
+        mr.setContentsMargins(0, 6, 0, 6)
+        mr.setSpacing(18)
+        mr.addWidget(label("Input"))
+        meters = QVBoxLayout()
+        meters.setSpacing(5)
+        self.meter_l, self.meter_r = LevelBar(), LevelBar()
+        meters.addWidget(self.meter_l)
+        meters.addWidget(self.meter_r)
+        mr.addLayout(meters, 1)
+        self.peak = label("", "muted")
+        self.peak.setMinimumWidth(66)
+        mr.addWidget(self.peak)
+        lay.addWidget(self.meter_row)
+        self.meter_row.setVisible(False)
+        self.has_meter = meter
         self.conf_path = None
         self.note = label("", "hint", wrap=True)
         lay.addWidget(self.note)
@@ -1473,6 +1500,15 @@ class InputSection(QWidget):
 
     def _pick_rate(self, i):
         rate = self.rate.itemData(i)
+        if self.rule_mode:
+            ctx = getattr(self.window(), "ctx", None)
+            if rate == pipewire.input_rule_rate(self.key):
+                return
+            if ctx is None or not confirm_wireplumber_restart(self.window(), self.title):
+                self._refresh_rate()
+                return
+            ctx.set_input_rule_rate(self.key, rate, self.title)
+            return
         path = self.conf_path
         if not path or rate == pipewire.input_conf_rate(path):
             return
@@ -1482,15 +1518,39 @@ class InputSection(QWidget):
             return
         ctx.set_input_rate(self.key, path, rate, self.title)
 
-    def _refresh_rate(self):
-        self.conf_path = pipewire.input_conf(self.device)
-        cur = pipewire.input_conf_rate(self.conf_path) if self.conf_path else None
+    def _refresh_rate(self, rule=None):
+        """rule: the source is the driver's own (0.11.0 card profile); a
+        WirePlumber rule pins its rate, Automatic follows PipeWire. None
+        keeps the mode it's in."""
+        if rule is None:
+            rule = bool(self.rule_mode)
+        if rule != self.rule_mode:
+            self.rule_mode = rule
+            self.rate.clear()
+            if rule:
+                self.rate.addItem("Automatic", None)
+            for r in INPUT_RATES:
+                self.rate.addItem(f"{r / 1000:g} kHz", r)
         offered = INPUT_RATES if C.wuh_96k() else INPUT_RATES[:1]
         model = self.rate.model()
         for k in range(self.rate.count()):
             r = self.rate.itemData(k)
-            model.item(k).setEnabled(r in offered)
-            model.item(k).setToolTip("" if r in offered else "Needs driver 0.9.5 or newer")
+            ok = r is None or r in offered
+            model.item(k).setEnabled(ok)
+            model.item(k).setToolTip("" if ok else "Needs driver 0.9.5 or newer")
+        if rule:
+            self.conf_path = None
+            cur = pipewire.input_rule_rate(self.key)
+            i = self.rate.findData(cur)
+            self.rate.setCurrentIndex(i if i >= 0 else 0)
+            self.rate.setEnabled(True)
+            self.rate.setToolTip("Automatic follows PipeWire's rate (48 kHz unless something "
+                                 "else runs it higher). Creative records What U Hear at 48 kHz. "
+                                 "Changing it restarts WirePlumber: audio on every device drops "
+                                 "for a moment.")
+            return
+        self.conf_path = pipewire.input_conf(self.device)
+        cur = pipewire.input_conf_rate(self.conf_path) if self.conf_path else None
         i = self.rate.findData(cur)
         self.rate.setCurrentIndex(i if i >= 0 else 0)
         self.rate.setEnabled(cur is not None and len(offered) > 1)
@@ -1500,6 +1560,12 @@ class InputSection(QWidget):
         else:
             self.rate.setToolTip("Restarts PipeWire to apply: audio on every device drops for a "
                                  "moment" if len(offered) > 1 else "96 kHz needs driver 0.9.5 or newer")
+
+    def set_levels(self, l, r):
+        self.meter_l.set_db(l)
+        self.meter_r.set_db(r)
+        top = max(l, r)
+        self.peak.setText(f"{top:.0f} dBFS" if top > -89 else "—")
 
     def _make_default(self):
         if self.node:
@@ -1519,19 +1585,40 @@ class InputSection(QWidget):
         if not has:
             return False
         found = bool(self.node)
+        # the card profile (driver 0.11.0+) makes this source: by version, or
+        # seen making one (dev builds still carry the old version)
+        by_profile = self.profile and (C.driver_at_least(0, 11, 0) or n.profile_inputs)
+        twice = n.extra_count.get(self.key, 0) > 1
         self.name.setText((self.node.get("description") or self.default_name) if found
                           else "Not set up in PipeWire")
         self.set_default.setVisible(found)
         self.ok.setVisible(found)
-        self.rate_row.setVisible(found and self.rate_choice)
-        if found and self.rate_choice:
-            self._refresh_rate()
+        # the rate: the copied config's audio.rate, or for the driver's own
+        # source (0.11.0) a WirePlumber rule
+        rule = bool(found and by_profile and self.key in pipewire.INPUT_RULES
+                    and self.node["name"] != pipewire.EXTRA_INPUTS[self.key][0])
+        rate = found and self.rate_choice
+        self.rate_row.setVisible(rate)
+        self.meter_row.setVisible(found and self.has_meter)
+        if rate:
+            self._refresh_rate(rule)
         if found:
             default = n.is_default_source(self.node)
             self.set_default.setEnabled(not default)
             self.set_default.setText("Default device" if default else "Set Default")
             self.ok.setPixmap(icons.pixmap("check", T.ACCENT_HI if default else T.DIM, 22))
             self.note.setText(self.about)
+            if twice and by_profile:
+                self.note.setText(
+                    f"{self.about}\n\nPipeWire lists this input twice: driver 0.11.0 adds it by "
+                    f"itself now, so delete ~/.config/pipewire/pipewire.conf.d/{self.conf} and "
+                    "restart PipeWire (systemctl --user restart pipewire).")
+        elif by_profile:
+            self.note.setText(
+                "The driver has it, but PipeWire doesn't list it yet. Driver 0.11.0 adds it "
+                "through its card profile (config/creative-ae9.conf), which the driver's "
+                "packages install: update or reinstall the driver package, then restart "
+                "PipeWire (systemctl --user restart pipewire).")
         else:
             self.note.setText(
                 f"The driver has it, but PipeWire doesn't list it yet. Copy config/{self.conf} "
@@ -1543,6 +1630,8 @@ class InputSection(QWidget):
 # =====================================================================================
 class RecordingPage(Page):
     title = "Recording"
+    inputs = ()
+    _meter_target = None      # (source the meter reads, its InputSection or None for the mic)
 
     def __init__(self, ctx):
         super().__init__(ctx)
@@ -1676,21 +1765,23 @@ class RecordingPage(Page):
         self.inputs = [
             InputSection("optical_in", "Optical In (S/PDIF)", "AE-9 Optical In", 1,
                          "Records alongside the head unit mic, as its own device: pick it in your "
-                         "recording app. S/PDIF can't be resampled, so it opens at the sender's "
-                         "rate (44.1–192 kHz) and won't open at all without a signal.",
-                         "ae9-optical-in.conf"),
+                         "recording app. S/PDIF can't be resampled, so the sender's rate "
+                         "(44.1–192 kHz) must match the rate it records at. With no signal it "
+                         "records silence (driver 0.11.0; older drivers don't open without one); "
+                         "plugging or pulling the cable restarts the recording once.",
+                         "ae9-optical-in.conf", profile=True),
             InputSection("what_u_hear", "What U Hear", "AE-9 What U Hear", 2,
                          "Records what the card plays: games, music, calls, all of it, at "
                          "48 or 96 kHz (96 kHz with driver 0.9.5+). Handy for streaming or "
                          "capturing the card's own output. With SBX on you get the effects too; "
                          "with SBX off it's the stream exactly as sent.",
-                         "ae9-what-u-hear.conf", rate_choice=True),
+                         "ae9-what-u-hear.conf", rate_choice=True, profile=True),
             InputSection("rear_rca", "Head unit rear RCA", "AE-9 Rear RCA In", 3,
                          "The RCA L/R jacks on the back of the head unit (Creative calls this "
                          "input Aux). Records alongside the mic, as its own device, at 44.1 to "
                          "192 kHz. There's no level control yet, and the level is low: about "
                          "-45 dBFS for a -20 dBFS source.",
-                         "ae9-rear-rca-in.conf"),
+                         "ae9-rear-rca-in.conf", meter=True, profile=True),
         ]
         for sec in self.inputs:
             other.addWidget(sec)
@@ -1867,22 +1958,35 @@ class RecordingPage(Page):
             self.ctx.monitor.stop()
 
     def _levels(self, l, r):
-        self.meter_l.set_db(l)
-        self.meter_r.set_db(r)
-        top = max(l, r)
-        self.peak.setText(f"{top:.0f} dBFS" if top > -89 else "—")
+        sec = self._meter_target[1] if self._meter_target else None
+        if sec is None:
+            self.meter_l.set_db(l)
+            self.meter_r.set_db(r)
+            top = max(l, r)
+            self.peak.setText(f"{top:.0f} dBFS" if top > -89 else "—")
+        else:
+            sec.set_levels(l, r)
 
-    def _metering(self):
-        """The mic meter runs only while the Microphone tab is on screen."""
-        return self.isVisible() and self.tab_stack.currentIndex() == 0
+    def _meter_wanted(self):
+        """(source name, section or None for the mic) for the input on screen:
+        the mic on the Microphone tab, a metered input on Other Input."""
+        if not self.isVisible():
+            return None
+        n = self.ctx.pw.nodes
+        if self.tab_stack.currentIndex() == 0:
+            return (n.source["name"], None) if n.source else None
+        for sec in self.inputs:
+            if sec.has_meter and sec.node and not sec.isHidden():
+                return sec.node["name"], sec
+        return None
 
     def _update_meter(self):
-        n = self.ctx.pw.nodes
-        if n.source and self._metering():
-            if not self.ctx.meter._proc:
-                self.ctx.meter.start(n.source["name"])
-        else:
-            self.ctx.meter.stop()
+        want = self._meter_wanted()
+        if want != self._meter_target or (want and not self.ctx.meter._proc):
+            self.ctx.meter.stop()            # shows silence on the old one
+            self._meter_target = want
+            if want:
+                self.ctx.meter.start(want[0])
 
     def show_tab(self, i, save=True):
         super().show_tab(i, save)
@@ -1896,6 +2000,7 @@ class RecordingPage(Page):
         super().hideEvent(e)
         try:
             self.ctx.meter.stop()
+            self._meter_target = None
         except RuntimeError:     # the app is shutting down and the meter is gone
             pass
 
@@ -1905,8 +2010,8 @@ class RecordingPage(Page):
         self.set_default.setEnabled(bool(n.source) and not n.source_is_default)
         self.set_default.setText("Default device" if n.source_is_default else "Set Default")
         self.default_ok.setPixmap(icons.pixmap("check", T.ACCENT_HI if n.source_is_default else T.DIM, 22))
-        self._update_meter()
         self._refresh_inputs(n)
+        self._update_meter()
         self._refresh_mic_quality(n)
         muted = False
         if n.source:

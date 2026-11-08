@@ -3,6 +3,29 @@
 Sound Blaster Command for Linux: the UI for the Creative Sound Blaster AE-9
 driver ([SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv)).
 
+## Unreleased
+
+### Added
+
+- Recording > Other Input: the head unit rear RCA input has a live level
+  meter, the same as the mic's. It runs while that tab is on screen and
+  the input is set up in PipeWire.
+- DAC Filter lists driver 0.11.0's seven filters under Creative's names
+  (Apodizing Fast Roll Off, the Windows default, through Brick Wall), with
+  what each one does in its info box. Older drivers keep Default / Fast /
+  Slow. Thanks, DarkNikGr (PR #1).
+
+### Changed
+
+- Driver 0.11.0 adds optical in, What U Hear and the rear RCA input itself
+  (its card profile). Optical in records silence without a signal there. Other Input stops asking you to copy their configs on 0.11.0,
+  and says so when an old copied config makes an input show up twice.
+  What U Hear's rate picker works on the driver's own source too: Automatic
+  (follows PipeWire) or a fixed 48 / 96 kHz, set by a WirePlumber rule
+  (`92-sbae9-sbc-what-u-hear.conf`), as for the mic.
+- The Headphone Profile tip: from driver 0.11.0, a curve loads once
+  nothing is playing.
+
 ## 0.13.0 (2026-11-07)
 
 Panel widgets for KDE Plasma and GNOME with keyboard shortcuts, the head

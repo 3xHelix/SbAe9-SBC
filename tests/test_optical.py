@@ -120,6 +120,92 @@ class OtherInputTest(S.AppTestCase):
         sec.set_default.click()
         self.assertTrue(any(c[:2] == ("wpctl", "set-default") and c[2] == "997" for c in S.PW.calls))
 
+    def _metered(self):
+        """The source of the last level-meter start."""
+        recs = [args for prog, args in S.PW.processes if prog == "pw-record"]
+        return recs[-1][recs[-1].index("--target") + 1] if recs else None
+
+    def test_rear_rca_meter_follows_the_tab(self):
+        S.PW.add_rear_rca()
+        pg, secs = self.other()
+        sec = secs["rear_rca"]
+        self.assertTrue(sec.meter_row.isVisible())
+        self.assertEqual(self._metered(), "alsa_input.ae9_rear_rca")
+        pg.ctx.meter.levels.emit(-40.0, -46.0)
+        self.assertEqual(sec.peak.text(), "-40 dBFS")
+        self.assertEqual(sec.meter_l.db, -40.0)
+        pg.show_tab(0)                        # back to the mic
+        S.process(20)
+        self.assertNotEqual(self._metered(), "alsa_input.ae9_rear_rca")
+        self.assertEqual(sec.peak.text(), "—")   # the old meter falls silent
+        pg.ctx.meter.levels.emit(-12.0, -12.0)
+        self.assertEqual(pg.peak.text(), "-12 dBFS")
+        self.assertEqual(sec.peak.text(), "—")
+
+    def test_no_meter_without_the_node(self):
+        S.PCMS.update({3})
+        pg, secs = self.other()
+        self.assertFalse(secs["rear_rca"].meter_row.isVisible())
+        self.assertFalse(secs["optical_in"].meter_row.isVisible())
+        self.assertIsNone(pg._meter_target)
+
+    def test_card_profile_sources_on_0_11(self):
+        """Driver 0.11.0's card profile makes What U Hear and rear RCA sources itself."""
+        S.PARAMS["version"] = "0.11.0"
+        S.PW.add_input("alsa_input.pci-0000_06_00.0.what_u_hear", "AE-9 What U Hear", 2, 996,
+                       False, True)
+        S.PW.add_input("alsa_input.pci-0000_06_00.0.rear_rca", "AE-9 Rear RCA In", 3, 995,
+                       False, True)
+        pg, secs = self.other()
+        self.assertEqual(secs["rear_rca"].node["name"], "alsa_input.pci-0000_06_00.0.rear_rca")
+        self.assertTrue(secs["rear_rca"].meter_row.isVisible())
+        self.assertNotIn("twice", secs["rear_rca"].note.text())
+        wuh = secs["what_u_hear"]
+        self.assertTrue(wuh.isVisible())
+        self.assertTrue(wuh.rate_row.isVisible())      # a WirePlumber rule sets it
+        self.assertTrue(wuh.rule_mode)
+        self.assertEqual(wuh.rate.currentText(), "Automatic")
+
+    def test_twice_with_a_leftover_config(self):
+        S.PARAMS["version"] = "0.11.0"
+        S.PW.add_rear_rca(alsa_props=True)
+        S.PW.add_input("alsa_input.pci-0000_06_00.0.rear_rca", "AE-9 Rear RCA In", 3, 995,
+                       False, True)
+        pg, secs = self.other()
+        sec = secs["rear_rca"]
+        self.assertEqual(sec.node["name"], "alsa_input.pci-0000_06_00.0.rear_rca")
+        self.assertIn("twice", sec.note.text())
+        self.assertIn("ae9-rear-rca-in.conf", sec.note.text())
+
+    def test_profile_seen_on_an_old_version_string(self):
+        """A dev build still says 0.10.1: its card-profile sources tell."""
+        S.PARAMS["version"] = "0.10.1"
+        S.PW.add_input("alsa_input.pci-0000_06_00.0.what_u_hear", "AE-9 What U Hear", 2, 996,
+                       False, True)
+        S.PCMS.update({3})
+        pg, secs = self.other()
+        self.assertTrue(secs["what_u_hear"].rule_mode)
+        self.assertIn("creative-ae9.conf", secs["rear_rca"].note.text())
+
+    def test_setup_hint_on_0_11_points_at_the_package(self):
+        S.PARAMS["version"] = "0.11.0"
+        S.PCMS.update({1, 3})
+        pg, secs = self.other()
+        self.assertIn("creative-ae9.conf", secs["rear_rca"].note.text())
+        self.assertNotIn("ae9-rear-rca-in.conf", secs["rear_rca"].note.text())
+        self.assertIn("creative-ae9.conf", secs["optical_in"].note.text())   # in the profile too
+
+    def test_optical_twice_with_the_old_config(self):
+        S.PARAMS["version"] = "0.11.0"
+        S.PW.add_optical_in(alsa_props=True)
+        S.PW.add_input("alsa_input.pci-0000_06_00.0.optical_in", "AE-9 Optical In", 1, 994,
+                       False, True)
+        pg, secs = self.other()
+        sec = secs["optical_in"]
+        self.assertEqual(sec.node["name"], "alsa_input.pci-0000_06_00.0.optical_in")
+        self.assertIn("twice", sec.note.text())
+        self.assertIn("ae9-optical-in.conf", sec.note.text())
+
     def test_rear_rca_setup_hint(self):
         S.PCMS.update({3})
         pg, secs = self.other()
@@ -227,3 +313,58 @@ class WhatUHearRateTest(S.AppTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class WhatUHearRuleRateTest(S.AppTestCase):
+    """Driver 0.11.0: What U Hear is the card profile's source; a WirePlumber
+    rule pins its rate."""
+
+    def setUp(self):
+        super().setUp()
+        S.PARAMS.update({"version": "0.11.0", "wuh_96k": "Y"})
+        S.PW.add_input("alsa_input.pci-0000_06_00.0.what_u_hear", "AE-9 What U Hear", 2, 996,
+                       False, True)
+        self.path = pipewire.INPUT_RULES["what_u_hear"][0]
+        self.addCleanup(lambda: os.path.exists(self.path) and os.remove(self.path))
+        self.answer = True
+        old = pages.confirm_wireplumber_restart
+        pages.confirm_wireplumber_restart = lambda parent, what: self.answer
+        self.addCleanup(setattr, pages, "confirm_wireplumber_restart", old)
+
+    def section(self):
+        self.snapshot()
+        pg = self.page(pages.RecordingPage)
+        pg.show_tab(1)
+        S.process(20)
+        return {sec.key: sec for sec in pg.inputs}["what_u_hear"]
+
+    def test_96_writes_the_rule_and_restarts_wireplumber(self):
+        sec = self.section()
+        S.PW.calls.clear()
+        sec._pick_rate(sec.rate.findData(96000))
+        self.settle()
+        with open(self.path) as f:
+            text = f.read()
+        self.assertIn('node.name = "~alsa_input.pci-.*[.]what_u_hear"', text)
+        self.assertIn("audio.rate = 96000", text)
+        self.assertEqual(pipewire.input_rule_rate("what_u_hear"), 96000)
+        self.assertIn(("systemctl", "--user", "restart", "wireplumber"), S.PW.calls)
+        sec._pick_rate(sec.rate.findData(None))       # Automatic removes it
+        self.settle()
+        self.assertFalse(os.path.exists(self.path))
+
+    def test_cancel_changes_nothing(self):
+        self.answer = False
+        sec = self.section()
+        sec._pick_rate(sec.rate.findData(48000))
+        self.settle()
+        self.assertFalse(os.path.exists(self.path))
+        self.assertEqual(sec.rate.currentText(), "Automatic")
+
+    def test_copied_config_source_keeps_the_config_picker(self):
+        S.PW.objects[:] = [o for o in S.PW.objects
+                           if "what_u_hear" not in str((o.get("info") or {}).get("props", {}).get("node.name", ""))]
+        S.PW.add_what_u_hear()
+        sec = self.section()
+        self.assertFalse(sec.rule_mode)
+        self.assertEqual(sec.rate.findData(None), -1)
