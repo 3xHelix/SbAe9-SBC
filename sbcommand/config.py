@@ -64,11 +64,12 @@ DEFAULTS = {
     "tabs": {},              # page title -> last tab shown
     "palette": "command",    # see theme.PALETTES
     "frameless": True,       # the app's own title bar instead of the desktop's frame
-    "ui_scale": 100,
+    "ui_scale": 100,         # percent, see theme.SCALES
     "glass": False,          # see-through backgrounds on any palette
-    "phantom_confirm": "popup",
-    "quantum": 0,            # PipeWire quantum picked (0 = PipeWire decides); high rates raise it  # turning phantom power on: "popup" warning or "two_click"
-    "glass_opacity": 70,     # percent, see theme.GLASS_RANGE         # percent, see theme.SCALES
+    "phantom_confirm": "popup",  # turning phantom power on: "popup" warning or "two_click"
+    "quantum": 0,            # PipeWire quantum picked (0 = PipeWire decides); high rates raise it
+    "glass_opacity": 70,     # percent, see theme.GLASS_RANGE
+    "encoder": "off",        # optical encoder: "off", "ac3" or "dts" (see encoder.py)
 }
 
 

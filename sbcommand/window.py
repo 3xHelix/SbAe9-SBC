@@ -274,6 +274,7 @@ NAV = [
     ("Playback", "playback", pages.PlaybackPage),
     ("Recording", "recording", pages.RecordingPage),
     ("Scout Mode", "scout", pages.ScoutPage),
+    ("Encoder", "encoder", pages.EncoderPage),
     ("Mixer", "mixer", pages.MixerPage),
 ]
 NAV_BOTTOM = [("Settings", "settings", pages.SettingsPage)]

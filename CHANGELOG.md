@@ -3,6 +3,27 @@
 Sound Blaster Command for Linux: the UI for the Creative Sound Blaster AE-9
 driver ([SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv)).
 
+## Unreleased
+
+### Added
+
+- An Encoder page (left panel, as in Creative's app): No Encoder, an AC-3
+  encoder (Dolby Digital compatible, 640 kbps) or a DTS encoder
+  (experimental), for surround to a receiver over one optical cable. Like
+  Windows, the encoding runs on the PC: the card's own mix (What U Hear) is
+  encoded by your installed ffmpeg and played to the optical output with
+  the non-audio flag. It runs as the user service `sbae9-sbc-encoder`
+  (install.sh installs it), so it keeps going with the app closed and
+  starts again at login. Also `sbae9-sbc ctl encoder off|ac3|dts`. Needs
+  driver 0.12.0 and ffmpeg; 5.1 needs the driver's 6-channel What U Hear
+  (stereo until then).
+
+### Fixed
+
+- The level meter, the mic monitor and the encoder name their PipeWire
+  streams properly ("AE-9 level meter", "AE-9 mic monitor"): PipeWire
+  doesn't take single quotes, so the names came out cut ("'AE-9").
+
 ## 0.15.0 (2026-11-08)
 
 The separate optical output on Playback > Digital, and the main output is

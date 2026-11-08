@@ -236,6 +236,25 @@ C.has_capture_pcm = lambda device, card_id="AE9": device in PCMS
 PLAYBACK_PCMS = set()   # extra playback devices (4 = the separate optical out)
 C.has_playback_pcm = lambda device, card_id="AE9": device in PLAYBACK_PCMS
 pipewire.optical_out_stream = lambda card_id="AE9": PW.optical_stream
+# the optical encoder: a fake ffmpeg / systemd user service
+from sbcommand import encoder  # noqa: E402
+ENCODER = {"ffmpeg": {"ac3", "dca"}, "active": False, "calls": []}
+
+
+def _encoder_run(*args, timeout=5):
+    ENCODER["calls"].append(args)
+    if args[:3] == ("systemctl", "--user", "is-active"):
+        return (0 if ENCODER["active"] else 3), ""
+    if args[:3] == ("systemctl", "--user", "restart"):
+        ENCODER["active"] = True
+    if args[:3] == ("systemctl", "--user", "disable"):
+        ENCODER["active"] = False
+    return 0, ""
+
+
+encoder._run = _encoder_run
+encoder.ffmpeg_encoders = lambda: ENCODER["ffmpeg"]
+encoder.UNIT_PATH = os.path.join(_TMP, "systemd", encoder.UNIT)
 import subprocess  # noqa: E402
 subprocess.run = _no_subprocess
 subprocess.Popen = _no_subprocess
@@ -258,6 +277,7 @@ def reset():
     PARAMS.clear()
     PCMS.clear()
     PLAYBACK_PCMS.clear()
+    ENCODER.update({"ffmpeg": {"ac3", "dca"}, "active": False, "calls": []})
     PARAMS.update({"pcm_rates": "1", "pcm_bits": "24", "surround": "1", "surround_96k": "0",
                    "version": "0.6.8"})
     shutil.rmtree(os.environ["XDG_CONFIG_HOME"], ignore_errors=True)

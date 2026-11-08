@@ -8,14 +8,14 @@ import time
 
 from PySide6.QtCore import QSize, Qt, QTimer
 from PySide6.QtGui import QAction, QColor
-from PySide6.QtWidgets import (QButtonGroup, QCheckBox, QComboBox, QFrame, QGridLayout, QHBoxLayout,
+from PySide6.QtWidgets import (QApplication, QButtonGroup, QCheckBox, QComboBox, QFrame, QGridLayout, QHBoxLayout,
                                QHeaderView, QInputDialog, QLabel, QMenu, QMessageBox, QPushButton,
                                QRadioButton, QScrollArea, QSizePolicy, QSlider, QSpinBox, QTableWidget,
                                QTableWidgetItem, QToolButton, QVBoxLayout, QWidget)
 
 from . import __version__
 from . import card as C
-from . import config, icons, pipewire, profiles
+from . import config, encoder, icons, pipewire, profiles
 from . import theme as T
 from .widgets import (TabBar, Dial, EffectControl, EqGraph, LevelBar, PaletteCard, ProfileCarousel, Segmented,
                       SpeakerDiagram, Throttle, ToggleSwitch, VolumeRow, label)
@@ -2201,6 +2201,120 @@ class ScoutPage(Page):
 
 
 # =====================================================================================
+class EncoderPage(Page):
+    """Surround over one optical cable: the card's mix encoded to AC-3 or DTS
+    on the PC, as Creative's Windows app does (encoder.py)."""
+    title = "Encoder"
+
+    MODES = [
+        ("off", "No Encoder",
+         "Optical plays PCM: the main output's mirror, or what apps play to AE-9 Optical Out."),
+        ("ac3", "AC-3 encoder",
+         "Encodes everything the card plays into AC-3 (Dolby Digital compatible), 640 kbps, "
+         "so a receiver plays it as surround over one optical cable."),
+        ("dts", "DTS encoder (experimental)",
+         "The same in DTS, through ffmpeg's experimental DTS encoder: it sounds a little "
+         "worse than AC-3. For receivers that decode DTS but not AC-3."),
+    ]
+
+    def __init__(self, ctx):
+        super().__init__(ctx)
+        self.header("Encoder")
+        self.group = QButtonGroup(self)
+        self.radios, self.subs = {}, {}
+        for i, (mode, title, about) in enumerate(self.MODES):
+            w = QWidget()
+            g = QGridLayout(w)
+            g.setContentsMargins(0, 6, 0, 6)
+            g.setHorizontalSpacing(12)
+            r = QRadioButton(title)
+            self.group.addButton(r, i)
+            g.addWidget(r, 0, 0, 1, 2)
+            sub = label(about, "muted", wrap=True)
+            g.addWidget(sub, 1, 1)
+            g.setColumnMinimumWidth(0, 18)
+            g.setColumnStretch(1, 1)
+            self.radios[mode], self.subs[mode] = r, sub
+            self.lay.addWidget(w)
+        self.group.idClicked.connect(self._pick)
+        self.status = label("", "bigValue")
+        self.lay.addSpacing(6)
+        self.lay.addWidget(self.status)
+        self.why = label("", "hint", wrap=True)
+        self.why.setStyleSheet(f"color:{T.DANGER};")
+        self.lay.addWidget(self.why)
+        self.lay.addSpacing(8)
+        self.lay.addWidget(label(
+            "To use an encoder:\n"
+            "• Connect your receiver to the AE-9's optical out, and play to the AE-9 as usual "
+            "(speakers or headphones): the encoder takes the card's own mix (What U Hear).\n"
+            "• While it runs, the optical jack carries only the encoded stream: the mirror "
+            "stops, and apps can't play to AE-9 Optical Out.\n"
+            "• It adds a delay of about 0.1–0.2 s: fine for films and music, noticeable in "
+            "games.\n"
+            "• It keeps running with this app closed and starts again at login, until you "
+            "pick No Encoder.\n"
+            "• It uses your own ffmpeg (Fedora: ffmpeg-free) and needs driver 0.12.0 or newer.",
+            "hint", wrap=True))
+        self.lay.addStretch()
+        self._timer = QTimer(self, interval=2000)
+        self._timer.timeout.connect(self.refresh)
+        ctx.pw.updated.connect(self._on_pw)
+
+    def showEvent(self, e):
+        super().showEvent(e)
+        self._timer.start()
+
+    def hideEvent(self, e):
+        super().hideEvent(e)
+        self._timer.stop()
+
+    def _pick(self, i):
+        mode = self.MODES[i][0]
+        if mode == self.ctx.settings["encoder"] and (mode == "off" or encoder.active()):
+            return
+        self.status.setText("Starting…" if mode != "off" else "Stopping…")
+        QApplication.processEvents()
+        ok, msg = encoder.set_mode(mode)
+        self.why.setText("" if ok else msg)
+        self.refresh(keep_why=not ok)
+
+    def refresh(self, keep_why=False):
+        n = self.ctx.pw.nodes
+        mode = self.ctx.settings["encoder"]
+        if mode not in self.radios:
+            mode = "off"
+        self.radios[mode].setChecked(True)
+        reasons = {m: encoder.missing(m, n) for m in encoder.ENCODERS}
+        for m, why in reasons.items():
+            self.radios[m].setEnabled(not why or m == mode)
+            self.radios[m].setToolTip(why)
+        running = mode != "off" and encoder.active()
+        src = n.what_u_hear
+        ch = encoder._channels(src) if src else 2
+        if mode == "off":
+            self.status.setText("Off — optical plays PCM")
+        elif running:
+            layout = {2: "stereo", 6: "5.1"}.get(ch, f"{ch} ch")
+            self.status.setText(f"On — {encoder.ENCODERS[mode][0]} from What U Hear ({layout}) "
+                                "to the optical out")
+        else:
+            self.status.setText(f"{encoder.ENCODERS[mode][0]} picked, but not running")
+        if not keep_why:
+            shown = reasons.get(mode) if mode != "off" else ""
+            if not shown:
+                shown = next((w for w in reasons.values() if w), "")
+            if mode != "off" and not running and not shown:
+                shown = f"See journalctl --user -u {encoder.UNIT} for why it stopped."
+            if not shown and running and ch == 2:
+                shown = ("What U Hear is stereo on this driver, so the encoder sends 2.0; "
+                         "5.1 comes with the driver's 6-channel What U Hear.")
+                self.why.setStyleSheet("")
+            else:
+                self.why.setStyleSheet(f"color:{T.DANGER};")
+            self.why.setText(shown)
+
+
 class MixerPage(Page):
     title = "Mixer"
 

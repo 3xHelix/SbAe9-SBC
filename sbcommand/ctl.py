@@ -14,6 +14,7 @@ the app, if it's open, sees them as changes made elsewhere.
   sbae9-sbc ctl quantum 0|<frames>     8 to 8192; 0 = PipeWire decides
   sbae9-sbc ctl phantom 0|1            48 V; the caller asks the user first
   sbae9-sbc ctl preset <Hz> <frames>   rate and quantum at once
+  sbae9-sbc ctl encoder off|ac3|dts    the optical encoder (driver 0.12.0+, ffmpeg)
 
   direct, sbx and output also take "toggle" (the keyboard shortcuts use it).
   --notify shows the result as a desktop notification too.
@@ -94,6 +95,7 @@ class Card:
     def close(self):
         if self.mixer:
             self.mixer.close()
+            self.mixer = None
 
 
 def rate_set(card, nodes, direct=None):
@@ -272,6 +274,16 @@ def main(argv):
         if argv[0] == "status":
             print(json.dumps(status(card, settings)))
             return 0
+        if argv[0] in ("encoder", "encoder-run", "encoder-cleanup"):
+            card.close()          # the encoder opens the mixer itself
+            from . import encoder
+            if argv[0] == "encoder-run":
+                return encoder.run()
+            if argv[0] == "encoder-cleanup":
+                return encoder.cleanup()
+            ok, msg = encoder.set_mode(argv[1] if len(argv) > 1 else "")
+            print(json.dumps({"ok": ok, "error": msg}))
+            return 0 if ok else 1
         cmd, arg = argv[0], argv[1] if len(argv) > 1 else None
         if arg == "toggle" and cmd in TOGGLES and card.present:
             arg = toggled_arg(card, cmd)

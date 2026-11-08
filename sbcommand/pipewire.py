@@ -760,8 +760,8 @@ class MicMonitor(QObject):
         self._proc.start("pw-loopback", [
             "-n", "sbae9-mic-monitor", "-l", "20",
             "-C", source_name,
-            "--capture-props", "node.description='AE-9 mic monitor' node.dont-reconnect=true",
-            "--playback-props", "media.role=Communication node.description='AE-9 mic monitor'",
+            "--capture-props", '{ node.description="AE-9 mic monitor" node.dont-reconnect=true }',
+            "--playback-props", '{ media.role=Communication node.description="AE-9 mic monitor" }',
         ])
         self.state.emit(True)
 
@@ -797,7 +797,7 @@ class LevelMeter(QObject):
         self._proc.readyReadStandardOutput.connect(self._read)
         self._proc.start("pw-record", ["--raw", "--target", source_name, "--rate", "48000",
                                        "--channels", "2", "--format", "s16",
-                                       "-P", "node.description='AE-9 level meter' node.dont-reconnect=true",
+                                       "-P", '{ node.description="AE-9 level meter" node.dont-reconnect=true }',
                                        "-"])
         self._timer.start()
 

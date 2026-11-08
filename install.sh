@@ -77,6 +77,29 @@ if command -v kpackagetool6 >/dev/null 2>&1; then
     fi
 fi
 
+# the optical encoder's user service (AC-3 / DTS over optical, driver 0.12.0+).
+# Installed, not enabled: the app's Encoder page enables it when you pick one.
+if command -v systemctl >/dev/null 2>&1; then
+    mkdir -p "$HOME/.config/systemd/user"
+    cat > "$HOME/.config/systemd/user/sbae9-sbc-encoder.service" <<UNIT
+[Unit]
+Description=Sound Blaster AE-9 optical encoder (AC-3 / DTS)
+After=pipewire.service wireplumber.service pipewire-pulse.service
+
+[Service]
+ExecStart=$BIN/sbae9-sbc ctl encoder-run
+ExecStopPost=$BIN/sbae9-sbc ctl encoder-cleanup
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target
+UNIT
+    systemctl --user daemon-reload 2>/dev/null || true
+    # a running encoder picks up the new copy of the app
+    systemctl --user try-restart sbae9-sbc-encoder.service 2>/dev/null || true
+fi
+
 # the GNOME Shell extension ("Sound Blaster AE-9" in the top bar), if GNOME is here
 GNOME=""
 UUID="sbae9-sbc@3xhelix.github.io"
