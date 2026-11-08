@@ -36,6 +36,12 @@ ALIASES = {
     HU_MIC: ("Head Unit Line In Plugged",),
 }
 OPTICAL_OUT = "Optical Out Playback Switch"   # newer drivers: optical plays what the main output plays
+# Driver 0.12.0: optical out is also its own playback device (hw:AE9,4). Its
+# channel status; AES0 bit 1 = non-audio (AC-3 / DTS passthrough), set by
+# ae9-optical-passthrough while it plays a file. Left on, PCM is noise.
+OPTICAL_IEC958 = "IEC958 Playback Default"
+IEC958_NONAUDIO = 0x02
+OPTICAL_OUT_PCM = 4
 BIT_DEPTH = "PCM Bit Depth"
 CAP_BIT_DEPTH = "Capture Bit Depth"       # 24-bit / 32-bit recording (newer drivers), next open             # 24-bit / 32-bit (newer drivers), next stream open
 SPEAKER_CFG = "Speaker Config"         # 2.0 / 2.1
@@ -260,6 +266,32 @@ class AE9(QObject):
         except OSError as e:
             return e.errno or errno.EIO
 
+    def iec958(self, name):
+        """An IEC958 control's 24 channel-status bytes, or None."""
+        name = self._name(name)
+        if not self.has(name):
+            return None
+        try:
+            return self.mixer.get_iec958(name)
+        except OSError:
+            return None
+
+    def passthrough(self):
+        """Optical out sends non-audio (AC-3 / DTS): None without the control."""
+        st = self.iec958(OPTICAL_IEC958)
+        return None if st is None else bool(st[0] & IEC958_NONAUDIO)
+
+    def clear_passthrough(self):
+        """Back to PCM audio on optical out (a stuck passthrough)."""
+        st = self.iec958(OPTICAL_IEC958)
+        if st is None or not st[0] & IEC958_NONAUDIO:
+            return True
+        try:
+            self.mixer.set_iec958(OPTICAL_IEC958, bytes([st[0] & ~IEC958_NONAUDIO]) + st[1:])
+            return True
+        except OSError:
+            return False
+
     def writable(self, name):
         c = self.control(name)
         return bool(c and c.writable)
@@ -328,6 +360,11 @@ class AE9(QObject):
 
 def module_param(name):
     return ae9.module_param(name)
+
+
+def has_playback_pcm(device, card_id="AE9"):
+    """The driver offers playback device `device` (4 = the separate optical out)."""
+    return os.path.exists(f"/proc/asound/{card_id}/pcm{device}p")
 
 
 def has_capture_pcm(device, card_id="AE9"):

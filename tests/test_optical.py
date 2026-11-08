@@ -69,6 +69,90 @@ class OpticalOutTest(S.AppTestCase):
         self.assertEqual(pg.optical_lbl.text(), "Off")
 
 
+class SeparateOpticalOutTest(S.AppTestCase):
+    """Driver 0.12.0: optical out is also its own output (hw:AE9,4)."""
+
+    def setUp(self):
+        super().setUp()
+        self.mixer.add_bool(C.OPTICAL_OUT, True)
+
+    def digital(self):
+        self.snapshot()
+        pg = self.page(pages.PlaybackPage)
+        pg.show_tab(2)
+        S.process(20)
+        return pg
+
+    def test_hidden_on_older_drivers(self):
+        pg = self.digital()
+        self.assertFalse(pg.oo_box.isVisible())
+        self.assertIn("same audio as the main output", pg.optical_quality_note.text())
+
+    def test_sink_with_set_default(self):
+        S.PW.add_optical_out()
+        pg = self.digital()
+        self.assertTrue(pg.oo_box.isVisible())
+        self.assertEqual(pg.oo_name.text(), "AE-9 Optical Out")
+        self.assertIn("mirrors the main output", pg.oo_note.text())
+        S.PW.calls.clear()
+        pg.oo_default.click()
+        self.assertTrue(any(c[:2] == ("wpctl", "set-default") and c[2] == "993" for c in S.PW.calls))
+
+    def test_device_without_sink_points_at_the_package(self):
+        S.PLAYBACK_PCMS.add(4)
+        pg = self.digital()
+        self.assertTrue(pg.oo_box.isVisible())
+        self.assertFalse(pg.oo_default.isVisible())
+        self.assertIn("creative-ae9.conf", pg.oo_note.text())
+        self.assertNotIn("ae9-optical-out.conf", pg.oo_note.text())
+
+    def test_its_own_stream(self):
+        S.PW.add_optical_out()
+        S.PW.optical_stream = (96000, 2, "S32_LE")
+        pg = self.digital()
+        self.assertEqual(pg.optical_lbl.text(), "On — playing its own stream")
+        self.assertEqual(pg.optical_quality.text(), "96 kHz · 24-bit · stereo (its own stream)")
+
+    def test_passthrough_is_shown_and_can_be_cleared(self):
+        S.PW.add_optical_out()
+        self.mixer.add_iec958(status=b"\x04")
+        pg = self.digital()
+        self.assertTrue(pg.pt_row.isVisible())
+        self.assertEqual(pg.pt_lbl.text(), "Off — PCM audio")
+        self.assertFalse(pg.pt_clear.isVisible())
+        self.mixer.external(C.OPTICAL_IEC958, b"\x06" + bytes(23))    # ae9-optical-passthrough
+        S.process(20)
+        pg.refresh()
+        self.assertIn("Active", pg.pt_lbl.text())
+        self.assertTrue(pg.pt_clear.isVisible())
+        pg.pt_clear.click()
+        self.assertEqual(self.mixer.get_iec958(C.OPTICAL_IEC958)[0], 0x04)
+        self.assertEqual(pg.pt_lbl.text(), "Off — PCM audio")
+
+    def test_no_passthrough_row_without_the_control(self):
+        S.PW.add_optical_out()
+        pg = self.digital()
+        self.assertFalse(pg.pt_row.isVisible())
+
+
+class OpticalOutSinkTest(S.AppTestCase):
+    """Driver 0.12.0's separate optical output is its own sink, never the main one."""
+
+    def test_main_sink_is_never_the_optical_one(self):
+        S.PW.add_optical_out(first=True)
+        n = pipewire.Nodes(S.PW.objects)
+        self.assertNotIn("optical", n.sink["name"])
+        self.assertEqual(n.optical_out["name"], "alsa_output.pci-0000_06_00.0.optical_out")
+        self.assertEqual(n.optical_out_count, 1)
+
+    def test_profile_sink_over_the_old_drop_in(self):
+        S.PW.add_optical_out(first=True, name="alsa_output.ae9_optical", node_id=992)
+        S.PW.add_optical_out(first=False)
+        n = pipewire.Nodes(S.PW.objects)
+        self.assertEqual(n.optical_out["name"], "alsa_output.pci-0000_06_00.0.optical_out")
+        self.assertEqual(n.optical_out_count, 2)
+
+
 class OtherInputTest(S.AppTestCase):
     def other(self):
         self.snapshot()

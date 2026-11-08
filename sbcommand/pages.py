@@ -683,15 +683,51 @@ class PlaybackPage(Page):
         ob.addLayout(orow)
         self.optical_note = label("", "hint", wrap=True)
         ob.addWidget(self.optical_note)
+
+        # driver 0.12.0: optical is also its own output (hw:AE9,4)
+        self.oo_box = QWidget()
+        sb = QVBoxLayout(self.oo_box)
+        sb.setContentsMargins(0, 6, 0, 0)
+        sb.setSpacing(6)
+        sb.addWidget(label("Its own output", "subTitle"))
+        srow = QHBoxLayout()
+        self.oo_name = label("", "sectionTitle")
+        srow.addWidget(self.oo_name)
+        srow.addStretch()
+        self.oo_default = QPushButton("Set Default")
+        self.oo_default.setMinimumWidth(150)
+        self.oo_default.clicked.connect(self._optical_default)
+        self.oo_ok = QLabel()
+        srow.addWidget(self.oo_default)
+        srow.addWidget(self.oo_ok)
+        sb.addLayout(srow)
+        self.oo_note = label("", "hint", wrap=True)
+        sb.addWidget(self.oo_note)
+        # passthrough: shown, not switched (ae9-optical-passthrough sets it per file)
+        self.pt_row = QWidget()
+        pr = QHBoxLayout(self.pt_row)
+        pr.setContentsMargins(0, 4, 0, 0)
+        pr.setSpacing(12)
+        pr.addWidget(label("Passthrough"))
+        self.pt_lbl = label("", "bigValue")
+        pr.addWidget(self.pt_lbl)
+        pr.addWidget(info_button(PASSTHROUGH_TIP))
+        self.pt_clear = QPushButton("Back to PCM")
+        self.pt_clear.setToolTip("Clears the non-audio flag, if a passthrough was left on: "
+                                 "normal audio plays as noise or silence until it's cleared")
+        self.pt_clear.clicked.connect(self._clear_passthrough)
+        pr.addWidget(self.pt_clear)
+        pr.addStretch()
+        sb.addWidget(self.pt_row)
+        self.oo_box.setVisible(False)
+        ob.addWidget(self.oo_box)
+
         ob.addSpacing(6)
         ob.addWidget(label("Audio Quality", "sectionTitle"))
         self.optical_quality = label("", "bigValue")
         ob.addWidget(self.optical_quality)
-        ob.addWidget(label(
-            "Optical plays the same audio as the main output, so its quality is set on the "
-            "Speakers/Headphones tab: stereo, 24-bit, 48–192 kHz reaches the card's Optical out "
-            "bit for bit. It's taken before the DSP, so SBX and the EQ aren't on it, and the "
-            "volume knob doesn't change it: set the level on your receiver.", "hint", wrap=True))
+        self.optical_quality_note = label("", "hint", wrap=True)
+        ob.addWidget(self.optical_quality_note)
         self.optical_box.setVisible(False)
         digital.addWidget(self.optical_box)
         self.optical_missing = label("Optical out and in need driver v0.8.0 or newer.", "muted", wrap=True)
@@ -1032,21 +1068,92 @@ class PlaybackPage(Page):
             why.append("5.1 stream")
         return why
 
+    def _optical_default(self):
+        n = self.ctx.pw.nodes
+        if n.optical_out:
+            pipewire.set_default(n.optical_out["id"])
+            self.ctx.pw.refresh()
+
+    def _clear_passthrough(self):
+        self.card.clear_passthrough()
+        self.refresh()
+
+    def _refresh_separate(self, n):
+        """Driver 0.12.0's separate optical output: its sink, and passthrough.
+        Returns (rate, channels, format) while something plays to it."""
+        has = bool(n.optical_out) or C.has_playback_pcm(C.OPTICAL_OUT_PCM)
+        self.oo_box.setVisible(has)
+        if not has:
+            return None
+        node = n.optical_out
+        self.oo_name.setText((node.get("description") or "AE-9 Optical Out") if node
+                             else "Not set up in PipeWire")
+        self.oo_default.setVisible(bool(node))
+        self.oo_ok.setVisible(bool(node))
+        about = ("Apps can play to optical on its own, as a second output: 44.1–192 kHz, "
+                 "16 or 24-bit stereo, with the main output carrying on as before. While "
+                 "nothing plays to it, optical mirrors the main output. The switch above "
+                 "turns both off.")
+        if node:
+            default = n.optical_out_is_default
+            self.oo_default.setEnabled(not default)
+            self.oo_default.setText("Default device" if default else "Set Default")
+            self.oo_ok.setPixmap(icons.pixmap("check", T.ACCENT_HI if default else T.DIM, 22))
+            if n.optical_out_count > 1:
+                about += ("\n\nPipeWire lists it twice: the driver adds it by itself now, so "
+                          "delete ~/.config/pipewire/pipewire.conf.d/ae9-optical-out.conf and "
+                          "restart PipeWire (systemctl --user restart pipewire).")
+            self.oo_note.setText(about)
+        else:
+            self.oo_note.setText(
+                "The driver has it, but PipeWire doesn't list it yet. The driver's card "
+                "profile (config/creative-ae9.conf, installed with its packages) adds it: "
+                "update or reinstall the driver package, then restart PipeWire "
+                "(systemctl --user restart pipewire).")
+        pt = self.card.passthrough()
+        self.pt_row.setVisible(pt is not None)
+        if pt is not None:
+            self.pt_lbl.setText("Active — AC-3 / DTS (non-audio)" if pt else "Off — PCM audio")
+            self.pt_lbl.setStyleSheet(f"color:{T.DANGER};" if pt else "")
+            self.pt_clear.setVisible(bool(pt))
+        return pipewire.optical_out_stream()
+
     def _refresh_optical(self, layout):
         has = self.card.has(C.OPTICAL_OUT)
         self.optical_box.setVisible(has)
         self.optical_missing.setVisible(not has)
         if not has:
             return
+        sep = self._refresh_separate(self.ctx.pw.nodes)
         live = pipewire.card_stream()
         bits = (self.card.get_item(C.BIT_DEPTH) or "") if self.card.has(C.BIT_DEPTH) else ""
-        if live:
-            ch = {1: "mono", 2: "stereo", 6: "5.1"}.get(live[1], f"{live[1]} ch")
-            self.optical_quality.setText(" · ".join(x for x in (f"{live[0] / 1000:g} kHz", bits, ch) if x))
+        if sep:
+            depth = {"S16_LE": "16-bit", "S24_LE": "24-bit", "S32_LE": "24-bit"}.get(sep[2], sep[2])
+            ch = {1: "mono", 2: "stereo"}.get(sep[1], f"{sep[1]} ch")
+            self.optical_quality.setText(" · ".join(x for x in (f"{sep[0] / 1000:g} kHz", depth, ch) if x)
+                                         + " (its own stream)")
+            self.optical_quality_note.setText(
+                "Something plays to the optical output itself, at its own rate: it reaches "
+                "the jack bit for bit, without the DSP. Set the level on your receiver.")
         else:
-            self.optical_quality.setText("Nothing playing")
+            if live:
+                ch = {1: "mono", 2: "stereo", 6: "5.1"}.get(live[1], f"{live[1]} ch")
+                self.optical_quality.setText(" · ".join(x for x in (f"{live[0] / 1000:g} kHz", bits, ch) if x))
+            else:
+                self.optical_quality.setText("Nothing playing")
+            self.optical_quality_note.setText(
+                "Optical plays the same audio as the main output, so its quality is set on the "
+                "Speakers/Headphones tab: stereo, 24-bit, 48–192 kHz reaches the card's Optical out "
+                "bit for bit. It's taken before the DSP, so SBX and the EQ aren't on it, and the "
+                "volume knob doesn't change it: set the level on your receiver.")
         on = bool(self.card.get(C.OPTICAL_OUT))
         self.optical.setCheckedSilently(on)
+        if on and sep:
+            self.optical_lbl.setText("On — playing its own stream")
+            self.optical_note.setText("An app plays to AE-9 Optical Out. When it stops, optical "
+                                      "goes back to mirroring the main output.")
+            self.optical_note.setStyleSheet("")
+            return
         why = self.optical_silent_because(layout) if on else []
         if why:
             self.optical_lbl.setText("On — silent right now")
@@ -1060,6 +1167,14 @@ class PlaybackPage(Page):
             self.optical_note.setStyleSheet("")
 
 
+PASSTHROUGH_TIP = (
+    "For AC-3 and Dolby Digital / DTS: optical sends the encoded stream untouched, flagged "
+    "as non-audio, for your receiver to decode.\n\n"
+    "The driver's ae9-optical-passthrough FILE plays a file this way and clears the flag "
+    "when it ends. The flag only applies to the separate optical stream; the mirror always "
+    "sends PCM.\n\n"
+    "If it's ever left on, normal audio comes out of the receiver as noise or silence: "
+    "\"Back to PCM\" clears it.")
 DIRECT_TIP = ("Direct Mode sends audio straight to the ESS DAC at the stream's own sample rate "
               "(up to 384 kHz), bypassing the DSP. SBX effects and the EQ are not heard.\n\n"
               "With Direct Mode off, audio goes through the Sound Core3D DSP at 48 or 96 kHz "
@@ -1073,7 +1188,10 @@ OPTICAL_TIP = ("Optical (S/PDIF) out plays what the main output plays, so you ca
                "It only plays a stereo stream at 24-bit, up to 192 kHz: with Bit Depth at "
                "32-bit, at 384 kHz or on a 5.1 stream it stays silent.\n\n"
                "It's taken before the DSP, so SBX and the EQ aren't on it, and the volume "
-               "knob doesn't change it (app volume does): set the level on the receiver.")
+               "knob doesn't change it (app volume does): set the level on the receiver.\n\n"
+               "With driver 0.12.0 it's also an output of its own, \"AE-9 Optical Out\": "
+               "an app playing there gets the jack to itself, at its own rate; when it "
+               "stops, the mirror comes back.")
 
 SURROUND_CFGS = ("4.0", "4.1", "5.1")
 MIC_NAME = "AE-9 Head Unit Mic / Aux"

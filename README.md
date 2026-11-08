@@ -18,7 +18,7 @@ switches and adjusts them.
 |---|---|---|
 | **SBX Profile** | SBX on/off; Surround, Crystalizer, Bass, Smart Volume (Night/Normal/Loud), Dialog+; built-in and personal profiles | card DSP (ALSA `SBX Switch`, `FX …`) |
 | **Equalizer** | 10-band EQ + pre-gain, Creative's 20 presets, your own saved curves | card DSP (`EQ …`) |
-| **Playback** | Speakers / headphones, speaker config (2.0 – 5.1) with matching stereo / 5.1 stream, Direct Mode, DAC filter, sample rate and bit depth, default device, spoken speaker test; Headphone Profile (Creative's EQ curve per headphone model); **Speaker Setup** tab: bass redirect (Speaker Type / crossover, subwoofer boost), level and distance per speaker; **Digital** tab: optical out | ALSA + PipeWire |
+| **Playback** | Speakers / headphones, speaker config (2.0 – 5.1) with matching stereo / 5.1 stream, Direct Mode, DAC filter, sample rate and bit depth, default device, spoken speaker test; Headphone Profile (Creative's EQ curve per headphone model); **Speaker Setup** tab: bass redirect (Speaker Type / crossover, subwoofer boost), level and distance per speaker; **Digital** tab: optical out (mirror, or its own output with driver 0.12.0; passthrough state) | ALSA + PipeWire |
 | **Recording** | Head unit mic (XLR/TRS or 3.5 mm mic jack): level, mic gain (0/+10/+20 dB), phantom power 48V (asks first), live input meter, mute, "listen to mic", sample rate (48 / 96 kHz), default device; **Other Input** tab: optical in, What U Hear (48 / 96 kHz), head unit rear RCA | ALSA + PipeWire |
 | **Scout Mode** | Creative's Scout Mode (footstep EQ + Smart Volume) | card DSP |
 | **Mixer** | Output volume (same as the head-unit knob), mute, per-channel levels (Front Left / Right, …), mic level | ALSA + PipeWire |
@@ -109,6 +109,9 @@ and 7.1 output. The driver doesn't support these yet.
 - For the head unit's rear RCA input and the subwoofer boost switch: driver
   [v0.10.1](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.10.1) or newer, with its
   `config/ae9-rear-rca-in.conf` in the same folder.
+- For optical out as its own output ("AE-9 Optical Out", alongside the
+  mirror of the main output) and its passthrough status: driver
+  [v0.12.0](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.0) or newer.
 - For 176.4 kHz (stereo, Direct Mode): driver
   [v0.9.7](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.9.7) or newer
   (`pcm_176k4=Y`).
@@ -120,7 +123,7 @@ and 7.1 output. The driver doesn't support these yet.
   Creative's Sound Blaster Command installer (the app looks in
   `firmware/creative-ae9/hp` and `firmware/updates/creative-ae9/hp`).
   This release pairs with
-  [SbAe9-Drv v0.11.1](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.11.1) (any 0.11.x).
+  [SbAe9-Drv v0.12.0](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.0).
 - For switching phantom power (48V) from the app and What U Hear at 96 kHz:
   driver [v0.9.5](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.9.5)
   or newer (`wuh_96k=Y`, the default).

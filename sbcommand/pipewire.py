@@ -84,6 +84,8 @@ class Nodes:
         objs = dump() if objs is None else objs
         self.sink = self.source = self.device = None
         self.optical_in = self.what_u_hear = self.rear_rca = None
+        self.optical_out = None       # the separate optical output (driver 0.12.0)
+        self.optical_out_count = 0
         self.extra_count = {}     # how many sources PipeWire lists per extra input
         self.profile_inputs = False   # the driver's card profile made one (0.11.0+)
         self.default_sink = self.default_source = None
@@ -116,6 +118,12 @@ class Nodes:
                 if not old or (old["name"] == EXTRA_INPUTS[extra][0]
                                and node["name"] != EXTRA_INPUTS[extra][0]):
                     setattr(self, extra, node)
+            elif mc == "Audio/Sink" and ae9.output_kind(props) == "optical_out":
+                # never the main output; the card profile's over an old drop-in's
+                self.optical_out_count += 1
+                old = self.optical_out
+                if not old or (old["name"] == ae9.OPTICAL_OUT[0] and node["name"] != ae9.OPTICAL_OUT[0]):
+                    self.optical_out = node
             elif mc == "Audio/Sink" and not self.sink:
                 self.sink = node
             elif mc == "Audio/Source" and not self.source:
@@ -130,6 +138,10 @@ class Nodes:
     @property
     def source_is_default(self):
         return bool(self.source and self.source["name"] == self.default_source)
+
+    @property
+    def optical_out_is_default(self):
+        return bool(self.optical_out and self.optical_out["name"] == self.default_sink)
 
     @property
     def optical_in_is_default(self):
@@ -468,6 +480,21 @@ def reopen_source(nodes):
 def card_stream(card_id="AE9"):
     """(rate, channels) the card's playback PCM is open at, or None when closed."""
     return ae9.pcm_open_at("pcm0p", card_id)
+
+
+def optical_out_stream(card_id="AE9"):
+    """(rate, channels, format) driver 0.12.0's separate optical output is open
+    at (hw:AE9,4), or None: then optical mirrors the main output."""
+    try:
+        with open(f"/proc/asound/{card_id}/pcm4p/sub0/hw_params") as f:
+            text = f.read()
+    except OSError:
+        return None
+    rc = ae9.parse_hw_params(text)
+    if not rc:
+        return None
+    m = re.search(r"^format:\s*(\S+)", text, re.M)
+    return rc[0], rc[1], m.group(1) if m else ""
 
 
 def capture_stream(card_id="AE9"):

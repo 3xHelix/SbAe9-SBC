@@ -75,6 +75,7 @@ class FakePipeWire:
         self.calls = []          # every command that changes something
         self.processes = []      # QProcess starts: (program, args)
         self.stream = None       # (rate, channels) in /proc hw_params, None = closed
+        self.optical_stream = None   # (rate, channels, format) on hw:AE9,4 (driver 0.12.0)
         self.capture = None      # same, for the mic / line-in capture
 
     # object lookup
@@ -135,6 +136,17 @@ class FakePipeWire:
 
     def add_rear_rca(self, first=False, alsa_props=False):
         return self.add_input("alsa_input.ae9_rear_rca", "AE-9 Rear RCA In", 3, 997, first, alsa_props)
+
+    def add_optical_out(self, first=True, name="alsa_output.pci-0000_06_00.0.optical_out", node_id=993):
+        """Driver 0.12.0's separate optical output sink (hw:AE9,4). first: listed
+        before the main sink, which must not fool the app."""
+        props = {"node.name": name, "node.description": "AE-9 Optical Out",
+                 "media.class": "Audio/Sink", "api.alsa.path": "hw:AE9,4",
+                 "alsa.id": "AE9", "alsa.card_name": "Sound Blaster AE-9"}
+        o = {"id": node_id, "type": "PipeWire:Interface:Node", "info": {"state": "suspended",
+                                                                  "props": props, "params": {}}}
+        self.objects.insert(0 if first else len(self.objects), o)
+        return o
 
     def add_input(self, name, desc, dev, node_id, first, alsa_props):
         props = {"node.name": name, "node.description": desc, "media.class": "Audio/Source",
@@ -221,6 +233,9 @@ C.module_param = lambda name: PARAMS.get(name)
 C.module_version = lambda: PARAMS.get("version")
 PCMS = set()   # extra capture devices the fake driver has (1 = optical in, 2 = What U Hear)
 C.has_capture_pcm = lambda device, card_id="AE9": device in PCMS
+PLAYBACK_PCMS = set()   # extra playback devices (4 = the separate optical out)
+C.has_playback_pcm = lambda device, card_id="AE9": device in PLAYBACK_PCMS
+pipewire.optical_out_stream = lambda card_id="AE9": PW.optical_stream
 import subprocess  # noqa: E402
 subprocess.run = _no_subprocess
 subprocess.Popen = _no_subprocess
@@ -242,6 +257,7 @@ def reset():
     PW.__init__()
     PARAMS.clear()
     PCMS.clear()
+    PLAYBACK_PCMS.clear()
     PARAMS.update({"pcm_rates": "1", "pcm_bits": "24", "surround": "1", "surround_96k": "0",
                    "version": "0.6.8"})
     shutil.rmtree(os.environ["XDG_CONFIG_HOME"], ignore_errors=True)

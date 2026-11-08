@@ -3,6 +3,26 @@
 Sound Blaster Command for Linux: the UI for the Creative Sound Blaster AE-9
 driver ([SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv)).
 
+## 0.15.0 (2026-11-08)
+
+The separate optical output on Playback > Digital, and the main output is
+never taken for the optical one. Pairs with
+[SbAe9-Drv v0.12.0](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.0).
+
+### Added
+
+- Playback > Digital: driver 0.12.0's separate optical output, "AE-9 Optical
+  Out", with Set Default, what it plays (its own stream, or the mirror of
+  the main output), and its passthrough state (AC-3 / DTS, set by the
+  driver's `ae9-optical-passthrough`) with a "Back to PCM" button for a
+  flag left on. Shown when the driver has the device, whatever its
+  version says.
+
+### Fixed
+
+- The main output is never the optical one: with driver 0.12.0's optical
+  sink, the app took whichever AE-9 output PipeWire listed first. Kit 0.3.8.
+
 ## 0.14.0 (2026-11-08)
 
 The seven DAC filters under Creative's names, optical in / What U Hear /
