@@ -977,9 +977,11 @@ class PlaybackPage(Page):
         self.direct_lbl.setText("On — DSP bypassed" if direct else "Off — SBX / EQ active")
         self._refresh_optical(layout)
         self.setup.refresh()
-        # The driver already uses the seven ESS names; only the default
-        # needs a note.
-        names = {"Apodizing Fast Roll Off": "Apodizing Fast Roll Off (Windows default)"}
+        # The driver uses the Creative app's names (0.11.0; 0.10.x and
+        # older: Default/Fast/Slow); only the default needs a note.
+        names = {"Apodizing Fast Roll Off": "Apodizing Fast Roll Off (Windows default)",
+                 "Default": "Default (Windows startup filter)", "Fast": "Fast Roll Off",
+                 "Slow": "Slow Roll Off"}
         if self.filter.count() != len(self.card.items(C.DAC_FILTER)):
             self.filter.clear()
             for k, it in enumerate(self.card.items(C.DAC_FILTER)):
@@ -1133,19 +1135,20 @@ HP_PROFILE_TIP = ("Creative's EQ correction for your headphone model, the same c
                   "(AECMDMasterInstaller_3.4.92.00.exe).")
 DAC_FILTER_TIP = (
     "The ES9038Q2M's digital interpolation filter. It runs in the DAC, so it "
-    "applies in Direct Mode too; it is not an SBX effect.\n\n"
-    "• Linear Phase Fast Roll Off — flat to 20 kHz, constant phase, steep "
-    "cutoff. Accurate, but the most ringing.\n"
-    "• Linear Phase Slow Roll Off — linear phase, gentler roll-off and less "
-    "ringing; a slightly softer top end.\n"
-    "• Minimum Phase Fast Roll Off — no pre-ringing, steep cutoff; punchy "
-    "transients, a little post-ringing.\n"
-    "• Minimum Phase Slow Roll Off — the gentlest roll-off and the least "
-    "ringing; smooth and relaxed.\n"
+    "applies in Direct Mode too; it is not an SBX effect. The names are the "
+    "Creative app's.\n\n"
     "• Apodizing Fast Roll Off — removes the DAC's pre-ringing; the "
     "Windows/Creative startup filter and a good all-rounder.\n"
-    "• Corrected Minimum Phase Fast Roll Off — minimum phase with a corrected "
-    "impulse; fast roll-off and reduced ringing.\n"
+    "• Fast Roll Off — linear phase, flat to 20 kHz, steep cutoff. Accurate, "
+    "but the most ringing.\n"
+    "• Slow Roll Off — linear phase, gentler roll-off and less ringing; a "
+    "slightly softer top end.\n"
+    "• Fast Roll Off - Minimum Phase — no pre-ringing, steep cutoff; punchy "
+    "transients, a little post-ringing.\n"
+    "• Slow Roll Off - Minimum Phase — the gentlest roll-off and the least "
+    "ringing; smooth and relaxed.\n"
+    "• Hybrid Fast Roll Off — minimum phase with a corrected impulse; fast "
+    "roll-off and reduced ringing.\n"
     "• Brick Wall — very steep cutoff and maximum alias rejection; more "
     "ringing, useful for testing.\n\n"
     "Fast/slow and phase differences are subtle: pick by ear."

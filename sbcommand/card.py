@@ -21,7 +21,7 @@ MASTER = "Master Playback Volume"      # 0..254, 0.5 dB steps, -127..0 dB
 MASTER_SW = "Master Playback Switch"
 MIC = "Capture Volume"                 # 0..99, -90 + v dB, 0 = mute
 MIC_GAIN = "Mic Gain Capture Volume"   # 0/1/2 = 0/+10/+20 dB, head unit XLR/TRS + 3.5 mm mic jack
-DAC_FILTER = "DAC Filter"              # seven ES9038Q2M modes (driver 0.10.0+)
+DAC_FILTER = "DAC Filter"              # 7 ES9038Q2M filters, Creative's names (driver 0.11.0; older: Default/Fast/Slow)
 DIRECT = "Direct Mode Switch"
 SBX = "SBX Switch"
 HU_AUTO = "Head Unit Auto Switch"              # newer drivers: the 3.5 mm headphone plug switches outputs
