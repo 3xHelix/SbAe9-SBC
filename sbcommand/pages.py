@@ -1652,7 +1652,10 @@ VOICE_CLARITY_TIP = (
     "It's a wideband voice processor (16 kHz inside, up to 8 kHz of audio), as on Windows: "
     "made for calls and chat. With one on, the mic records at 48 kHz. Changes apply when "
     "a recording starts, or at once on a 48 kHz recording already running. Works in "
-    "Direct Mode too.")
+    "Direct Mode too.\n\n"
+    "While Voice Clarity is on, the Microphone tab's Monitor uses Listen (through PipeWire, "
+    "with a short delay): the card's own mic monitor breaks Voice Clarity recordings until "
+    "the PC is fully powered off.")
 HP_VIRT_TIP = (
     "Creative's headphone virtualization (Virtual 7.1): with Headphones and Direct Mode "
     "off, the DSP runs in headphone mode and SBX Surround places the sound around you; "
@@ -1980,19 +1983,24 @@ class VoiceClarity(QWidget):
         top = QHBoxLayout()
         top.addWidget(label("Voice Clarity", "subTitle"))
         self.master = ToggleSwitch()
-        self.master.toggled.connect(lambda on: self.card.set(C.VC, on))
+        self.master.toggled.connect(lambda on: self._set(C.VC, on))
         top.addSpacing(10)
         top.addWidget(self.master)
         top.addWidget(info_button(VOICE_CLARITY_TIP))
         top.addStretch()
         lay.addLayout(top)
+        self.used_note = Banner("The card's mic monitor was used since the PC started. Voice Clarity "
+                                "recordings won't sound right until the PC is fully powered off "
+                                "(shut down, then switch off the power supply).", warn=True)
+        self.used_note.hide()
+        lay.addWidget(self.used_note)
         g = QGridLayout()
         g.setHorizontalSpacing(12)
         g.setVerticalSpacing(10)
         self.fx = {}
         for r, (name, title, tip) in enumerate(self.EFFECTS):
             sw = ToggleSwitch()
-            sw.toggled.connect(lambda on, n=name: self.card.set(n, on))
+            sw.toggled.connect(lambda on, n=name: self._set(n, on))
             g.addWidget(sw, r, 0)
             t = label(title)
             t.setToolTip(tip)
@@ -2001,7 +2009,7 @@ class VoiceClarity(QWidget):
         g.addWidget(label("Mic EQ"), len(self.EFFECTS), 1)
         self.miceq = QComboBox()
         self.miceq.setMinimumWidth(360)
-        self.miceq.activated.connect(lambda i: self.card.set(C.VC_MICEQ, i))
+        self.miceq.activated.connect(lambda i: self._set(C.VC_MICEQ, i))
         g.addWidget(self.miceq, len(self.EFFECTS), 2)
         g.setColumnStretch(3, 1)
         lay.addLayout(g)
@@ -2023,7 +2031,7 @@ class VoiceClarity(QWidget):
         lay.addLayout(self.morph_grid)
         self.morphs = QButtonGroup(self)
         self.morphs.setExclusive(True)
-        self.morphs.idClicked.connect(lambda i: self.card.set(C.VC_MORPH, i))
+        self.morphs.idClicked.connect(lambda i: self._set(C.VC_MORPH, i))
         self._morph_items = None
         self.test_note = label("", "hint", wrap=True)
         lay.addWidget(self.test_note)
@@ -2034,6 +2042,28 @@ class VoiceClarity(QWidget):
         self._wav = os.path.join(tempfile.gettempdir(), f"sbae9-voice-test-{os.getuid()}.wav")
         self._rec_timer = QTimer(self, singleShot=True, interval=5000)
         self._rec_timer.timeout.connect(self._play_back)
+
+    def _set(self, name, value):
+        """Write a Voice Clarity control. The card's mic monitor must not be on
+        while Voice Clarity is in use (driver 0.12.3 finding: once it has been
+        on, Voice Clarity recordings break until a power cycle), so turning
+        Voice Clarity on with it on asks first, then moves to the software Listen."""
+        if (bool(self.card.get(C.MIC_MONITOR, False)) and not C.vc_in_use(self.card)
+                and C.vc_in_use(self.card, {name: value})):
+            if QMessageBox.question(
+                    self, "Voice Clarity",
+                    "The card's mic monitor is on. Voice Clarity can't be used with it, so it "
+                    "will switch to Listen (the mic through PipeWire, with a short delay).\n\n"
+                    "Voice Clarity recordings may not sound right until the PC is fully powered "
+                    "off (shut down, then switch off the power supply).\n\nTurn Voice Clarity on?",
+                    QMessageBox.Yes | QMessageBox.No, QMessageBox.No) != QMessageBox.Yes:
+                self.refresh()
+                return
+            src = self.ctx.pw.nodes.source
+            if src:
+                self.ctx.monitor.start(src["name"])
+            self.card.set(C.MIC_MONITOR, False)
+        self.card.set(name, value)
 
     def _build_morphs(self, items):
         if items == self._morph_items:
@@ -2064,7 +2094,11 @@ class VoiceClarity(QWidget):
             t.setVisible(has)
         if not has:
             self.note.setText("")
+            self.used_note.hide()
             return
+        self.used_note.setVisible(bool(self.card.get(C.MIC_MONITOR_USED, False))
+                                  and C.vc_in_use(self.card)
+                                  and not self.card.get(C.MIC_MONITOR, False))
         on = bool(self.card.get(C.VC, False))
         self.master.setCheckedSilently(on)
         any_fx = False
@@ -2652,11 +2686,17 @@ class RecordingPage(Page):
         self.other_none.setVisible(not any(shown))
 
     def _card_monitor(self):
-        """The driver's mic monitor (0.12.2), mixed in the DSP: Direct Mode off only."""
-        return self.card.has(C.MIC_MONITOR) and not bool(self.card.get(C.DIRECT, True))
+        """The driver's mic monitor (0.12.2), mixed in the DSP: Direct Mode off only.
+        Not while Voice Clarity is in use (it breaks its recordings), nor while
+        the software Listen runs; if it's on anyway, the switch turns it off."""
+        if not self.card.has(C.MIC_MONITOR) or bool(self.card.get(C.DIRECT, True)):
+            return False
+        if self.card.get(C.MIC_MONITOR, False):
+            return True
+        return not C.vc_in_use(self.card) and not self.ctx.monitor.running
 
     def _listen(self, on):
-        if self._card_monitor():
+        if self._card_monitor() and not (on and C.vc_in_use(self.card)):
             self.ctx.monitor.stop()
             self.card.set(C.MIC_MONITOR, on)
             if on and not C.dsp_path_ready():
@@ -2697,9 +2737,13 @@ class RecordingPage(Page):
             self.listen.setCheckedSilently(bool(self.card.get(C.MIC_MONITOR, False)))
         else:
             self.listen_title.setText("Listen")
-            self.listen_lbl.setText("Hear the mic live (use headphones to avoid feedback)"
-                                    + (": through PipeWire in Direct Mode, with a short delay"
-                                       if self.card.has(C.MIC_MONITOR) else ""))
+            why = ""
+            if self.card.has(C.MIC_MONITOR):
+                why = (": through PipeWire in Direct Mode, with a short delay"
+                       if self.card.get(C.DIRECT, True) else
+                       ": through PipeWire while Voice Clarity is on, with a short delay"
+                       if C.vc_in_use(self.card) else ": through PipeWire, with a short delay")
+            self.listen_lbl.setText("Hear the mic live (use headphones to avoid feedback)" + why)
             self.listen_lbl.setToolTip("Plays the mic through the default output")
             self.listen.setCheckedSilently(self.ctx.monitor.running)
 

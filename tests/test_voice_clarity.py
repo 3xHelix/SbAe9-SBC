@@ -111,6 +111,80 @@ class CardMonitorTest(S.AppTestCase):
         self.assertTrue(self.ctx.monitor.running)
 
 
+class MonitorWithVoiceClarityTest(S.AppTestCase):
+    """Driver 0.12.3 finding: the card's monitor breaks Voice Clarity recordings."""
+    def setUp(self):
+        super().setUp()
+        self.mixer.add_bool(C.MIC_MONITOR, False)
+        VoiceClarityTest.add(self)
+        self.mixer.external(C.DIRECT, False)
+        self._q = pages.QMessageBox.question
+        self.addCleanup(setattr, pages.QMessageBox, "question", self._q)
+
+    def page(self, tab):
+        pg = super().page(pages.RecordingPage)
+        pg.show_tab(tab)
+        pg.refresh()
+        return pg
+
+    def test_voice_clarity_on_uses_listen(self):
+        self.mixer.external(C.VC_MORPH, 17)              # a voice, master off: still in use
+        pg = self.page(0)
+        self.assertEqual(pg.listen_title.text(), "Listen")
+        self.assertIn("Voice Clarity", pg.listen_lbl.text())
+        pg.listen.setChecked(True)
+        self.assertNotIn((C.MIC_MONITOR, True), self.mixer.writes)
+        self.assertTrue(self.ctx.monitor.running)
+
+    def test_card_monitor_on_asks_then_moves_to_listen(self):
+        self.mixer.external(C.MIC_MONITOR, True)
+        pg = self.page(1)
+        pages.QMessageBox.question = lambda *a, **k: pages.QMessageBox.No
+        pg.vc.master.setChecked(True)
+        self.assertNotIn((C.VC, True), self.mixer.writes)
+        self.assertFalse(pg.vc.master.isChecked())
+        pages.QMessageBox.question = lambda *a, **k: pages.QMessageBox.Yes
+        pg.vc.master.setChecked(True)
+        self.assertTrue(self.ctx.monitor.running)          # Listen first,
+        w = self.mixer.writes
+        self.assertLess(w.index((C.MIC_MONITOR, False)), w.index((C.VC, True)))   # then the card's off
+        S.process(20)
+        pg.show_tab(0)
+        pg.refresh()
+        self.assertEqual(pg.listen_title.text(), "Listen")
+        self.assertTrue(pg.listen.isChecked())
+
+    def test_no_question_with_the_monitor_off(self):
+        pg = self.page(1)
+        pages.QMessageBox.question = lambda *a, **k: self.fail("asked")
+        pg.vc.master.setChecked(True)
+        self.assertIn((C.VC, True), self.mixer.writes)
+
+    def test_card_monitor_back_once_voice_clarity_is_off(self):
+        self.mixer.external(C.VC, True)
+        pg = self.page(0)
+        self.assertEqual(pg.listen_title.text(), "Listen")
+        self.mixer.external(C.VC, False)
+        S.process(20)
+        pg.refresh()
+        self.assertEqual(pg.listen_title.text(), "Monitor")
+
+    def test_used_since_power_up_notice(self):
+        pg = self.page(1)
+        self.assertFalse(pg.vc.used_note.isVisible())      # older driver: no control, no notice
+        self.mixer.add_bool(C.MIC_MONITOR_USED, True)
+        pg.refresh()
+        self.assertFalse(pg.vc.used_note.isVisible())      # Voice Clarity off
+        self.mixer.external(C.VC, True)
+        S.process(20)
+        pg.refresh()
+        self.assertTrue(pg.vc.used_note.isVisible())
+        self.mixer.external(C.MIC_MONITOR_USED, False)     # power cycled
+        S.process(20)
+        pg.refresh()
+        self.assertFalse(pg.vc.used_note.isVisible())
+
+
 class VirtualizationTest(S.AppTestCase):
     def setUp(self):
         super().setUp()

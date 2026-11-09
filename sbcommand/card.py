@@ -80,6 +80,9 @@ HP_PROFILE = "Headphone Profile"   # Off + SB Command's headphone models (newer 
 HP_VIRT = "Headphone Virtualization Switch"     # Virtual 7.1 on headphones (0.12.2)
 LINE_VIRT = "Line Out Virtualization Switch"    # the headphone mix on the RCA out (0.12.2)
 MIC_MONITOR = "Mic Monitor Playback Switch"     # the mic mixed in the DSP, no delay (0.12.2)
+# read-only (0.12.3): the monitor was on since the DSP loaded. After that, a Voice
+# Clarity recording made with the monitor off comes out broken until a power cycle.
+MIC_MONITOR_USED = "Mic Monitor Used Since Power-up"
 # Voice Clarity (Recording, 0.12.2): the master and its effects
 VC = "Voice Clarity Capture Switch"
 VC_AEC = "Acoustic Echo Cancellation Capture Switch"
@@ -87,6 +90,15 @@ VC_NR = "Noise Reduction Capture Switch"
 VC_SVM = "Mic Smart Volume Capture Switch"
 VC_MICEQ = "Mic EQ Capture Enum"
 VC_MORPH = "Voice Morphing Capture Enum"
+
+
+def vc_in_use(card, change=None):
+    """Voice Clarity is in use: the master, an effect, Mic EQ or a voice is on.
+    `change` ({name: value}) asks what it would be after that write."""
+    if not card.has(VC):
+        return False
+    change = change or {}
+    return any(bool(change.get(n, card.get(n, 0))) for n in (VC, VC_AEC, VC_NR, VC_SVM, VC_MICEQ, VC_MORPH))
 # where ae9-get-firmware puts Creative's headphone curves (it checks the same);
 # firmware/updates/ first, as the kernel does (Arch installs there: AE-5/AE-7 clash)
 HP_DIRS = ("/etc/firmware", "/lib/firmware/updates", "/usr/lib/firmware/updates",
