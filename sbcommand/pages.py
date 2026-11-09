@@ -3,13 +3,17 @@
 
 import errno
 import os
+import re
+import shutil
 import subprocess
+import tempfile
 import time
 
-from PySide6.QtCore import QSize, Qt, QTimer
+from PySide6.QtCore import QProcess, QSize, Qt, QTimer
 from PySide6.QtGui import QAction, QColor
-from PySide6.QtWidgets import (QApplication, QButtonGroup, QCheckBox, QComboBox, QFrame, QGridLayout, QHBoxLayout,
-                               QHeaderView, QInputDialog, QLabel, QMenu, QMessageBox, QPushButton,
+from PySide6.QtWidgets import (QApplication, QButtonGroup, QCheckBox, QComboBox, QDialog, QDialogButtonBox,
+                               QFrame, QGridLayout, QHBoxLayout, QHeaderView, QInputDialog, QLabel,
+                               QLineEdit, QMenu, QMessageBox, QPlainTextEdit, QPushButton,
                                QRadioButton, QScrollArea, QSizePolicy, QSlider, QSpinBox, QTableWidget,
                                QTableWidgetItem, QToolButton, QVBoxLayout, QWidget)
 
@@ -635,15 +639,39 @@ class PlaybackPage(Page):
         pr.setHorizontalSpacing(10)
         pr.addWidget(label("Headphone Profile", "muted"), 0, 0)
         self.hp_prof = QComboBox()
-        self.hp_prof.setMinimumWidth(230)
-        self.hp_prof.activated.connect(lambda i: self.card.set(C.HP_PROFILE, i))
+        self.hp_prof.setMinimumWidth(250)
+        self.hp_prof.activated.connect(self._pick_hp_profile)
         pr.addWidget(self.hp_prof, 0, 1)
         pr.addWidget(info_button(HP_PROFILE_TIP), 0, 2)
+        self.hp_make = QPushButton("Make custom profile…")
+        self.hp_make.clicked.connect(self._make_hp_profile)
+        pr.addWidget(self.hp_make, 1, 1, Qt.AlignLeft)
         pr.setColumnStretch(3, 1)
         self.hp_prof_note = label("", "hint", wrap=True)
-        pr.addWidget(self.hp_prof_note, 1, 0, 1, 4)
+        pr.addWidget(self.hp_prof_note, 2, 0, 1, 4)
         g.addWidget(self.hp_prof_row, 3, 2, 1, 3)
         self.hp_prof_row.setVisible(False)
+        self._hp_sig = None
+        # driver 0.12.2: the DSP's headphone virtualization, and that mix on the line out
+        self.virt_row = QWidget()
+        vr = QGridLayout(self.virt_row)
+        vr.setContentsMargins(0, 4, 0, 0)
+        vr.setHorizontalSpacing(10)
+        self.hp_virt = ToggleSwitch()
+        self.hp_virt.toggled.connect(lambda on: self.card.set(C.HP_VIRT, on))
+        vr.addWidget(self.hp_virt, 0, 0)
+        vr.addWidget(label("Headphone virtualization (Virtual 7.1)", "muted"), 0, 1)
+        vr.addWidget(info_button(HP_VIRT_TIP), 0, 2)
+        self.line_virt = ToggleSwitch()
+        self.line_virt.toggled.connect(self._line_virt)
+        vr.addWidget(self.line_virt, 1, 0)
+        vr.addWidget(label("Apply headphone virtualization to Line Out", "muted"), 1, 1)
+        vr.addWidget(info_button(LINE_VIRT_TIP), 1, 2)
+        vr.setColumnStretch(3, 1)
+        self.virt_note = label("", "hint", wrap=True)
+        vr.addWidget(self.virt_note, 2, 0, 1, 4)
+        g.addWidget(self.virt_row, 4, 2, 1, 3)
+        self.virt_row.setVisible(False)
         self.hp_sub.setText("Head unit")
         self.hp_sub.setToolTip(HEADPHONES_TIP)
         left.addWidget(w)
@@ -1002,6 +1030,7 @@ class PlaybackPage(Page):
         if self.card.has(C.HU_AUTO):
             self.hp_auto.setCheckedSilently(bool(self.card.get(C.HU_AUTO)))
         self._refresh_hp_profile(out)
+        self._refresh_virt(out)
         cfg = self.card.get_item(C.SPEAKER_CFG) or "2.1"
         if self.spk_cfg.count() != len(self.card.items(C.SPEAKER_CFG)):
             self.spk_cfg.clear()
@@ -1045,11 +1074,32 @@ class PlaybackPage(Page):
         if not has:
             return
         items = self.card.items(C.HP_PROFILE)
-        if [self.hp_prof.itemText(k) for k in range(self.hp_prof.count())] != items:
-            self.hp_prof.clear()
-            self.hp_prof.addItems(items)
         k = self.card.get(C.HP_PROFILE, 0) or 0
-        self.hp_prof.setCurrentIndex(k)
+        files = C.hp_item_files(items)
+        custom0 = len(items) - C.HP_CUSTOM_SLOTS if len(items) == 1 + len(C.HP_KEYS) + C.HP_CUSTOM_SLOTS else None
+        rows = []
+        for i, (name, (key, ok)) in enumerate(zip(items, files)):
+            empty_slot = custom0 is not None and i >= custom0 and name == f"Custom {i - custom0 + 1}"
+            if empty_slot and not ok and i != k:
+                continue                    # an empty custom slot: nothing to pick
+            rows.append((i, name if ok else f"{name} (file missing)", ok))
+        if rows != self._hp_sig:
+            self._hp_sig = rows
+            self.hp_prof.clear()
+            for i, text, ok in rows:
+                self.hp_prof.addItem(text, i)
+                if not ok:
+                    it = self.hp_prof.model().item(self.hp_prof.count() - 1)
+                    it.setEnabled(False)
+                    it.setToolTip(f"No {key_file(files[i][0])}: reinstall it (ae9-get-firmware for "
+                                  "Creative's, ae9-hp-profile for your own)")
+        self.hp_prof.setCurrentIndex(max(0, self.hp_prof.findData(k)))
+        self.hp_make.setVisible(custom0 is not None)
+        self.hp_make.setEnabled(bool(shutil.which("ae9-hp-profile")))
+        self.hp_make.setToolTip("Makes a profile for your headphones from AutoEQ's published "
+                                "measurements and installs it in a free custom slot"
+                                if self.hp_make.isEnabled() else
+                                "Needs the driver's ae9-hp-profile command (driver 0.12.2 or newer)")
         curves = C.headphone_curves()
         direct = bool(self.card.get(C.DIRECT, True)) or self.card.inactive(C.HP_PROFILE)
         self.hp_prof.setEnabled(bool(curves) and not direct)
@@ -1070,8 +1120,66 @@ class PlaybackPage(Page):
             note = (note + "\n" if note else "") + (
                 "While the encoder runs, a new headphone profile loads only after you switch "
                 "the encoder off (profiles load when every stream is stopped).")
+        if not files[k][1] and k:
+            note = (note + "\n" if note else "") + (
+                f"{items[k]}: its file is missing, so the profile stays off.")
         self.hp_prof_note.setText(note)
         self.hp_prof_note.setVisible(bool(note))
+
+    def _pick_hp_profile(self, row):
+        i = self.hp_prof.itemData(row)
+        if i is not None:
+            self.card.set(C.HP_PROFILE, i)
+
+    def _make_hp_profile(self):
+        dlg = HpProfileDialog(self)
+        if dlg.exec() and dlg.installed:
+            self._reload_hp_slot(dlg.installed)
+
+    def _reload_hp_slot(self, name):
+        """A file installed for the profile already picked loads only on a
+        new pick: Off, then it again (the driver's rule)."""
+        items = self.card.items(C.HP_PROFILE)
+        k = self.card.get(C.HP_PROFILE, 0) or 0
+        if 0 < k < len(items) and items[k] == name:
+            self.card.set(C.HP_PROFILE, 0)
+            QTimer.singleShot(1500, lambda: self.card.set(C.HP_PROFILE, k))
+
+    def _line_virt(self, on):
+        if on and QMessageBox.question(
+                self, "Headphone virtualization on Line Out",
+                "The headphone mix will play from the card's line out (your speakers), at the "
+                "headphone volume, and the headphone jack goes silent.\n\n"
+                "Turn the head unit's volume knob down first.\n\nSwitch it on now?") != QMessageBox.Yes:
+            self.line_virt.setCheckedSilently(False)
+            return
+        self.card.set(C.LINE_VIRT, on)
+
+    def _refresh_virt(self, out):
+        has = self.card.has(C.HP_VIRT) or self.card.has(C.LINE_VIRT)
+        self.virt_row.setVisible(has)
+        if not has:
+            return
+        direct = bool(self.card.get(C.DIRECT, True))
+        hp_virt = bool(self.card.get(C.HP_VIRT, True))
+        line = bool(self.card.get(C.LINE_VIRT, False))
+        self.hp_virt.setCheckedSilently(hp_virt)
+        self.line_virt.setCheckedSilently(line)
+        self.hp_virt.setEnabled(self.card.has(C.HP_VIRT) and not direct)
+        self.line_virt.setEnabled(self.card.has(C.LINE_VIRT) and not direct)
+        if direct:
+            note = "Direct Mode off only: they're done in the DSP."
+        elif out != 1:
+            note = "Act when the output is Headphones."
+        elif line:
+            note = ("Playing from the line out (speakers), not the headphone jack: "
+                    "the headphone jack is muted.")
+        else:
+            note = ""
+        self.virt_note.setText(note)
+        self.virt_note.setVisible(bool(note))
+        if out == 1 and line and not direct:
+            self.hp_sub.setText("On Line Out")
 
     def optical_silent_because(self, layout):
         """Why optical out is silent right now, though switched on: the
@@ -1320,6 +1428,142 @@ def short_name(node, fallback):
     return desc if desc.startswith("AE-9") and len(desc) <= 40 else fallback
 
 
+class HpProfileDialog(QDialog):
+    """"Make custom profile…": the driver's ae9-hp-profile fetches AutoEQ's
+    correction for a headphone model and builds the filter (as you), then
+    installs it into a free custom slot (as root, through pkexec)."""
+
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.setWindowTitle("Make a custom headphone profile")
+        self.setMinimumWidth(520)
+        self.installed = None
+        self.tool = shutil.which("ae9-hp-profile")
+        lay = QVBoxLayout(self)
+        intro = QLabel(
+            "Makes a headphone profile from a published measurement of your headphones and "
+            "adds it to the Headphone Profile list (one of 4 custom slots).<br><br>"
+            "Corrections from the <a href='https://github.com/jaakkopasanen/AutoEq'>AutoEQ</a> "
+            "project (MIT licence), measured by oratory1990, crinacle, Rtings and others. "
+            "Type the model exactly as AutoEQ lists it.")
+        intro.setWordWrap(True)
+        intro.setOpenExternalLinks(True)
+        lay.addWidget(intro)
+        g = QGridLayout()
+        g.addWidget(QLabel("Headphones (AutoEQ name)"), 0, 0)
+        self.model = QLineEdit()
+        self.model.setPlaceholderText("Beyerdynamic DT 990 Pro")
+        self.model.textChanged.connect(self._suggest_key)
+        g.addWidget(self.model, 0, 1)
+        g.addWidget(QLabel("File name (key)"), 1, 0)
+        self.key = QLineEdit()
+        self.key.setPlaceholderText("DT990")
+        self.key.setMaxLength(24)
+        g.addWidget(self.key, 1, 1)
+        lay.addLayout(g)
+        free = sum(1 for sl in C.hp_custom_slots() if not sl)
+        self.slots = QLabel(f"Free custom slots: {free} of {C.HP_CUSTOM_SLOTS}. A key already "
+                            "installed is replaced in its slot.")
+        self.slots.setWordWrap(True)
+        lay.addWidget(self.slots)
+        self.log = QPlainTextEdit()
+        self.log.setReadOnly(True)
+        self.log.setMinimumHeight(120)
+        lay.addWidget(self.log)
+        self.buttons = QDialogButtonBox(QDialogButtonBox.Cancel)
+        self.go = self.buttons.addButton("Make and install", QDialogButtonBox.AcceptRole)
+        self.go.clicked.connect(self._start)
+        self.buttons.rejected.connect(self.reject)
+        lay.addWidget(self.buttons)
+        self._key_edited = False
+        self.key.textEdited.connect(lambda _: setattr(self, "_key_edited", True))
+        self._dir = None
+        self._steps = []
+        self._proc = None
+
+    def _suggest_key(self, text):
+        if not self._key_edited:
+            words = re.findall(r"[A-Za-z0-9]+", text)
+            # the model's last words, e.g. "DT 990 Pro" -> "DT990Pro"
+            self.key.setText("".join(words[1:] if len(words) > 1 else words)[:24])
+
+    def _say(self, text):
+        self.log.appendPlainText(text.rstrip())
+
+    def _start(self):
+        model, key = self.model.text().strip(), self.key.text().strip()
+        if not model or not re.fullmatch(r"[A-Za-z0-9_-][A-Za-z0-9_.-]{0,23}", key):
+            self._say("Type the model, and a key of letters, digits, - or _ (up to 24).")
+            return
+        if key.lower() in {k.lower() for k in C.HP_KEYS.values()}:
+            self._say(f"\"{key}\" is one of Creative's profiles: pick another key.")
+            return
+        if len(model) > 40 or any(c in model for c in ';="'):
+            self._say("The model name: up to 40 characters, without ; = or \".")
+            return
+        if not shutil.which("pkexec"):
+            self._say(f"Needs pkexec to install. In a terminal:\n  sudo ae9-hp-profile add \"{model}\" {key}")
+            return
+        self._dir = tempfile.mkdtemp(prefix="sbae9-hp-")
+        csv_path, bin_path = os.path.join(self._dir, "curve.csv"), os.path.join(self._dir, "profile.bin")
+        self._steps = [
+            ("Fetching AutoEQ's correction…", [self.tool, "fetch", model, csv_path]),
+            ("Making the filter…", [self.tool, "make", csv_path, bin_path]),
+            ("Installing (asks for your password)…",
+             ["pkexec", self.tool, "install", bin_path, key, model]),
+        ]
+        self._model = model
+        self.go.setEnabled(False)
+        self.model.setEnabled(False)
+        self.key.setEnabled(False)
+        self._next()
+
+    def _next(self):
+        if not self._steps:
+            self.installed = self._model
+            self._say("Done: it's in the Headphone Profile list.")
+            self._cleanup()
+            self.go.setVisible(False)
+            self.buttons.button(QDialogButtonBox.Cancel).setText("Close")
+            self.buttons.rejected.disconnect()
+            self.buttons.rejected.connect(self.accept)
+            return
+        text, cmd = self._steps.pop(0)
+        self._say(text)
+        self._proc = QProcess(self)
+        self._proc.setProcessChannelMode(QProcess.MergedChannels)
+        self._proc.readyReadStandardOutput.connect(
+            lambda: self._say(bytes(self._proc.readAllStandardOutput()).decode(errors="replace")))
+        self._proc.finished.connect(self._done)
+        self._proc.start(cmd[0], cmd[1:])
+
+    def _done(self, code, _status):
+        if code != 0:
+            self._say("Stopped." if code in (126, 127) else f"Failed (exit {code}).")
+            self._cleanup()
+            self.go.setEnabled(True)
+            self.model.setEnabled(True)
+            self.key.setEnabled(True)
+            return
+        self._next()
+
+    def _cleanup(self):
+        if self._dir:
+            shutil.rmtree(self._dir, ignore_errors=True)
+            self._dir = None
+
+    def reject(self):
+        if self._proc and self._proc.state() != QProcess.NotRunning:
+            self._proc.kill()
+            self._proc.waitForFinished(2000)
+        self._cleanup()
+        super().reject()
+
+
+def key_file(key):
+    return f"creative-ae9/hp/{key}.bin" if key else "file"
+
+
 def mic_name(node):
     """The mic's name: "AE-9 Head Unit Mic / Aux" with the naming config."""
     return short_name(node, MIC_NAME)
@@ -1397,6 +1641,32 @@ OPTICAL_PLAYS_TIP = (
     "• Encoder: AC-3 (or DTS) surround for a receiver; see the Encoder page.\n\n"
     "With the mirror, an app playing to AE-9 Optical Out takes the jack while it "
     "plays; with effects, it's mixed in.")
+VOICE_CLARITY_TIP = (
+    "Creative's Voice Clarity for the head unit mic, done in the card's DSP:\n\n"
+    "• Acoustic Echo Cancellation removes the speakers' sound from the mic.\n"
+    "• Noise Reduction lowers steady background noise.\n"
+    "• Smart Volume evens out your level.\n"
+    "• Mic EQ: Creative's voice presets.\n"
+    "• Voice Morph changes your voice; Test records 5 s and plays it back.\n\n"
+    "The switch turns the set on; the voice processor comes in once one of them is on. "
+    "It's a wideband voice processor (16 kHz inside, up to 8 kHz of audio), as on Windows: "
+    "made for calls and chat. With one on, the mic records at 48 kHz. Changes apply when "
+    "a recording starts, or at once on a 48 kHz recording already running. Works in "
+    "Direct Mode too.")
+HP_VIRT_TIP = (
+    "Creative's headphone virtualization (Virtual 7.1): with Headphones and Direct Mode "
+    "off, the DSP runs in headphone mode and SBX Surround places the sound around you; "
+    "a 5.1 source gets its channels placed around your head.\n\n"
+    "On by default. Off, headphones get the speaker-style mix.\n\n"
+    "Creative's app has no separate switch for it on the AE-9: it says \"Select "
+    "Headphones and set Direct Mode to OFF to experience Virtual 7.1\".")
+LINE_VIRT_TIP = (
+    "Creative's \"Apply Headphones Virtualization to Line Out\": with Headphones and "
+    "Direct Mode off, the virtualized headphone mix plays from the card's line out "
+    "(RCA, your speakers) instead of the headphone jack. For headphones on an external "
+    "amp, say.\n\n"
+    "It plays at the headphone volume: turn the knob down first. Any headphones plugged "
+    "into the headphone jack are muted meanwhile. It switches within about a second.")
 DAC_FILTER_TIP = (
     "The ES9038Q2M's digital interpolation filter. It runs in the DAC, so it "
     "applies in Direct Mode too; it is not an SBX effect. The names are the "
@@ -1690,6 +1960,174 @@ class SpeakerSetup(QWidget):
         self.layout_note.setVisible(bool(self.layout_note.text()))
 
 
+class VoiceClarity(QWidget):
+    """Recording > Voice Clarity (driver 0.12.2), in Creative's layout: the
+    master switch, its effects, Mic EQ, and Voice Morph with a Test button."""
+    EFFECTS = [(C.VC_AEC, "Acoustic Echo Cancellation",
+                "Removes the speakers' sound from the mic, so the people you talk to "
+                "don't hear themselves."),
+               (C.VC_NR, "Noise Reduction",
+                "Lowers steady background noise (fans, hum). Thins the lows a little, as on "
+                "Windows."),
+               (C.VC_SVM, "Smart Volume", "Evens out the mic level: quiet speech up, loud down.")]
+
+    def __init__(self, ctx, card):
+        super().__init__()
+        self.ctx, self.card = ctx, card
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(10)
+        top = QHBoxLayout()
+        top.addWidget(label("Voice Clarity", "subTitle"))
+        self.master = ToggleSwitch()
+        self.master.toggled.connect(lambda on: self.card.set(C.VC, on))
+        top.addSpacing(10)
+        top.addWidget(self.master)
+        top.addWidget(info_button(VOICE_CLARITY_TIP))
+        top.addStretch()
+        lay.addLayout(top)
+        g = QGridLayout()
+        g.setHorizontalSpacing(12)
+        g.setVerticalSpacing(10)
+        self.fx = {}
+        for r, (name, title, tip) in enumerate(self.EFFECTS):
+            sw = ToggleSwitch()
+            sw.toggled.connect(lambda on, n=name: self.card.set(n, on))
+            g.addWidget(sw, r, 0)
+            t = label(title)
+            t.setToolTip(tip)
+            g.addWidget(t, r, 1)
+            self.fx[name] = (sw, t)
+        g.addWidget(label("Mic EQ"), len(self.EFFECTS), 1)
+        self.miceq = QComboBox()
+        self.miceq.setMinimumWidth(360)
+        self.miceq.activated.connect(lambda i: self.card.set(C.VC_MICEQ, i))
+        g.addWidget(self.miceq, len(self.EFFECTS), 2)
+        g.setColumnStretch(3, 1)
+        lay.addLayout(g)
+        self.note = label("", "hint", wrap=True)
+        lay.addWidget(self.note)
+
+        lay.addSpacing(8)
+        mt = QHBoxLayout()
+        mt.addWidget(label("Voice Morph", "subTitle"))
+        mt.addStretch()
+        self.test = QPushButton("Test")
+        self.test.setMinimumWidth(110)
+        self.test.setToolTip("Records 5 s from the mic, then plays it back")
+        self.test.clicked.connect(self._test)
+        mt.addWidget(self.test)
+        lay.addLayout(mt)
+        self.morph_grid = QGridLayout()
+        self.morph_grid.setSpacing(6)
+        lay.addLayout(self.morph_grid)
+        self.morphs = QButtonGroup(self)
+        self.morphs.setExclusive(True)
+        self.morphs.idClicked.connect(lambda i: self.card.set(C.VC_MORPH, i))
+        self._morph_items = None
+        self.test_note = label("", "hint", wrap=True)
+        lay.addWidget(self.test_note)
+        self.missing = label("Voice Clarity and Voice Morph need driver 0.12.2 or newer.",
+                             "muted", wrap=True)
+        lay.addWidget(self.missing)
+        self._rec = None
+        self._wav = os.path.join(tempfile.gettempdir(), f"sbae9-voice-test-{os.getuid()}.wav")
+        self._rec_timer = QTimer(self, singleShot=True, interval=5000)
+        self._rec_timer.timeout.connect(self._play_back)
+
+    def _build_morphs(self, items):
+        if items == self._morph_items:
+            return
+        self._morph_items = items
+        for b in self.morphs.buttons():
+            self.morphs.removeButton(b)
+            b.deleteLater()
+        for i, name in enumerate(items):
+            b = QPushButton(name)
+            b.setCheckable(True)
+            b.setMinimumWidth(110)
+            b.setCursor(Qt.PointingHandCursor)
+            b.setStyleSheet(f"QPushButton{{background:{T.SEG};}}"
+                            f"QPushButton:hover{{background:{T.SEG_HOVER};}}"
+                            f"QPushButton:checked{{background:{T.ACCENT};color:{T.ACCENT_TEXT};}}"
+                            f"QPushButton:disabled{{color:{T.DIM};}}")
+            self.morphs.addButton(b, i)
+            self.morph_grid.addWidget(b, i // 6, i % 6)
+
+    def refresh(self):
+        has = self.card.has(C.VC)
+        self.missing.setVisible(not has)
+        for w in (self.master, self.miceq, self.test):
+            w.setVisible(has)
+        for sw, t in self.fx.values():
+            sw.setVisible(has)
+            t.setVisible(has)
+        if not has:
+            self.note.setText("")
+            return
+        on = bool(self.card.get(C.VC, False))
+        self.master.setCheckedSilently(on)
+        any_fx = False
+        for name, (sw, t) in self.fx.items():
+            v = bool(self.card.get(name, False))
+            any_fx = any_fx or v
+            sw.setCheckedSilently(v)
+            sw.setEnabled(on and self.card.has(name))
+            t.setEnabled(on)
+        items = self.card.items(C.VC_MICEQ)
+        if [self.miceq.itemText(k) for k in range(self.miceq.count())] != items:
+            self.miceq.clear()
+            self.miceq.addItems(items)
+        eq = self.card.get(C.VC_MICEQ, 0) or 0
+        self.miceq.setCurrentIndex(eq)
+        self.miceq.setEnabled(on)
+        self._build_morphs(self.card.items(C.VC_MORPH))
+        morph = self.card.get(C.VC_MORPH, 0) or 0
+        b = self.morphs.button(morph)
+        if b:
+            b.setChecked(True)
+        for b in self.morphs.buttons():
+            b.setEnabled(on)
+        any_fx = any_fx or bool(eq) or bool(morph)
+        if not on:
+            note = "Off: the mic records as is."
+        elif not any_fx:
+            note = ("On, but nothing picked yet: the voice processor comes in once an "
+                    "effect, Mic EQ or a voice is on.")
+        else:
+            note = ("Changes apply when a recording starts (or at once on a 48 kHz recording "
+                    "already running). With an effect on the mic records at 48 kHz, as a "
+                    "wideband voice (up to 8 kHz): for calls and chat, not music.")
+        self.note.setText(note)
+
+    # --- Voice Morph's Test: 5 s from the mic, then played back
+    def _test(self):
+        n = self.ctx.pw.nodes
+        if not n.source:
+            self.test_note.setText("The AE-9's mic input isn't in PipeWire.")
+            return
+        if self._rec:
+            return
+        self._rec = QProcess(self)
+        self._rec.start("pw-record", ["--target", n.source["name"], "--rate", "48000",
+                                      "--channels", "2", "-P",
+                                      '{ node.description="AE-9 voice test" node.dont-reconnect=true }',
+                                      self._wav])
+        self.test.setEnabled(False)
+        self.test_note.setText("Recording 5 s: say something…")
+        self._rec_timer.start()
+
+    def _play_back(self):
+        if self._rec:
+            self._rec.terminate()
+            self._rec.waitForFinished(2000)
+            self._rec = None
+        self.test_note.setText("Playing it back…")
+        p = QProcess(self)
+        p.finished.connect(lambda *_: (self.test_note.setText(""), self.test.setEnabled(True)))
+        p.start("pw-play", [self._wav])
+
+
 class InputSection(QWidget):
     """One of the AE-9's extra recording devices (Recording → Other Input):
     its PipeWire source with Set Default, or how to set it up."""
@@ -1887,13 +2325,17 @@ class InputSection(QWidget):
 # =====================================================================================
 class RecordingPage(Page):
     title = "Recording"
+    OTHER_TAB = 2
     inputs = ()
     _meter_target = None      # (source the meter reads, its InputSection or None for the mic)
 
     def __init__(self, ctx):
         super().__init__(ctx)
         self.header("Recording")
-        self.lay, other = self.add_tabs(["Microphone", "Other Input"])
+        self.lay, vc, other = self.add_tabs(["Microphone", "Voice Clarity", "Other Input"])
+        self.vc = VoiceClarity(ctx, self.card)
+        vc.addWidget(self.vc)
+        vc.addStretch()
         dev = QHBoxLayout()
         dcol = QVBoxLayout()
         dcol.setSpacing(0)
@@ -1941,15 +2383,16 @@ class RecordingPage(Page):
                                  "dynamic mics, 0 dB for loud sources or condensers."))
         xr.addStretch()
         g.addLayout(xr, 3, 1)
-        g.addWidget(label("Listen"), 4, 0)
+        self.listen_title = label("Listen")
+        g.addWidget(self.listen_title, 4, 0)
         lr = QHBoxLayout()
         lr.setSpacing(12)
         self.listen = ToggleSwitch()
         self.listen.toggled.connect(self._listen)
         lr.addWidget(self.listen)
-        listen_lbl = label("Hear the mic live (use headphones to avoid feedback)", "muted")
-        listen_lbl.setToolTip("Plays the mic through the default output")
-        lr.addWidget(listen_lbl)
+        self.listen_lbl = label("Hear the mic live (use headphones to avoid feedback)", "muted")
+        self.listen_lbl.setToolTip("Plays the mic through the default output")
+        lr.addWidget(self.listen_lbl)
         lr.addStretch()
         g.addLayout(lr, 4, 1, 1, 2)
         g.addWidget(label("Quality"), 5, 0)
@@ -2048,7 +2491,8 @@ class RecordingPage(Page):
         other.addWidget(self.other_none)
         other.addStretch()
         ctx.meter.levels.connect(self._levels)
-        ctx.monitor.state.connect(self.listen.setCheckedSilently)
+        ctx.monitor.state.connect(lambda *_: self._refresh_listen())
+        self._warm = None
         ctx.pw.updated.connect(self._on_pw)
 
     def _make_default(self):
@@ -2207,12 +2651,57 @@ class RecordingPage(Page):
         shown = [sec.refresh(n, self.card) for sec in self.inputs]
         self.other_none.setVisible(not any(shown))
 
+    def _card_monitor(self):
+        """The driver's mic monitor (0.12.2), mixed in the DSP: Direct Mode off only."""
+        return self.card.has(C.MIC_MONITOR) and not bool(self.card.get(C.DIRECT, True))
+
     def _listen(self, on):
+        if self._card_monitor():
+            self.ctx.monitor.stop()
+            self.card.set(C.MIC_MONITOR, on)
+            if on and not C.dsp_path_ready():
+                self._warm_dsp_path()
+            self._refresh_listen()
+            return
         n = self.ctx.pw.nodes
         if on and n.source:
             self.ctx.monitor.start(n.source["name"])
         else:
             self.ctx.monitor.stop()
+
+    def _warm_dsp_path(self):
+        """The card's monitor is silent until a playback has run in DSP mode
+        since boot: play 4 s of silence to the AE-9 to set that path up."""
+        n = self.ctx.pw.nodes
+        if not n.sink or (self._warm and self._warm.state() != QProcess.NotRunning):
+            return
+        path = os.path.join(tempfile.gettempdir(), f"sbae9-silence-{os.getuid()}.wav")
+        if not os.path.exists(path):
+            import wave
+            with wave.open(path, "wb") as w:
+                w.setnchannels(2)
+                w.setsampwidth(2)
+                w.setframerate(48000)
+                w.writeframes(b"\0" * 48000 * 4 * 4)
+        self._warm = QProcess(self)
+        self._warm.start("pw-play", ["--target", n.sink["name"], "-P",
+                                     '{ node.description="AE-9 monitor setup (silence)" }', path])
+
+    def _refresh_listen(self):
+        card_mon = self._card_monitor()
+        if card_mon:
+            self.listen_title.setText("Monitor")
+            self.listen_lbl.setText("Hear the mic live, mixed in the card with no delay "
+                                    "(use headphones to avoid feedback)")
+            self.listen_lbl.setToolTip("The card's own mic monitor (Direct Mode off)")
+            self.listen.setCheckedSilently(bool(self.card.get(C.MIC_MONITOR, False)))
+        else:
+            self.listen_title.setText("Listen")
+            self.listen_lbl.setText("Hear the mic live (use headphones to avoid feedback)"
+                                    + (": through PipeWire in Direct Mode, with a short delay"
+                                       if self.card.has(C.MIC_MONITOR) else ""))
+            self.listen_lbl.setToolTip("Plays the mic through the default output")
+            self.listen.setCheckedSilently(self.ctx.monitor.running)
 
     def _levels(self, l, r):
         sec = self._meter_target[1] if self._meter_target else None
@@ -2230,7 +2719,7 @@ class RecordingPage(Page):
         if not self.isVisible():
             return None
         n = self.ctx.pw.nodes
-        if self.tab_stack.currentIndex() == 0:
+        if self.tab_stack.currentIndex() != self.OTHER_TAB:
             return (n.source["name"], None) if n.source else None
         for sec in self.inputs:
             if sec.has_meter and sec.node and not sec.isHidden():
@@ -2276,6 +2765,8 @@ class RecordingPage(Page):
         if not self.card.present:
             return
         self._refresh_phantom()
+        self._refresh_listen()
+        self.vc.refresh()
         self.mic_jack.setVisible(self.card.has(C.HU_MIC))
         if self.card.has(C.HU_MIC):
             self.mic_jack.setText("3.5 mm mic: " + (

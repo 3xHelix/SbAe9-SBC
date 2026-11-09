@@ -18,8 +18,8 @@ switches and adjusts them.
 |---|---|---|
 | **SBX Profile** | SBX on/off; Surround, Crystalizer, Bass, Smart Volume (Night/Normal/Loud), Dialog+; built-in and personal profiles | card DSP (ALSA `SBX Switch`, `FX …`) |
 | **Equalizer** | 10-band EQ + pre-gain, Creative's 20 presets, your own saved curves | card DSP (`EQ …`) |
-| **Playback** | Speakers / headphones, speaker config (2.0 – 5.1) with matching stereo / 5.1 stream, Direct Mode, DAC filter, sample rate and bit depth, default device, spoken speaker test; Headphone Profile (Creative's EQ curve per headphone model); **Speaker Setup** tab: bass redirect (Speaker Type / crossover, subwoofer boost), level and distance per speaker; **Digital** tab: what optical out plays (its own output, the mirror of the main output, the main output with SBX/EQ, or the encoder; driver 0.12.0+), passthrough state | ALSA + PipeWire |
-| **Recording** | Head unit mic (XLR/TRS or 3.5 mm mic jack): level, mic gain (0/+10/+20 dB), phantom power 48V (asks first), live input meter, mute, "listen to mic", sample rate (48 / 96 kHz), default device; **Other Input** tab: optical in, What U Hear (48 / 96 kHz), head unit rear RCA | ALSA + PipeWire |
+| **Playback** | Speakers / headphones, speaker config (2.0 – 5.1) with matching stereo / 5.1 stream, Direct Mode, DAC filter, sample rate and bit depth, default device, spoken speaker test; Headphone Profile (Creative's EQ curve per headphone model, or your own made from AutoEQ), headphone virtualization (Virtual 7.1, also on Line Out); **Speaker Setup** tab: bass redirect (Speaker Type / crossover, subwoofer boost), level and distance per speaker; **Digital** tab: what optical out plays (its own output, the mirror of the main output, the main output with SBX/EQ, or the encoder; driver 0.12.0+), passthrough state | ALSA + PipeWire |
+| **Recording** | Head unit mic (XLR/TRS or 3.5 mm mic jack): level, mic gain (0/+10/+20 dB), phantom power 48V (asks first), live input meter, mute, "listen to mic" (or the card's own monitor, no delay, with driver 0.12.2), sample rate (48 / 96 kHz), default device; **Voice Clarity** tab (driver 0.12.2): echo cancellation, noise reduction, smart volume, Mic EQ, Voice Morph with a test; **Other Input** tab: optical in, What U Hear (48 / 96 kHz), head unit rear RCA | ALSA + PipeWire |
 | **Scout Mode** | Creative's Scout Mode (footstep EQ + Smart Volume) | card DSP |
 | **Encoder** | No Encoder / AC-3 encoder (Dolby Digital compatible) / DTS encoder (experimental): the card's mix encoded on the PC by your ffmpeg and sent over optical, as Windows does | ffmpeg + PipeWire + ALSA |
 | **Mixer** | Output volume (same as the head-unit knob), mute, per-channel levels (Front Left / Right, …), mic level | ALSA + PipeWire |
@@ -120,6 +120,11 @@ and 7.1 output. The driver doesn't support these yet.
   Encoder page (What U Hear with six channels, on the card's 5.1 stream with
   the inputs on): driver
   [v0.12.1](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.1) or newer.
+- For Voice Clarity and Voice Morph, the card's own mic monitor, headphone
+  virtualization (Virtual 7.1, and on Line Out), and your own headphone
+  profiles ("Make custom profile…", from AutoEQ's measurements, with the
+  driver's `ae9-hp-profile`): driver
+  [v0.12.2](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.2) or newer.
 - For 176.4 kHz (stereo, Direct Mode): driver
   [v0.9.7](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.9.7) or newer
   (`pcm_176k4=Y`).
@@ -131,7 +136,7 @@ and 7.1 output. The driver doesn't support these yet.
   Creative's Sound Blaster Command installer (the app looks in
   `firmware/creative-ae9/hp` and `firmware/updates/creative-ae9/hp`).
   This release pairs with
-  [SbAe9-Drv v0.12.1](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.1).
+  [SbAe9-Drv v0.12.2](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.2).
 - For switching phantom power (48V) from the app and What U Hear at 96 kHz:
   driver [v0.9.5](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.9.5)
   or newer (`wuh_96k=Y`, the default).

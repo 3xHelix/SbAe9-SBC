@@ -231,6 +231,8 @@ pipewire.INPUT_RULES = {k: (os.path.join(_TMP, "wireplumber", os.path.basename(v
 C.HP_DIRS = (os.path.join(_TMP, "firmware"),)   # headphone curves; tests add them
 C.module_param = lambda name: PARAMS.get(name)
 C.module_version = lambda: PARAMS.get("version")
+DSP_PATH = {"ready": True}      # the kernel log: a playback ran in DSP mode since boot
+C.dsp_path_ready = lambda: DSP_PATH["ready"]
 PCMS = set()   # extra capture devices the fake driver has (1 = optical in, 2 = What U Hear)
 C.has_capture_pcm = lambda device, card_id="AE9": device in PCMS
 PLAYBACK_PCMS = set()   # extra playback devices (4 = the separate optical out)
@@ -277,6 +279,7 @@ def reset():
     global PW
     PW.__init__()
     PARAMS.clear()
+    DSP_PATH["ready"] = True
     PCMS.clear()
     PLAYBACK_PCMS.clear()
     ENCODER.update({"ffmpeg": {"ac3", "dca"}, "active": False, "calls": []})

@@ -3,7 +3,13 @@
 Sound Blaster Command for Linux: the UI for the Creative Sound Blaster AE-9
 driver ([SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv)).
 
-## Unreleased
+## 0.17.0 (2026-11-09)
+
+Voice Clarity and Voice Morph, the card's own mic monitor, headphone
+virtualization, your own headphone profiles, and one "Optical out plays"
+choice with a new "main output with effects". Pairs with
+[SbAe9-Drv v0.12.2](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.2);
+kit 0.3.8.
 
 ### Added
 
@@ -17,6 +23,24 @@ driver ([SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv)).
   stream it's a stereo downmix. About 20-45 ms behind the speakers. Needs
   driver 0.12.1's What U Hear and optical output in PipeWire. Also
   `sbae9-sbc ctl optical own|mirror|fx|ac3|dts`.
+- Recording > Voice Clarity (driver 0.12.2), in Creative's layout: the
+  Voice Clarity switch with Acoustic Echo Cancellation, Noise Reduction,
+  Smart Volume and Mic EQ (the driver's presets), and Voice Morph (18
+  voices) with a Test button that records 5 s and plays it back.
+- Recording > Microphone: with driver 0.12.2 and Direct Mode off, "Monitor"
+  is the card's own mic monitor, mixed in the DSP with no delay. The first
+  time since boot, the app plays 4 s of silence to the AE-9 to set up the
+  DSP's output path it needs. In Direct Mode, "Listen" (through PipeWire)
+  as before.
+- Playback > Headphones (driver 0.12.2): "Headphone virtualization (Virtual
+  7.1)" and "Apply headphone virtualization to Line Out" (asks first: it
+  plays at the headphone volume, and mutes the headphone jack). Direct Mode
+  off only.
+- Headphone Profile: empty custom slots are left out of the list, and a
+  profile whose file is missing is greyed ("file missing"). "Make custom
+  profile…" builds one from AutoEQ's published measurements with the
+  driver's `ae9-hp-profile` (installing asks for your password), and
+  reloads it if that slot was already picked.
 - Headphone Profile and the Encoder page note that while the encoder runs,
   a new headphone profile loads only once it's switched off.
 - Panel widget (KDE): the card icon is drawn by the widget: a chip in DSP

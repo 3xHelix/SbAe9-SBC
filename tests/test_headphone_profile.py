@@ -21,8 +21,8 @@ class HeadphoneProfileTest(S.AppTestCase):
         if curves:
             d = os.path.join(C.HP_DIRS[0], "creative-ae9", "hp")
             os.makedirs(d, exist_ok=True)
-            for f in ("AKGM220.bin", "ATHM50.bin"):
-                open(os.path.join(d, f), "wb").close()
+            for m in MODELS[1:]:
+                open(os.path.join(d, C.HP_KEYS[m] + ".bin"), "wb").close()
 
     def playback(self):
         pg = self.page(pages.PlaybackPage)
@@ -100,6 +100,56 @@ class HeadphoneProfileTest(S.AppTestCase):
         self.ctx.settings["encoder"] = "fx"       # the effects loop stops by itself
         pg.refresh()
         self.assertNotIn("encoder", pg.hp_prof_note.text())
+
+
+    def full_list(self, slots="DT990=Beyerdynamic DT 990 Pro;;;"):
+        """Driver 0.12.2: Off + Creative's 32 + 4 custom slots."""
+        items = ["Off"] + list(C.HP_KEYS) + ["Beyerdynamic DT 990 Pro", "Custom 2", "Custom 3", "Custom 4"]
+        S.PARAMS["hp_custom"] = slots
+        self.mixer.add_enum(C.HP_PROFILE, items, 0)
+        d = os.path.join(C.HP_DIRS[0], "creative-ae9", "hp")
+        os.makedirs(d, exist_ok=True)
+        for key in list(C.HP_KEYS.values()) + ["DT990"]:
+            if key != "HD280Pro":                 # one of Creative's files missing
+                open(os.path.join(d, key + ".bin"), "wb").close()
+        return items
+
+    def test_empty_custom_slots_hidden_missing_files_greyed(self):
+        items = self.full_list()
+        pg = self.playback()
+        texts = [pg.hp_prof.itemText(k) for k in range(pg.hp_prof.count())]
+        self.assertIn("Beyerdynamic DT 990 Pro", texts)
+        self.assertNotIn("Custom 2", texts)                       # empty: hidden
+        self.assertIn("SENNHEISER HD 280 Pro (file missing)", texts)
+        row = pg.hp_prof.findText("SENNHEISER HD 280 Pro (file missing)")
+        self.assertFalse(pg.hp_prof.model().item(row).isEnabled())
+        # the rows map to the control's own numbers
+        pg._pick_hp_profile(pg.hp_prof.findText("Beyerdynamic DT 990 Pro"))
+        self.assertEqual(self.card(C.HP_PROFILE), items.index("Beyerdynamic DT 990 Pro"))
+
+    def test_empty_slot_with_its_file_is_shown(self):
+        self.full_list()
+        open(os.path.join(C.HP_DIRS[0], "creative-ae9", "hp", "custom3.bin"), "wb").close()
+        pg = self.playback()
+        self.assertGreaterEqual(pg.hp_prof.findText("Custom 3"), 0)
+
+    def test_a_picked_missing_profile_says_so(self):
+        items = self.full_list()
+        self.mixer.external(C.HP_PROFILE, items.index("SENNHEISER HD 280 Pro"))
+        pg = self.playback()
+        self.assertEqual(pg.hp_prof.currentText(), "SENNHEISER HD 280 Pro (file missing)")
+        self.assertIn("file is missing", pg.hp_prof_note.text())
+
+    def test_reload_after_install_picks_off_then_it_again(self):
+        items = self.full_list()
+        k = items.index("Beyerdynamic DT 990 Pro")
+        self.mixer.external(C.HP_PROFILE, k)
+        pg = self.playback()
+        self.mixer.writes.clear()
+        pg._reload_hp_slot("Beyerdynamic DT 990 Pro")
+        self.assertEqual(self.mixer.writes, [(C.HP_PROFILE, 0)])
+        S.wait_until(lambda: len(self.mixer.writes) > 1, 3)
+        self.assertEqual(self.mixer.writes[-1], (C.HP_PROFILE, k))
 
 
 if __name__ == "__main__":

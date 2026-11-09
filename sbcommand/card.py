@@ -9,6 +9,7 @@ desktop volume slider) arrives as an ALSA event and is re-emitted as
 import errno
 import math
 import os
+import subprocess
 
 from PySide6.QtCore import QObject, QSocketNotifier, QTimer, Signal
 
@@ -76,10 +77,99 @@ CM_DELAY_MS = 0.0293867                           # the driver's delay per cm (s
 
 
 HP_PROFILE = "Headphone Profile"   # Off + SB Command's headphone models (newer drivers)
+HP_VIRT = "Headphone Virtualization Switch"     # Virtual 7.1 on headphones (0.12.2)
+LINE_VIRT = "Line Out Virtualization Switch"    # the headphone mix on the RCA out (0.12.2)
+MIC_MONITOR = "Mic Monitor Playback Switch"     # the mic mixed in the DSP, no delay (0.12.2)
+# Voice Clarity (Recording, 0.12.2): the master and its effects
+VC = "Voice Clarity Capture Switch"
+VC_AEC = "Acoustic Echo Cancellation Capture Switch"
+VC_NR = "Noise Reduction Capture Switch"
+VC_SVM = "Mic Smart Volume Capture Switch"
+VC_MICEQ = "Mic EQ Capture Enum"
+VC_MORPH = "Voice Morphing Capture Enum"
 # where ae9-get-firmware puts Creative's headphone curves (it checks the same);
 # firmware/updates/ first, as the kernel does (Arch installs there: AE-5/AE-7 clash)
 HP_DIRS = ("/etc/firmware", "/lib/firmware/updates", "/usr/lib/firmware/updates",
            "/lib/firmware", "/usr/lib/firmware")
+
+
+# Headphone Profile items -> the file each loads (driver's hp_profiles[]):
+# Creative's models by name; the last four are custom slots, named by the
+# driver's hp_custom parameter (0.12.2), "Custom N" (custom<N>.bin) when empty.
+HP_KEYS = {
+    "AKG M220": "AKGM220", "Apple Earphone": "IP3EP", "Apple Earpod": "IP5EP",
+    "audio-technica ATH-M50": "ATHM50", "CORSAIR HS50": "HS50",
+    "Creative Aurvana Air": "CTAVNA", "Creative Aurvana Gold": "CTAVNG",
+    "Creative Aurvana Live!": "CTAVNL", "Creative Aurvana Live!2": "CTAVNL2",
+    "Creative EP-3NC": "CTEP3NC", "Creative Fatal1ty Gaming Headset": "CTFATGHS",
+    "Creative Flex": "CTFlex", "Creative Outlier": "OUTLIER",
+    "Creative Outlier Black": "OUTLIERB", "Creative SB Inferno Headset": "CTSBINF",
+    "Creative SXFI AIR": "SXFIAIR", "Creative SXFI AIR C": "SXFIAIRC",
+    "E-MU Teak": "EMUTEAK", "E-MU Walnut": "WALNUT", "HYPERX HX-HSCF": "HXHSCF",
+    "Mr Speakers ETHER C": "ETHERC", "Philips Fidelio X2HR": "PFX2HR",
+    "Samsung Galaxy Headset": "GS3EP", "SENNHEISER HD 201": "HD201",
+    "SENNHEISER HD 280 Pro": "HD280Pro", "SENNHEISER HD 457": "HD457",
+    "SONY MDR-1R": "MDR1R", "Sound Blaster Blaze": "SBBLAZE",
+    "Sound BlasterX H3": "H3", "Sound BlasterX H5 TE": "H5",
+    "Sound BlasterX H7 TE": "H7", "Sound BlasterX P5": "P5",
+}
+HP_CUSTOM_SLOTS = 4
+HP_CUSTOM_PARAM = "hp_custom"
+
+
+def hp_custom_slots():
+    """[(key, name) or None] * 4: the driver's custom headphone slots (0.12.2)."""
+    raw = module_param(HP_CUSTOM_PARAM) or ""
+    slots = [None] * HP_CUSTOM_SLOTS
+    for n, ent in enumerate(raw.split(";")[:HP_CUSTOM_SLOTS]):
+        if "=" in ent:
+            k, v = ent.split("=", 1)
+            if k.strip():
+                slots[n] = (k.strip(), v.strip())
+    return slots
+
+
+def hp_file(key):
+    """Where the driver would find hp/<key>.bin, or None."""
+    for d in HP_DIRS:
+        f = os.path.join(d, "creative-ae9", "hp", f"{key}.bin")
+        if os.path.exists(f):
+            return f
+    return None
+
+
+def hp_item_files(items):
+    """For each Headphone Profile item: (key, installed). Off is (None, True);
+    an item SBC doesn't know is (None, True) too (shown as is)."""
+    out = []
+    # Off + Creative's models + the custom slots (driver 0.12.2)
+    custom0 = 1 + len(HP_KEYS) if len(items) == 1 + len(HP_KEYS) + HP_CUSTOM_SLOTS else None
+    slots = hp_custom_slots() if custom0 is not None else []
+    for i, name in enumerate(items):
+        if custom0 is not None and i >= custom0:
+            n = i - custom0
+            key = slots[n][0] if slots[n] else f"custom{n + 1}"
+        else:
+            key = HP_KEYS.get(name)
+        out.append((key, True if key is None else hp_file(key) is not None))
+    return out
+
+
+DSP_PATH_LOG = r"switching the running stream to DSP mode|router chip stream format 0x31 ok"
+
+
+def dsp_path_ready():
+    """True if the DSP's output path has been set up since boot (a playback
+    stream ran in DSP mode): the driver's mic monitor is silent until then.
+    From the kernel log; None when it can't be read."""
+    try:
+        r = subprocess.run(["journalctl", "-k", "-b", "-q", "--no-pager", "-g", DSP_PATH_LOG],
+                           capture_output=True, text=True, timeout=5)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if r.returncode not in (0, 1):
+        return None
+    return bool(r.stdout.strip())
 
 
 def headphone_curves():

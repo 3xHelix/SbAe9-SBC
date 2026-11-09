@@ -189,7 +189,7 @@ class OtherInputTest(S.AppTestCase):
     def other(self):
         self.snapshot()
         pg = self.page(pages.RecordingPage)
-        pg.show_tab(1)
+        pg.show_tab(pg.OTHER_TAB)
         S.process(20)
         return pg, {sec.key: sec for sec in pg.inputs}
 
@@ -369,7 +369,7 @@ class WhatUHearRateTest(S.AppTestCase):
     def section(self):
         self.snapshot()
         pg = self.page(pages.RecordingPage)
-        pg.show_tab(1)
+        pg.show_tab(pg.OTHER_TAB)
         S.process(20)
         return {sec.key: sec for sec in pg.inputs}["what_u_hear"]
 
@@ -422,7 +422,7 @@ class WhatUHearRateTest(S.AppTestCase):
         S.PW.add_optical_in()
         self.snapshot()
         pg = self.page(pages.RecordingPage)
-        pg.show_tab(1)
+        pg.show_tab(pg.OTHER_TAB)
         S.process(20)
         self.assertFalse({s.key: s for s in pg.inputs}["optical_in"].rate_row.isVisible())
 
@@ -450,7 +450,7 @@ class WhatUHearRuleRateTest(S.AppTestCase):
     def section(self):
         self.snapshot()
         pg = self.page(pages.RecordingPage)
-        pg.show_tab(1)
+        pg.show_tab(pg.OTHER_TAB)
         S.process(20)
         return {sec.key: sec for sec in pg.inputs}["what_u_hear"]
 

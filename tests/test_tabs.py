@@ -11,7 +11,7 @@ from sbcommand import card as C, config, pages
 class TabsTest(S.AppTestCase):
     def test_tab_names(self):
         for cls, names in ((pages.PlaybackPage, ["Speakers/Headphones", "Speaker Setup", "Digital"]),
-                           (pages.RecordingPage, ["Microphone", "Other Input"]),
+                           (pages.RecordingPage, ["Microphone", "Voice Clarity", "Other Input"]),
                            (pages.SettingsPage, ["Application", "Device"])):
             pg = self.page(cls)
             self.assertEqual([b.text() for b in pg.tab_bar.buttons], names)
