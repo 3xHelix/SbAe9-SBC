@@ -3,6 +3,30 @@
 Sound Blaster Command for Linux: the UI for the Creative Sound Blaster AE-9
 driver ([SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv)).
 
+## 0.17.1 (2026-11-09)
+
+Voice Clarity never uses the card's mic monitor. Pairs with
+[SbAe9-Drv v0.12.3](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.3).
+
+### Changed
+
+- Recording > Microphone: while Voice Clarity is in use (its switch, an
+  effect, Mic EQ or a voice on), "Monitor" is the software Listen (through
+  PipeWire, with a short delay) and the app never turns the card's own mic
+  monitor on. Once the card's monitor has been on since the PC started, a
+  Voice Clarity recording comes out broken (one side low, the other empty)
+  until the PC is fully powered off. With Voice Clarity off, the card's
+  monitor (no delay) as before.
+- Turning Voice Clarity on while the card's monitor is on asks first, then
+  moves to Listen.
+
+### Added
+
+- Recording > Voice Clarity: a notice when driver 0.12.3's "Mic Monitor
+  Used Since Power-up" says the card's monitor was used since the PC
+  started, while Voice Clarity is in use. Older drivers don't have it: no
+  notice.
+
 ## 0.17.0 (2026-11-09)
 
 Voice Clarity and Voice Morph, the card's own mic monitor, headphone
