@@ -37,7 +37,7 @@ for p in S.PW.sink["info"]["params"]["Props"]:
     if "channelVolumes" in p:
         p["channelVolumes"] = [0.62 ** 3] * 6
 S.PW.stream = (48000, 6)
-S.PARAMS.update({"version": "0.9.1", "surround_96k": "1"})
+S.PARAMS.update({"version": "0.12.2", "surround_96k": "1"})
 
 # the wallpaper frame, full screen on the centre monitor, behind the app
 wall = QLabel(); wall.setWindowFlag(Qt.FramelessWindowHint)
