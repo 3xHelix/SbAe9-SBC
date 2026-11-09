@@ -3,7 +3,10 @@
 Sound Blaster Command for Linux: the UI for the Creative Sound Blaster AE-9
 driver ([SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv)).
 
-## Unreleased
+## 0.17.2 (2026-11-09)
+
+A quicker way to reset the card's power for Voice Clarity. Pairs with
+[SbAe9-Drv v0.12.4](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.4).
 
 ### Changed
 
