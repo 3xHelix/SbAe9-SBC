@@ -2354,8 +2354,8 @@ class EncoderPage(Page):
     def _to_surround(self):
         n = self.ctx.pw.nodes
         target = encoder.surround_profile(n)
-        if target and pipewire.set_card_profile(n, target):
-            # the service sees What U Hear change and restarts on the 6-channel source
+        if target and self.ctx.switch_card_profile(n, target):
+            # the encoder starts again on the 6-channel source
             self.status.setText("Switching the card to 5.1…")
 
     def refresh(self, keep_why=False):

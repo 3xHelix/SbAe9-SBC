@@ -81,7 +81,7 @@ class EncoderTest(Base):
         self.assertIn("hw:AE9,4", out)
         self.assertEqual(rec[rec.index("--channel-map") + 1], "FL,FR,FC,LFE,RL,RR")
         self.assertEqual(rec[rec.index("--format") + 1], "s32")
-        self.assertEqual(enc[enc.index("-f") + 1], "s32le")
+        self.assertEqual(enc[enc.index("-f") + 1], "au")     # pw-record's pipe output
         self.assertEqual(rec[-1], "-")
         rec, enc, out = encoder.commands("dts", "x", 2)
         self.assertNotIn("--channel-map", rec)
@@ -132,8 +132,14 @@ class Surround51Test(Base):
         pg.group.button(1).click()
         self.assertTrue(pg.surround_row.isVisible())
         self.assertIn("2.0", pg.why.text())
+        S.ENCODER["calls"].clear()
         pg.surround_btn.click()
         self.assertEqual(S.PW.profile(), S.SURROUND)
+        # the encoder lets go of the optical output while the profile is built
+        self.assertEqual(self.systemctl(), ["is-active", "stop"])
+        self.assertFalse(S.ENCODER["active"])
+        S.process(10)
+        self.assertTrue(S.wait_until(lambda: S.ENCODER["active"], 2))
         self.to_51()
         self.snapshot()
         pg.refresh()

@@ -101,5 +101,39 @@ class PlaybackSyncTest(S.AppTestCase):
         self.assertEqual(profile_writes(), [])
 
 
+class KeepDefaultTest(S.AppTestCase):
+    """A card profile switch can move the desktop's default output to another
+    card (seen live: HDMI on the switch to 5.1); the app puts it back."""
+
+    def set_default_name(self, name):
+        for o in S.PW.objects:
+            for m in o.get("metadata", []):
+                if m.get("key") == "default.audio.sink":
+                    m["value"] = {"name": name}
+
+    def set_defaults(self):
+        return [c for c in S.PW.calls if c[:2] == ("wpctl", "set-default")]
+
+    def test_switch_puts_the_ae9_back_as_default(self):
+        self.page(pages.PlaybackPage)
+        self.snapshot()
+        self.assertTrue(self.ctx.pw.nodes.sink_is_default)
+        S.PW.calls.clear()
+        S.PW.set_profile(S.SURROUND)
+        self.set_default_name("alsa_output.pci-0000_0f_00.1.hdmi-stereo")
+        self.snapshot()
+        self.assertEqual(self.set_defaults(), [("wpctl", "set-default", str(S.PW.sink["id"]))])
+
+    def test_not_the_default_before_stays_so(self):
+        self.page(pages.PlaybackPage)
+        self.set_default_name("alsa_output.pci-0000_0f_00.1.hdmi-stereo")
+        self.snapshot()
+        S.PW.calls.clear()
+        self.ctx._ae9_default_at = 0.0
+        S.PW.set_profile(S.SURROUND)
+        self.snapshot()
+        self.assertEqual(self.set_defaults(), [])
+
+
 if __name__ == "__main__":
     unittest.main()

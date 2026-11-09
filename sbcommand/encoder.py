@@ -130,6 +130,21 @@ def surround_profile(nodes):
     return pipewire.SURROUND_DUPLEX if pipewire.SURROUND_DUPLEX in nodes.card_profiles() else None
 
 
+def pause():
+    """Stop the running encoder for a card profile switch (it holds hw:AE9,4:
+    a profile built meanwhile would come up without the optical output).
+    True if it was running; resume() starts it again."""
+    if not active():
+        return False
+    _run("systemctl", "--user", "stop", UNIT, timeout=15)
+    return True
+
+
+def resume():
+    if config.Settings()["encoder"] in ENCODERS:
+        _run("systemctl", "--user", "start", UNIT, timeout=15)
+
+
 # --- inside the service --------------------------------------------------------
 def commands(mode, source, channels):
     """The three processes of the loop: capture, encode, play to optical."""
@@ -143,7 +158,9 @@ def commands(mode, source, channels):
     rec.append("-")
     enc = (["ffmpeg", "-hide_banner", "-loglevel", "error", "-nostdin",
             "-fflags", "nobuffer", "-probesize", "32", "-analyzeduration", "0",
-            "-f", "s32le", "-ar", str(RATE), "-ac", str(channels), "-ch_layout", layout, "-i", "-"]
+            # pw-record writes a Sun AU stream to a pipe (a ".snd" header, then
+            # big-endian samples), not raw PCM: ffmpeg reads it as such
+            "-f", "au", "-ch_layout", layout, "-i", "-"]
            + ENCODERS[mode][2] + ["-flush_packets", "1", "-f", "spdif", "-"])
     out = ["aplay", "-q", "-D", OPTICAL_PCM, "-f", "S16_LE", "-r", str(RATE), "-c", "2",
            "-t", "raw", "--buffer-time=100000", "-"]

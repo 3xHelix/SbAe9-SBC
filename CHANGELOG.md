@@ -3,6 +3,27 @@
 Sound Blaster Command for Linux: the UI for the Creative Sound Blaster AE-9
 driver ([SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv)).
 
+## 0.16.1 (2026-11-08)
+
+Fixes the Encoder from 0.16.0, which sent noise. Pairs with
+[SbAe9-Drv v0.12.1](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.1);
+kit 0.3.8.
+
+### Fixed
+
+- The encoder sent noise: pw-record writes a Sun AU stream to a pipe (a
+  header, then big-endian samples), and ffmpeg read it as raw little-endian
+  PCM. ffmpeg now reads it as AU. Checked on the card: six tones through
+  What U Hear 5.1, AC-3 and S/PDIF framing decode back each in its own
+  channel, level-exact; stereo the same.
+- Switching the card between the stereo and 5.1 stream while the encoder
+  ran left the new profile without "AE-9 Optical Out" (the encoder held
+  the optical output while PipeWire built it). The app now pauses the
+  encoder for its own switches (Encoder page, Speakers' stream).
+- After a switch between the stereo and 5.1 stream, PipeWire could make
+  another card the default output (HDMI, say). The app puts the AE-9 back
+  when it was the default before.
+
 ## 0.16.0 (2026-11-08)
 
 The Encoder page (AC-3, or experimental DTS, to a receiver over optical, in

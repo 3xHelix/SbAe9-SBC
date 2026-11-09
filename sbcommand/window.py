@@ -2,6 +2,7 @@
 """Main window: sidebar navigation, page stack and the bottom status bar."""
 
 import os
+import time
 
 from PySide6.QtCore import QEvent, QObject, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QIcon, QPainter
@@ -11,7 +12,7 @@ from PySide6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QMainWindow, QPushBu
 from sbae9kit import desktop, frame, glass
 
 from . import card as C
-from . import config, icons, pages, pipewire, profiles
+from . import applier, config, encoder, icons, pages, pipewire, profiles
 from .applier import Applier, Change
 from . import theme as T
 from .widgets import ApplyOverlay, Throttle, VolumeRow, label
@@ -44,6 +45,13 @@ class Context(QObject):
         self.card.changed.connect(self._on_card_rate)
         self.card.connection_changed.connect(self._on_card_rate)
         self.pw.updated.connect(self._on_pw_rate)
+        # a card profile switch removes the AE-9's output and adds another:
+        # PipeWire may then pick another card as default (HDMI, say)
+        self._last_profile = None
+        self._ae9_default_at = 0.0     # last seen as the default output
+        self._keep_default_until = 0.0
+        self._sink_before = None       # the AE-9 output before the switch
+        self.pw.updated.connect(self._keep_default)
 
     def rate_set(self):
         """The rates the card plays right now (Direct Mode, 5.1, driver options)."""
@@ -163,7 +171,7 @@ class Context(QObject):
             if target:
                 if self.tone.running:
                     self.tone.stop()
-                pipewire.set_card_profile(n, target)
+                self.switch_card_profile(n, target)
 
         def settled():
             n = self.pw.nodes
@@ -265,6 +273,40 @@ class Context(QObject):
 
     def _on_pw_rate(self, *_):
         self.apply_rate()
+
+    def switch_card_profile(self, nodes, name):
+        """Switch the AE-9's card profile, pausing the optical encoder around
+        it: the profile is built while nothing holds the optical output."""
+        paused = encoder.pause()
+        ok = pipewire.set_card_profile(nodes, name)
+        if paused:
+            QTimer.singleShot(int(3000 * applier.TIME_SCALE), encoder.resume)
+        return ok
+
+    def _keep_default(self, *_):
+        """After the AE-9 changes card profile (5.1 / stereo stream, from here
+        or elsewhere) while it was the default output, make its new output
+        the default once it's there."""
+        n = self.pw.nodes
+        prof = n.card_profile()
+        now = time.monotonic()
+        if n.sink and n.sink_is_default and now >= self._keep_default_until:
+            self._ae9_default_at = now
+            self._sink_before = n.sink["name"]
+        # "was default" a few seconds back: the switch can move the default
+        # a snapshot before the new profile shows
+        if (prof and self._last_profile and prof != self._last_profile
+                and now - self._ae9_default_at < 6):
+            self._keep_default_until = now + 10
+        if prof:
+            self._last_profile = prof
+        if (now < self._keep_default_until and n.sink and n.default_sink
+                and n.sink["name"] != self._sink_before):
+            if n.sink_is_default:
+                self._keep_default_until = 0.0
+            elif n.sink["state"] in ("running", "idle", "suspended"):
+                pipewire.set_default(n.sink["id"])
+                self._keep_default_until = 0.0
 
 
 NAV = [

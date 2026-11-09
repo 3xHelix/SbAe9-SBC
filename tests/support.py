@@ -245,8 +245,10 @@ def _encoder_run(*args, timeout=5):
     ENCODER["calls"].append(args)
     if args[:3] == ("systemctl", "--user", "is-active"):
         return (0 if ENCODER["active"] else 3), ""
-    if args[:3] == ("systemctl", "--user", "restart"):
+    if args[:3] in (("systemctl", "--user", "restart"), ("systemctl", "--user", "start")):
         ENCODER["active"] = True
+    if args[:3] == ("systemctl", "--user", "stop"):
+        ENCODER["active"] = False
     if args[:3] == ("systemctl", "--user", "disable"):
         ENCODER["active"] = False
     return 0, ""
