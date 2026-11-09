@@ -1655,7 +1655,8 @@ VOICE_CLARITY_TIP = (
     "Direct Mode too.\n\n"
     "While Voice Clarity is on, the Microphone tab's Monitor uses Listen (through PipeWire, "
     "with a short delay): the card's own mic monitor breaks Voice Clarity recordings until "
-    "the PC is fully powered off.")
+    "the PC is fully powered off, or after a 25 s suspend (sudo rtcwake -m mem -s 25), which "
+    "also cuts the card's power.")
 HP_VIRT_TIP = (
     "Creative's headphone virtualization (Virtual 7.1): with Headphones and Direct Mode "
     "off, the DSP runs in headphone mode and SBX Surround places the sound around you; "
@@ -1990,8 +1991,10 @@ class VoiceClarity(QWidget):
         top.addStretch()
         lay.addLayout(top)
         self.used_note = Banner("The card's mic monitor was used since the PC started. Voice Clarity "
-                                "recordings won't sound right until the PC is fully powered off "
-                                "(shut down, then switch off the power supply).", warn=True)
+                                "recordings won't sound right until the card loses power: shut down "
+                                "and switch off the power supply, or suspend the PC for 25 s with "
+                                "sudo rtcwake -m mem -s 25", warn=True)
+        self.used_note.text.setTextInteractionFlags(Qt.TextSelectableByMouse)
         self.used_note.hide()
         lay.addWidget(self.used_note)
         g = QGridLayout()
@@ -2054,8 +2057,9 @@ class VoiceClarity(QWidget):
                     self, "Voice Clarity",
                     "The card's mic monitor is on. Voice Clarity can't be used with it, so it "
                     "will switch to Listen (the mic through PipeWire, with a short delay).\n\n"
-                    "Voice Clarity recordings may not sound right until the PC is fully powered "
-                    "off (shut down, then switch off the power supply).\n\nTurn Voice Clarity on?",
+                    "Voice Clarity recordings may not sound right until the card loses power: shut "
+                    "down and switch off the power supply, or suspend the PC for 25 s with "
+                    "sudo rtcwake -m mem -s 25\n\nTurn Voice Clarity on?",
                     QMessageBox.Yes | QMessageBox.No, QMessageBox.No) != QMessageBox.Yes:
                 self.refresh()
                 return

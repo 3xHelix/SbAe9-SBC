@@ -3,6 +3,14 @@
 Sound Blaster Command for Linux: the UI for the Creative Sound Blaster AE-9
 driver ([SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv)).
 
+## Unreleased
+
+### Changed
+
+- Recording > Voice Clarity: where the app says the card needs a power-off,
+  it also gives the quicker way: a 25 s suspend (`sudo rtcwake -m mem -s 25`)
+  cuts the card's power too (driver 0.12.4's tip).
+
 ## 0.17.1 (2026-11-09)
 
 Voice Clarity never uses the card's mic monitor. Pairs with

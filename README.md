@@ -127,7 +127,8 @@ and 7.1 output. The driver doesn't support these yet.
   [v0.12.2](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.2) or newer.
   With [v0.12.3](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.3),
   the Voice Clarity tab also says when the card's monitor was used since the
-  PC started (Voice Clarity recordings then need a full power-off).
+  PC started (Voice Clarity recordings then need a full power-off, or a 25 s
+  suspend that cuts the card's power: `sudo rtcwake -m mem -s 25`).
 - For 176.4 kHz (stereo, Direct Mode): driver
   [v0.9.7](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.9.7) or newer
   (`pcm_176k4=Y`).
