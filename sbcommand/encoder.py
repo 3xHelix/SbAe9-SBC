@@ -5,7 +5,8 @@ Windows app does it.
 The AE-9 can't encode by itself: on Windows, Creative's software encodes on
 the PC. Here the same loop runs in user space:
 
-  What U Hear (the card's own mix, hw:AE9,2)  ->  pw-record
+  What U Hear (the card's own mix, hw:AE9,2)  ->  pw-record: 5.1 from the
+     6-channel source of the 5.1 duplex card profile (driver 0.12.1), else 2.0
   -> the user's ffmpeg: AC-3 640 kbps or DTS (experimental), IEC 61937 framing
   -> aplay to the separate optical output (hw:AE9,4, driver 0.12.0) with the
      S/PDIF non-audio bit set, so the receiver decodes it.
@@ -109,26 +110,40 @@ def set_mode(mode):
                        "see journalctl --user -u " + UNIT)
 
 
+def source(nodes):
+    """(What U Hear node, channels) to encode from: the 6-channel source of the
+    5.1 duplex profile, else the stereo one as 2.0 (never 6 ch from the stereo
+    source: its channels 3-6 are only the DSP's upmix). (None, 2) if neither."""
+    if nodes.what_u_hear_51:
+        return nodes.what_u_hear_51, 6
+    return nodes.what_u_hear, 2
+
+
+def surround_profile(nodes):
+    """The card profile that gives 5.1 What U Hear, when the card is on another
+    one that could switch to it; else None."""
+    cur = nodes.card_profile() or ""
+    if nodes.what_u_hear_51 or cur == pipewire.SURROUND_DUPLEX:
+        return None
+    if cur in ("off", "pro-audio") or cur.startswith("pro-audio"):
+        return None
+    return pipewire.SURROUND_DUPLEX if pipewire.SURROUND_DUPLEX in nodes.card_profiles() else None
+
+
 # --- inside the service --------------------------------------------------------
-def _channels(node):
-    try:
-        return max(1, min(6, int(node["props"].get("audio.channels") or 2)))
-    except (TypeError, ValueError):
-        return 2
-
-
 def commands(mode, source, channels):
     """The three processes of the loop: capture, encode, play to optical."""
-    layout = {1: "mono", 2: "stereo", 6: "5.1"}.get(channels, "stereo")
+    layout = "5.1" if channels == 6 else "stereo"
     rec = ["pw-record", "--target", source, "--rate", str(RATE), "--channels", str(channels),
-           "--format", "s16", "-P", '{ node.description="AE-9 encoder" node.dont-reconnect=true }']
+           "--format", "s32", "-P", '{ node.description="AE-9 encoder" node.dont-reconnect=true }']
     if channels == 6:
-        # PipeWire's RL/RR are ffmpeg's 5.1 back pair: the order both expect
+        # the source's order (front-left, front-right, front-center, lfe,
+        # rear-left, rear-right) is ffmpeg's 5.1 and AC-3's input order
         rec += ["--channel-map", "FL,FR,FC,LFE,RL,RR"]
     rec.append("-")
     enc = (["ffmpeg", "-hide_banner", "-loglevel", "error", "-nostdin",
             "-fflags", "nobuffer", "-probesize", "32", "-analyzeduration", "0",
-            "-f", "s16le", "-ar", str(RATE), "-ac", str(channels), "-ch_layout", layout, "-i", "-"]
+            "-f", "s32le", "-ar", str(RATE), "-ac", str(channels), "-ch_layout", layout, "-i", "-"]
            + ENCODERS[mode][2] + ["-flush_packets", "1", "-f", "spdif", "-"])
     out = ["aplay", "-q", "-D", OPTICAL_PCM, "-f", "S16_LE", "-r", str(RATE), "-c", "2",
            "-t", "raw", "--buffer-time=100000", "-"]
@@ -178,6 +193,12 @@ def cleanup():
     return 0
 
 
+def _source_changed(name):
+    n = pipewire.Nodes()
+    src, _ = source(n)
+    return bool(src) and src["name"] != name
+
+
 def run():
     """The service: run the loop for the saved encoder until stopped. A
     non-zero exit makes systemd try again (e.g. PipeWire not up yet)."""
@@ -194,16 +215,20 @@ def run():
     if why:
         print(why, flush=True)
         return 1
-    rec_cmd, enc_cmd, out_cmd = commands(mode, n.what_u_hear["name"], _channels(n.what_u_hear))
+    src, channels = source(n)
+    rec_cmd, enc_cmd, out_cmd = commands(mode, src["name"], channels)
     _suspend_optical_sink(True)
     procs = []
     stopping = []
 
-    def stop(*_):
-        stopping.append(True)
+    def end():
         for p in procs:
             if p.poll() is None:
                 p.terminate()
+
+    def stop(*_):                       # SIGTERM / SIGINT: asked to stop
+        stopping.append(True)
+        end()
 
     signal.signal(signal.SIGTERM, stop)
     signal.signal(signal.SIGINT, stop)
@@ -217,12 +242,19 @@ def run():
         out = subprocess.Popen(out_cmd, stdin=enc.stdout)
         procs.append(out)
         enc.stdout.close()
-        print(f"{ENCODERS[mode][0]} encoder: {n.what_u_hear['name']} "
-              f"({_channels(n.what_u_hear)} ch) -> {OPTICAL_PCM}", flush=True)
+        print(f"{ENCODERS[mode][0]} encoder: {src['name']} ({channels} ch) -> {OPTICAL_PCM}",
+              flush=True)
+        ticks = 0
         while not stopping and all(p.poll() is None for p in procs):
             time.sleep(0.5)
+            ticks += 1
+            if ticks % 6 == 0 and _source_changed(src["name"]):
+                # a card profile switch: exit non-zero, systemd starts it
+                # again on the new source (5.1 <-> 2.0)
+                print("What U Hear changed; restarting on the new source", flush=True)
+                break
     finally:
-        stop()
+        end()
         for p in procs:
             try:
                 p.wait(3)

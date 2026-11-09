@@ -35,7 +35,9 @@ MIC_RATES = (48000, 96000)
 INPUT_RULES = {
     "what_u_hear": (os.path.expanduser(
         "~/.config/wireplumber/wireplumber.conf.d/92-sbae9-sbc-what-u-hear.conf"),
-        "~alsa_input.pci-.*[.]what_u_hear", "What U Hear"),
+        # the stereo source and the 5.1 profile's 6-channel one (0.12.1), by
+        # name, as the driver's 61-ae9-names.conf matches them
+        "~alsa_input.pci-.*[.]what_u_hear(_51)?$", "What U Hear"),
 }
 # Where the driver's own PipeWire configs for optical in and What U Hear go
 PW_CONF_DIR = os.path.expanduser("~/.config/pipewire/pipewire.conf.d")
@@ -69,6 +71,10 @@ def _is_ae9(props):
 # PipeWire source, never taken for the head unit mic.
 EXTRA_INPUTS = ae9.EXTRA_INPUTS
 OPTICAL_IN = EXTRA_INPUTS["optical_in"][0]
+# The 6-channel What U Hear (driver 0.12.1): only in the 5.1 duplex card
+# profile, next to (never instead of) the name rules above. Matched by its
+# ending: "what_u_hear" alone would catch it too.
+WHAT_U_HEAR_51 = re.compile(r"[.]what_u_hear_51$")
 
 
 def _extra_input(props):
@@ -84,6 +90,7 @@ class Nodes:
         objs = dump() if objs is None else objs
         self.sink = self.source = self.device = None
         self.optical_in = self.what_u_hear = self.rear_rca = None
+        self.what_u_hear_51 = None    # 6 ch, 5.1 duplex profile only (0.12.1)
         self.optical_out = None       # the separate optical output (driver 0.12.0)
         self.optical_out_count = 0
         self.extra_count = {}     # how many sources PipeWire lists per extra input
@@ -108,7 +115,10 @@ class Nodes:
             node = {"id": o["id"], "name": props.get("node.name"), "state": info.get("state"),
                     "description": props.get("node.description"), "props": props,
                     "params": info.get("params") or {}}
-            if extra:
+            if extra == "what_u_hear" and WHAT_U_HEAR_51.search(node["name"] or ""):
+                self.what_u_hear_51 = node
+                self.profile_inputs = True
+            elif extra:
                 # two of one input: a hand-copied driver config next to the
                 # 0.11.0 card profile's source. Show the profile's.
                 self.extra_count[extra] = self.extra_count.get(extra, 0) + 1
@@ -130,6 +140,8 @@ class Nodes:
                 self.source = node
             elif mc == "Audio/Device":
                 self.device = node
+        if not self.what_u_hear:
+            self.what_u_hear = self.what_u_hear_51    # the 5.1 profile has only this one
 
     @property
     def sink_is_default(self):
@@ -234,6 +246,7 @@ def set_mute(node_id, muted):
 STEREO_OUT = "output:analog-stereo"
 SURROUND_OUT = "output:analog-surround-51"
 STEREO_IN = "input:analog-stereo"
+SURROUND_DUPLEX = SURROUND_OUT + "+" + STEREO_IN   # has the 6-channel What U Hear
 
 
 def layout_profile(nodes, surround):

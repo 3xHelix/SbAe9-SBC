@@ -5,6 +5,9 @@ driver ([SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv)).
 
 ## Unreleased
 
+Thanks to Kaiba, DarkNikGr and HandsomeHans, whose reports, dumps, tests and
+code shaped the driver's 0.12.1 and this release with it.
+
 ### Added
 
 - An Encoder page (left panel, as in Creative's app): No Encoder, an AC-3
@@ -15,14 +18,25 @@ driver ([SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv)).
   the non-audio flag. It runs as the user service `sbae9-sbc-encoder`
   (install.sh installs it), so it keeps going with the app closed and
   starts again at login. Also `sbae9-sbc ctl encoder off|ac3|dts`. Needs
-  driver 0.12.0 and ffmpeg; 5.1 needs the driver's 6-channel What U Hear
-  (stereo until then).
+  driver 0.12.0 and ffmpeg. 5.1 comes from driver 0.12.1's 6-channel What U
+  Hear, on the card's 5.1 stream with the inputs on (the page has a button
+  to switch to it); on a stereo stream it sends 2.0. Switching the card's
+  stream while it runs moves the encoder to the new source.
+- Playback: the main output shows the desktop's short name when the
+  driver's optional naming config gives it one ("AE-9 Analog Out" from
+  driver 0.12.1, next to "AE-9 Optical Out"), else "Sound Blaster AE-9".
 - Playback > Digital: driver 0.12.1's "Mirror the main output when nothing
   plays to Optical Out" switch (off by default there: optical plays only
   what apps send to AE-9 Optical Out). The page's text follows it.
 
 ### Fixed
 
+- The encoder service restarts after a crash: it used to exit as if asked
+  to stop, so systemd left it off.
+- The What U Hear rate pick names the 6-channel source too (driver
+  0.12.1), as the driver's own rules do, rather than by a name prefix.
+- The "copy config/ae9-*.conf" hints are for driver 0.10.x only; newer
+  drivers add those inputs themselves.
 - The level meter, the mic monitor and the encoder name their PipeWire
   streams properly ("AE-9 level meter", "AE-9 mic monitor"): PipeWire
   doesn't take single quotes, so the names came out cut ("'AE-9").

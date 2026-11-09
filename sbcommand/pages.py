@@ -709,6 +709,10 @@ class PlaybackPage(Page):
         mr.setContentsMargins(0, 4, 0, 0)
         mr.setSpacing(12)
         self.mirror = ToggleSwitch()
+        self.mirror_row.setToolTip(
+            "Optical Out Mirror Switch (driver 0.12.1), off by default: optical and the main "
+            "output are two separate outputs. On, optical copies the main output while "
+            "nothing plays to AE-9 Optical Out. Older drivers always mirror.")
         self.mirror.toggled.connect(lambda on: self.card.set(C.OPTICAL_MIRROR, on))
         mr.addWidget(self.mirror)
         mr.addWidget(label("Mirror the main output when nothing plays to Optical Out"))
@@ -968,7 +972,7 @@ class PlaybackPage(Page):
 
     def refresh(self):
         n = self.ctx.pw.nodes
-        self.dev_name.setText("Sound Blaster AE-9" if n.sink else "AE-9 not found in PipeWire")
+        self.dev_name.setText(output_name(n.sink) if n.sink else "AE-9 not found in PipeWire")
         self.set_default.setEnabled(bool(n.sink) and not n.sink_is_default)
         self.set_default.setText("Default device" if n.sink_is_default else "Set Default")
         self.default_ok.setPixmap(icons.pixmap("check", T.ACCENT_HI if n.sink_is_default else T.DIM, 22))
@@ -1238,12 +1242,24 @@ SURROUND_CFGS = ("4.0", "4.1", "5.1")
 MIC_NAME = "AE-9 Head Unit Mic / Aux"
 
 
-def mic_name(node):
-    """The mic's name to show: the desktop's if it's a short AE-9 one (the
-    driver's naming config gives it "AE-9 Head Unit Mic / Aux"), else that
-    name, not PipeWire's long default ("CA0132 Sound Core3D [...] Analog Stereo")."""
+def short_name(node, fallback):
+    """A device's name to show: the desktop's if it's a short AE-9 one (the
+    driver's optional 61-ae9-names.conf), else `fallback`, not PipeWire's long
+    default ("CA0132 Sound Core3D [...] Analog Stereo"). Only for showing:
+    nodes are told apart by node.name."""
     desc = (node or {}).get("description") or ""
-    return desc if desc.startswith("AE-9") and len(desc) <= 40 else MIC_NAME
+    return desc if desc.startswith("AE-9") and len(desc) <= 40 else fallback
+
+
+def mic_name(node):
+    """The mic's name: "AE-9 Head Unit Mic / Aux" with the naming config."""
+    return short_name(node, MIC_NAME)
+
+
+def output_name(node):
+    """The main output's name: "AE-9 Analog Out" with the naming config
+    (driver 0.12.1), next to "AE-9 Optical Out"."""
+    return short_name(node, "Sound Blaster AE-9")
 
 
 # driver options shown read-only on Settings → Device
@@ -1780,9 +1796,10 @@ class InputSection(QWidget):
                 "PipeWire (systemctl --user restart pipewire).")
         else:
             self.note.setText(
-                f"The driver has it, but PipeWire doesn't list it yet. Copy config/{self.conf} "
-                "from the driver to ~/.config/pipewire/pipewire.conf.d/ and restart PipeWire "
-                "(systemctl --user restart pipewire).")
+                f"The driver has it, but PipeWire doesn't list it yet. On driver 0.10.x, copy "
+                f"config/{self.conf} from the driver to ~/.config/pipewire/pipewire.conf.d/ and "
+                "restart PipeWire (systemctl --user restart pipewire). From 0.11.0 the driver "
+                "adds it itself: update the driver instead.")
         return True
 
 
@@ -2284,6 +2301,18 @@ class EncoderPage(Page):
         self.why = label("", "hint", wrap=True)
         self.why.setStyleSheet(f"color:{T.DANGER};")
         self.lay.addWidget(self.why)
+        # stereo card profile: 2.0 only, until the card plays a 5.1 stream
+        self.surround_row = QWidget()
+        sr = QHBoxLayout(self.surround_row)
+        sr.setContentsMargins(0, 4, 0, 0)
+        self.surround_btn = QPushButton("Switch the card to 5.1")
+        self.surround_btn.setToolTip(
+            "Switches the card profile to the 5.1 stream with the inputs on (as the 5.1 "
+            "Stream choice on Speakers does): What U Hear then has all six channels.")
+        self.surround_btn.clicked.connect(self._to_surround)
+        sr.addWidget(self.surround_btn)
+        sr.addStretch()
+        self.lay.addWidget(self.surround_row)
         self.lay.addSpacing(8)
         self.lay.addWidget(label(
             "To use an encoder:\n"
@@ -2295,6 +2324,8 @@ class EncoderPage(Page):
             "games.\n"
             "• It keeps running with this app closed and starts again at login, until you "
             "pick No Encoder.\n"
+            "• 5.1 needs the card on its 5.1 stream with the inputs on, and driver 0.12.1 or "
+            "newer; otherwise the encoder sends 2.0.\n"
             "• It uses your own ffmpeg (Fedora: ffmpeg-free) and needs driver 0.12.0 or newer.",
             "hint", wrap=True))
         self.lay.addStretch()
@@ -2320,6 +2351,13 @@ class EncoderPage(Page):
         self.why.setText("" if ok else msg)
         self.refresh(keep_why=not ok)
 
+    def _to_surround(self):
+        n = self.ctx.pw.nodes
+        target = encoder.surround_profile(n)
+        if target and pipewire.set_card_profile(n, target):
+            # the service sees What U Hear change and restarts on the 6-channel source
+            self.status.setText("Switching the card to 5.1…")
+
     def refresh(self, keep_why=False):
         n = self.ctx.pw.nodes
         mode = self.ctx.settings["encoder"]
@@ -2331,8 +2369,8 @@ class EncoderPage(Page):
             self.radios[m].setEnabled(not why or m == mode)
             self.radios[m].setToolTip(why)
         running = mode != "off" and encoder.active()
-        src = n.what_u_hear
-        ch = encoder._channels(src) if src else 2
+        src, ch = encoder.source(n)
+        to_51 = encoder.surround_profile(n)
         if mode == "off":
             self.status.setText("Off — optical plays PCM")
         elif running:
@@ -2348,12 +2386,15 @@ class EncoderPage(Page):
             if mode != "off" and not running and not shown:
                 shown = f"See journalctl --user -u {encoder.UNIT} for why it stopped."
             if not shown and running and ch == 2:
-                shown = ("What U Hear is stereo on this driver, so the encoder sends 2.0; "
-                         "5.1 comes with the driver's 6-channel What U Hear.")
+                shown = ("What U Hear is stereo in this card profile, so the encoder sends 2.0."
+                         if to_51 else
+                         "What U Hear is stereo here, so the encoder sends 2.0; 5.1 needs "
+                         "driver 0.12.1 and the card's 5.1 stream with the inputs on.")
                 self.why.setStyleSheet("")
             else:
                 self.why.setStyleSheet(f"color:{T.DANGER};")
             self.why.setText(shown)
+        self.surround_row.setVisible(bool(mode != "off" and ch == 2 and to_51))
 
 
 class MixerPage(Page):

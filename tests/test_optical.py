@@ -459,7 +459,7 @@ class WhatUHearRuleRateTest(S.AppTestCase):
         self.settle()
         with open(self.path) as f:
             text = f.read()
-        self.assertIn('node.name = "~alsa_input.pci-.*[.]what_u_hear"', text)
+        self.assertIn('node.name = "~alsa_input.pci-.*[.]what_u_hear(_51)?$"', text)
         self.assertIn("audio.rate = 96000", text)
         self.assertEqual(pipewire.input_rule_rate("what_u_hear"), 96000)
         self.assertIn(("systemctl", "--user", "restart", "wireplumber"), S.PW.calls)

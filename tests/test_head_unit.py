@@ -92,6 +92,11 @@ class HeadUnitTest(S.AppTestCase):
         self.assertEqual(pages.mic_name({"description": "AE-9 Head Unit Mic / Aux"}), "AE-9 Head Unit Mic / Aux")
         self.assertEqual(pages.mic_name({"description": "AE-9 Studio Mic"}), "AE-9 Studio Mic")
 
+    def test_output_name_is_short(self):
+        long = "CA0132 Sound Core3D [Sound Blaster AE-7/AE-9] (Sound Blaster AE-9) Analog Stereo"
+        self.assertEqual(pages.output_name({"description": long}), "Sound Blaster AE-9")
+        self.assertEqual(pages.output_name({"description": "AE-9 Analog Out"}), "AE-9 Analog Out")
+
 
 class MicGainTest(S.AppTestCase):
     def test_released_drivers_xlr_gain_name_still_works(self):
