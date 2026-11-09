@@ -17,6 +17,7 @@ an encoder: it uses the ffmpeg already installed, and says when it's missing.
 """
 
 import os
+import select
 import shutil
 import signal
 import subprocess
@@ -36,6 +37,11 @@ ENCODERS = {
     "dts": ("DTS", "dca", ["-c:a", "dca", "-strict", "experimental"]),
 }
 RATE = 48000
+# "Main output with effects": What U Hear looped to the optical output on the
+# PC, as Windows' "Play Stereo Mix to Digital Output" does. Same service.
+FX = "fx"
+MODES = (FX,) + tuple(ENCODERS)
+FX_NAME = "ae9-optical-fx"
 OPTICAL_PCM = f"hw:{ae9.CARD_ID},{C.OPTICAL_OUT_PCM}"
 
 
@@ -67,6 +73,18 @@ def ffmpeg_encoders():
 
 def missing(mode, nodes=None):
     """Why `mode` can't run here, or "" when it can."""
+    if mode == FX:
+        for tool in ("pw-loopback", "systemctl"):
+            if not shutil.which(tool):
+                return f"Needs {tool}."
+        nodes = nodes if nodes is not None else pipewire.Nodes()
+        if not nodes.optical_out:
+            return "Needs AE-9 Optical Out in PipeWire (driver 0.12.0 and its card profile)."
+        if not nodes.what_u_hear:
+            return "Needs the What U Hear input in PipeWire (Recording > Other Input)."
+        if not os.path.exists(UNIT_PATH):
+            return "Run install.sh once: it installs the optical out's background service."
+        return ""
     if not shutil.which("ffmpeg"):
         return "Needs ffmpeg (Fedora: sudo dnf install ffmpeg-free)."
     if ENCODERS[mode][1] not in ffmpeg_encoders():
@@ -90,17 +108,19 @@ def active():
 
 
 def set_mode(mode):
-    """Pick the encoder: "off", "ac3" or "dts". Saved, and the service is
-    (re)started and enabled for login, or stopped and disabled. Returns
-    (ok, message)."""
-    if mode != "off" and mode not in ENCODERS:
-        return False, f"encoder: off, {', '.join(ENCODERS)}"
+    """Pick what the service runs: "off", "fx" (the effects loop), "ac3" or
+    "dts". Saved, and the service is (re)started and enabled for login, or
+    stopped and disabled. Returns (ok, message)."""
+    if mode != "off" and mode not in MODES:
+        return False, f"encoder: off, {', '.join(MODES)}"
     if mode != "off":
         why = missing(mode)
         if why:
             return False, why
     settings = config.Settings()
     settings["encoder"] = mode
+    if mode in ENCODERS:
+        settings["encoder_last"] = mode
     if mode == "off":
         _run("systemctl", "--user", "disable", "--now", UNIT, timeout=15)
         return True, ""
@@ -128,6 +148,45 @@ def surround_profile(nodes):
     if cur in ("off", "pro-audio") or cur.startswith("pro-audio"):
         return None
     return pipewire.SURROUND_DUPLEX if pipewire.SURROUND_DUPLEX in nodes.card_profiles() else None
+
+
+# --- Playback > Digital's "Optical out plays" ------------------------------------
+CHOICES = ("own", "mirror", FX, "ac3", "dts")
+
+
+def set_mirror(on):
+    """The driver's Optical Out Mirror Switch (0.12.1); False without it."""
+    try:
+        m = _mixer()
+    except OSError:
+        return False
+    if not m:
+        return False
+    try:
+        if not m.has(C.OPTICAL_MIRROR):
+            return False
+        m.set(C.OPTICAL_MIRROR, bool(on))
+        return True
+    except OSError:
+        return False
+    finally:
+        m.close()
+
+
+def set_optical(choice, mirror=set_mirror):
+    """What optical out plays, one of CHOICES: its own output, the mirror of
+    the main output, the main output with effects (the loop), or an encoder.
+    Each turns the others off. `mirror` sets the driver's mirror switch (the
+    app passes its own). Returns (ok, message)."""
+    if choice not in CHOICES:
+        return False, f"optical: {', '.join(CHOICES)}"
+    service = choice if choice in MODES else "off"
+    if choice != "mirror":
+        mirror(False)           # first: a stopping loop mustn't hand over to the mirror
+    ok, msg = set_mode(service)
+    if ok and choice == "mirror":
+        mirror(True)
+    return ok, msg
 
 
 def pause():
@@ -220,6 +279,8 @@ def run():
     """The service: run the loop for the saved encoder until stopped. A
     non-zero exit makes systemd try again (e.g. PipeWire not up yet)."""
     mode = config.Settings()["encoder"]
+    if mode == FX:
+        return run_fx()
     if mode not in ENCODERS:
         return 0
     n = None
@@ -278,4 +339,118 @@ def run():
             except subprocess.TimeoutExpired:
                 p.kill()
         cleanup()
+    return 0 if stopping else 1
+
+
+# --- the effects loop --------------------------------------------------------------
+def _spa(props):
+    """SPA JSON for pw-loopback's stream properties (double quotes only)."""
+    def val(v):
+        if isinstance(v, bool):
+            return "true" if v else "false"
+        if isinstance(v, list):
+            return "[ " + " ".join(v) + " ]"
+        return f'"{v}"'
+    return "{ " + " ".join(f"{k}={val(v)}" for k, v in props.items()) + " }"
+
+
+def fx_command(source, channels, sink):
+    """pw-loopback: What U Hear -> AE-9 Optical Out, stereo. Both streams keep
+    node.dont-fallback (a missing target must not fall back to the mic, or to
+    the analog output: a feedback howl) and node.linger (WirePlumber would
+    otherwise remove such a stream when its target goes, e.g. on a profile
+    switch). The 6-channel What U Hear is downmixed to stereo by PipeWire."""
+    cap = {"node.description": "AE-9 Effects to Optical (What U Hear)",
+           "target.object": source, "node.dont-fallback": True, "node.linger": True,
+           "audio.position": ["FL", "FR"]}
+    if channels == 2:
+        cap["stream.dont-remix"] = True
+    play = {"node.description": "AE-9 Effects to Optical",
+            "target.object": sink, "node.dont-fallback": True, "node.linger": True,
+            "stream.dont-remix": True, "audio.position": ["FL", "FR"]}
+    return ["pw-loopback", "-n", FX_NAME, "--capture-props", _spa(cap),
+            "--playback-props", _spa(play)]
+
+
+def fx_wanted(nodes):
+    """(source, channels, sink) while the loop should run, else None. It runs
+    only while the main output plays: the driver loads a picked headphone
+    profile only once every stream has stopped, so an always-on loop would
+    hold it back. It stops when the main output suspends (idle for a few s)."""
+    src, ch = source(nodes)
+    sink = nodes.sink
+    if not (src and nodes.optical_out and sink):
+        return None
+    if sink.get("state") == "running":
+        return src["name"], ch, nodes.optical_out["name"]
+    return False if sink.get("state") == "idle" else None
+
+
+def run_fx():
+    """The effects loop, gated on the main output. Follows PipeWire's events
+    (pactl subscribe), and looks again every 2 s."""
+    why = ""
+    for _ in range(30):                 # at login, PipeWire may still be starting
+        why = missing(FX)
+        if not why:
+            break
+        time.sleep(1)
+    if why:
+        print(why, flush=True)
+        return 1
+    stopping = []
+    loop = [None, None]                 # the pw-loopback process, what it runs
+
+    def end_loop():
+        p = loop[0]
+        if p and p.poll() is None:
+            p.terminate()
+            try:
+                p.wait(3)
+            except subprocess.TimeoutExpired:
+                p.kill()
+        loop[:] = [None, None]
+
+    def stop(*_):
+        stopping.append(True)
+
+    signal.signal(signal.SIGTERM, stop)
+    signal.signal(signal.SIGINT, stop)
+    sub = None
+    if shutil.which("pactl"):
+        try:
+            sub = subprocess.Popen(["pactl", "subscribe"], stdout=subprocess.PIPE,
+                                   stderr=subprocess.DEVNULL)
+        except OSError:
+            sub = None
+    print("Effects to optical: waiting for the main output to play", flush=True)
+    try:
+        while not stopping:
+            want = fx_wanted(pipewire.Nodes())
+            if loop[0] and loop[0].poll() is not None:
+                print("pw-loopback ended; starting it again", flush=True)
+                loop[:] = [None, None]
+            if want is False:
+                pass                    # idle between tracks: keep what runs
+            elif want != loop[1]:
+                if loop[0]:
+                    end_loop()
+                    print("Effects to optical: off", flush=True)
+                if want:
+                    loop[:] = [subprocess.Popen(fx_command(*want)), want]
+                    print(f"Effects to optical: {want[0]} ({want[1]} ch) -> {want[2]}", flush=True)
+            # wait for a PipeWire event, or 2 s
+            fds = [sub.stdout] if sub and sub.poll() is None else []
+            try:
+                ready = select.select(fds, [], [], 2.0)[0] if fds else (time.sleep(2) or [])
+            except InterruptedError:
+                ready = []
+            if ready:
+                if not os.read(sub.stdout.fileno(), 65536):
+                    sub = None
+                time.sleep(0.2)         # let a burst of events pass
+    finally:
+        end_loop()
+        if sub and sub.poll() is None:
+            sub.terminate()
     return 0 if stopping else 1

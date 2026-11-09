@@ -79,5 +79,28 @@ class HeadphoneProfileTest(S.AppTestCase):
         self.assertFalse(pg.hp_prof_note.isVisible())
 
 
+    def test_renamed_items_show_live(self):
+        """Driver 0.12.2's custom slots: renaming one (hp_custom) sends an INFO
+        event, and the picker shows the new name without a restart."""
+        self.add()
+        pg = self.playback()
+        named = MODELS + ["Beyerdynamic DT 990 Pro", "Custom 2"]
+        self.mixer.set_items(C.HP_PROFILE, named)
+        self.mixer._event(self.mixer.controls[C.HP_PROFILE].numid, S.alsa.EVENT_MASK_INFO)
+        S.process(50)       # the card's event watcher; no manual refresh
+        self.assertEqual([pg.hp_prof.itemText(k) for k in range(pg.hp_prof.count())], named)
+
+
+    def test_says_the_encoder_holds_profiles_back(self):
+        self.add(value=1)
+        S.ENCODER["active"] = True
+        self.ctx.settings["encoder"] = "ac3"
+        pg = self.playback()
+        self.assertIn("switch the encoder off", pg.hp_prof_note.text())
+        self.ctx.settings["encoder"] = "fx"       # the effects loop stops by itself
+        pg.refresh()
+        self.assertNotIn("encoder", pg.hp_prof_note.text())
+
+
 if __name__ == "__main__":
     unittest.main()

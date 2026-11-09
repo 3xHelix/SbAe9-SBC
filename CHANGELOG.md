@@ -3,6 +3,27 @@
 Sound Blaster Command for Linux: the UI for the Creative Sound Blaster AE-9
 driver ([SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv)).
 
+## Unreleased
+
+### Added
+
+- Playback > Digital: one "Optical out plays" choice instead of the mirror
+  switch: its own output, the mirror of the main output (bit-exact, no
+  effects), the main output with effects (SBX / EQ), or the encoder. Each
+  turns the others off. "With effects" is new: the card's mix (What U Hear)
+  looped to AE-9 Optical Out on the PC, as Windows' "Play Stereo Mix to
+  Digital Output" does. It runs only while the main output plays, so a
+  picked headphone profile still loads once playback stops; in the 5.1
+  stream it's a stereo downmix. About 20-45 ms behind the speakers. Needs
+  driver 0.12.1's What U Hear and optical output in PipeWire. Also
+  `sbae9-sbc ctl optical own|mirror|fx|ac3|dts`.
+- Headphone Profile and the Encoder page note that while the encoder runs,
+  a new headphone profile loads only once it's switched off.
+- Panel widget (KDE): the card icon is drawn by the widget: a chip in DSP
+  mode, a bitstream in Direct Mode; green when idle, yellow while playing,
+  red while recording. Phantom power on is a red dot (the whole card used
+  to turn red). `ctl status` reports "playing" and "recording".
+
 ## 0.16.1 (2026-11-08)
 
 Fixes the Encoder from 0.16.0, which sent noise. Pairs with

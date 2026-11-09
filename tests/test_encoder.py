@@ -6,7 +6,7 @@ import shutil
 import unittest
 
 import support as S
-from sbcommand import encoder, pages, pipewire
+from sbcommand import card as C, encoder, pages, pipewire
 
 
 class Base(S.AppTestCase):
@@ -146,6 +146,115 @@ class Surround51Test(Base):
         self.assertFalse(pg.surround_row.isVisible())
         self.assertIn("(5.1)", pg.status.text())
         self.assertEqual(pg.why.text(), "")
+
+
+class OpticalPlaysTest(Base):
+    """Playback > Digital's "Optical out plays": own / mirror / effects / encoder."""
+
+    def setUp(self):
+        super().setUp()
+        self.mixer.add_bool(C.OPTICAL_OUT, True)
+        self.mixer.add_bool(C.OPTICAL_MIRROR, False)
+
+    def digital(self):
+        self.snapshot()
+        pg = super(Base, self).page(pages.PlaybackPage)
+        pg.show_tab(2)
+        S.process(20)
+        pg.refresh()
+        return pg
+
+    def pick(self, pg, key):
+        pg._pick_plays(pg.plays.findData(key))
+        S.process(20)
+        pg.refresh()
+
+    def test_choices(self):
+        pg = self.digital()
+        self.assertEqual([pg.plays.itemData(k) for k in range(pg.plays.count())],
+                         ["own", "mirror", "fx", "enc"])
+        self.assertEqual(pg.plays.currentData(), "own")
+        self.assertEqual(pg.plays.itemText(3), "Encoder: AC-3")
+
+    def test_effects_turns_the_mirror_off_and_starts_the_loop(self):
+        self.mixer.external(C.OPTICAL_MIRROR, True)
+        pg = self.digital()
+        self.assertEqual(pg.plays.currentData(), "mirror")
+        self.pick(pg, "fx")
+        self.assertFalse(self.mixer.values[C.OPTICAL_MIRROR])
+        self.assertEqual(self.window().ctx.settings["encoder"], "fx")
+        self.assertIn("restart", self.systemctl())
+        self.assertEqual(pg.plays.currentData(), "fx")
+        self.assertIn("echo", pg.plays_note.text())
+        # the Encoder page says so, and its "No Encoder" leaves the loop alone
+        ep = super(Base, self).page(pages.EncoderPage)
+        self.assertIn("with effects", ep.status.text())
+        S.ENCODER["calls"].clear()
+        ep.group.button(0).click()
+        self.assertEqual(self.systemctl(), [])
+        self.assertEqual(self.window().ctx.settings["encoder"], "fx")
+
+    def test_mirror_stops_the_service(self):
+        pg = self.digital()
+        self.pick(pg, "fx")
+        self.pick(pg, "mirror")
+        self.assertTrue(self.mixer.values[C.OPTICAL_MIRROR])
+        self.assertEqual(self.window().ctx.settings["encoder"], "off")
+        self.assertFalse(S.ENCODER["active"])
+        self.assertEqual(pg.plays.currentData(), "mirror")
+
+    def test_encoder_choice_uses_the_last_encoder(self):
+        self.window().ctx.settings["encoder_last"] = "dts"
+        pg = self.digital()
+        self.assertEqual(pg.plays.itemText(3), "Encoder: DTS")
+        self.pick(pg, "enc")
+        self.assertEqual(self.window().ctx.settings["encoder"], "dts")
+        self.pick(pg, "own")
+        self.assertEqual(self.window().ctx.settings["encoder"], "off")
+        self.assertFalse(self.mixer.values[C.OPTICAL_MIRROR])
+
+    def test_no_effects_without_what_u_hear(self):
+        S.PW.objects[:] = [o for o in S.PW.objects
+                           if "what_u_hear" not in str((o.get("info") or {}).get("props", {}).get("node.name"))]
+        pg = self.digital()
+        self.assertEqual(pg.plays.findData("fx"), -1)
+
+
+class EffectsLoopTest(Base):
+    def test_both_streams_never_fall_back(self):
+        cmd = encoder.fx_command("alsa_input.x.what_u_hear", 2, "alsa_output.x.optical_out")
+        cap = cmd[cmd.index("--capture-props") + 1]
+        play = cmd[cmd.index("--playback-props") + 1]
+        for props in (cap, play):
+            self.assertIn("node.dont-fallback=true", props)
+            self.assertIn("node.linger=true", props)
+            self.assertNotIn("'", props)                  # SPA JSON: double quotes only
+        self.assertIn('target.object="alsa_input.x.what_u_hear"', cap)
+        self.assertIn('target.object="alsa_output.x.optical_out"', play)
+        self.assertIn("stream.dont-remix=true", cap)
+
+    def test_51_source_is_downmixed(self):
+        cap = encoder.fx_command("alsa_input.x.what_u_hear_51", 6, "o")[4]
+        self.assertNotIn("dont-remix", cap)               # PipeWire mixes 6 -> 2
+        self.assertIn("audio.position=[ FL FR ]", cap)
+
+    def test_runs_only_while_the_main_output_plays(self):
+        main = next(o for o in S.PW.objects
+                    if (o.get("info") or {}).get("props", {}).get("media.class") == "Audio/Sink"
+                    and "optical" not in o["info"]["props"]["node.name"])
+
+        def wanted(state):
+            main["info"]["state"] = state
+            return encoder.fx_wanted(pipewire.Nodes())
+        self.assertEqual(wanted("running"), ("alsa_input.pci-0000_06_00.0.what_u_hear", 2,
+                                             "alsa_output.pci-0000_06_00.0.optical_out"))
+        self.assertIs(wanted("idle"), False)              # between tracks: keep it
+        self.assertIsNone(wanted("suspended"))            # stopped: profiles can load
+
+    def test_needs_the_optical_sink_itself(self):
+        S.PW.objects[:] = [o for o in S.PW.objects
+                           if "optical_out" not in str((o.get("info") or {}).get("props", {}).get("node.name"))]
+        self.assertIn("Optical Out", encoder.missing(encoder.FX))
 
 
 if __name__ == "__main__":

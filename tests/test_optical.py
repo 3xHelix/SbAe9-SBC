@@ -134,15 +134,16 @@ class SeparateOpticalOutTest(S.AppTestCase):
         S.PW.add_optical_out()
         self.mixer.add_bool(C.OPTICAL_MIRROR, False)
         pg = self.digital()
-        self.assertTrue(pg.mirror_row.isVisible())
-        self.assertFalse(pg.mirror.isChecked())
+        self.assertTrue(pg.plays_row.isVisible())
+        self.assertEqual(pg.plays.currentData(), "own")
         self.assertEqual(pg.optical_lbl.text(), "On — waiting for AE-9 Optical Out")
         self.assertIn("stays quiet", pg.oo_note.text())
         self.assertIn("mirroring is off", pg.optical_quality_note.text())
-        pg.mirror.setChecked(True)
+        pg._pick_plays(pg.plays.findData("mirror"))
         self.assertIn((C.OPTICAL_MIRROR, True), self.mixer.writes)
         S.process(20)
         pg.refresh()
+        self.assertEqual(pg.plays.currentData(), "mirror")
         self.assertNotIn("waiting", pg.optical_lbl.text())    # the mirror's own state now
         self.assertIn("mirrors the main output", pg.oo_note.text())
 
@@ -156,7 +157,8 @@ class SeparateOpticalOutTest(S.AppTestCase):
     def test_no_mirror_switch_on_0_12_0(self):
         S.PW.add_optical_out()
         pg = self.digital()
-        self.assertFalse(pg.mirror_row.isVisible())
+        self.assertEqual(pg.plays.findData("mirror"), -1)
+        self.assertIn("mirrors the main output while idle", pg.plays.itemText(0))
         self.assertIn("mirrors the main output", pg.oo_note.text())
 
     def test_no_passthrough_row_without_the_control(self):

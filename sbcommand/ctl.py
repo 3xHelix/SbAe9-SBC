@@ -15,6 +15,8 @@ the app, if it's open, sees them as changes made elsewhere.
   sbae9-sbc ctl phantom 0|1            48 V; the caller asks the user first
   sbae9-sbc ctl preset <Hz> <frames>   rate and quantum at once
   sbae9-sbc ctl encoder off|ac3|dts    the optical encoder (driver 0.12.0+, ffmpeg)
+  sbae9-sbc ctl optical own|mirror|fx|ac3|dts
+                                       what optical out plays (fx: main output with effects)
 
   direct, sbx and output also take "toggle" (the keyboard shortcuts use it).
   --notify shows the result as a desktop notification too.
@@ -27,6 +29,8 @@ import json
 import shutil
 import subprocess
 import sys
+
+from sbae9kit import ae9
 
 from . import alsa, config, pipewire
 from . import card as C
@@ -118,6 +122,10 @@ def apply_rate(settings, card, nodes, direct=None):
                            settings["quantum"] or 0)
 
 
+def _pcm_open(pcm):
+    return ae9.pcm_open_at(pcm, ae9.CARD_ID) is not None
+
+
 def status(card, settings):
     nodes = pipewire.Nodes()
     out = {"present": card.present, "pipewire": nodes.sink is not None}
@@ -132,6 +140,7 @@ def status(card, settings):
             return 0
     direct = bool(card.get(C.DIRECT, True))
     live = pipewire.card_stream()
+    own_streams_free = settings["encoder"] == "off"
     offered = pipewire.card_rates(C.module_param("pcm_rates") or "1", C.plays_176k4())
     depths = card.items(C.BIT_DEPTH)
     out.update({
@@ -153,6 +162,12 @@ def status(card, settings):
         "quanta": list(pipewire.QUANTA),
         "quantum_floor": pipewire.QUANTUM,
         "live": {"rate": live[0], "channels": live[1]} if live else None,
+        # for the panel icon: playing (yellow) / recording (red). The optical
+        # service's own streams (effects loop, encoder: What U Hear in, optical
+        # out) run on their own, so they don't count.
+        "playing": bool(live) or (own_streams_free and _pcm_open("pcm4p")),
+        "recording": any(_pcm_open(p) for p in ("pcm0c", "pcm1c", "pcm3c"))
+                     or (own_streams_free and _pcm_open("pcm2c")),
         "phantom": None,
     })
     if card.has(C.HU_PHANTOM):
@@ -274,14 +289,20 @@ def main(argv):
         if argv[0] == "status":
             print(json.dumps(status(card, settings)))
             return 0
-        if argv[0] in ("encoder", "encoder-run", "encoder-cleanup"):
+        if argv[0] in ("encoder", "encoder-run", "encoder-cleanup", "optical"):
             card.close()          # the encoder opens the mixer itself
             from . import encoder
             if argv[0] == "encoder-run":
                 return encoder.run()
             if argv[0] == "encoder-cleanup":
                 return encoder.cleanup()
-            ok, msg = encoder.set_mode(argv[1] if len(argv) > 1 else "")
+            arg = argv[1] if len(argv) > 1 else ""
+            if argv[0] == "optical":
+                ok, msg = encoder.set_optical(arg)
+            elif arg == encoder.FX:
+                ok, msg = False, "encoder: off, ac3, dts (the effects loop is ctl optical fx)"
+            else:
+                ok, msg = encoder.set_mode(arg)
             print(json.dumps({"ok": ok, "error": msg}))
             return 0 if ok else 1
         cmd, arg = argv[0], argv[1] if len(argv) > 1 else None

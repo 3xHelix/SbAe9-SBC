@@ -703,22 +703,21 @@ class PlaybackPage(Page):
         sb.addLayout(srow)
         self.oo_note = label("", "hint", wrap=True)
         sb.addWidget(self.oo_note)
-        # driver 0.12.1: mirroring the main output is a choice (off by default)
-        self.mirror_row = QWidget()
-        mr = QHBoxLayout(self.mirror_row)
+        # what optical plays: one choice (mirror switch, effects loop, encoder)
+        self.plays_row = QWidget()
+        mr = QHBoxLayout(self.plays_row)
         mr.setContentsMargins(0, 4, 0, 0)
         mr.setSpacing(12)
-        self.mirror = ToggleSwitch()
-        self.mirror_row.setToolTip(
-            "Optical Out Mirror Switch (driver 0.12.1), off by default: optical and the main "
-            "output are two separate outputs. On, optical copies the main output while "
-            "nothing plays to AE-9 Optical Out. Older drivers always mirror.")
-        self.mirror.toggled.connect(lambda on: self.card.set(C.OPTICAL_MIRROR, on))
-        mr.addWidget(self.mirror)
-        mr.addWidget(label("Mirror the main output when nothing plays to Optical Out"))
+        mr.addWidget(label("Optical out plays"))
+        self.plays = QComboBox()
+        self.plays.setMinimumWidth(340)
+        self.plays.activated.connect(self._pick_plays)
+        mr.addWidget(self.plays)
+        mr.addWidget(info_button(OPTICAL_PLAYS_TIP))
         mr.addStretch()
-        self.mirror_row.setVisible(False)
-        sb.addWidget(self.mirror_row)
+        sb.addWidget(self.plays_row)
+        self.plays_note = label("", "hint", wrap=True)
+        sb.addWidget(self.plays_note)
         # passthrough: shown, not switched (ae9-optical-passthrough sets it per file)
         self.pt_row = QWidget()
         pr = QHBoxLayout(self.pt_row)
@@ -1067,6 +1066,10 @@ class PlaybackPage(Page):
             note = f"Acts at 48 kHz; the card is playing at {live[0] / 1000:g} kHz now."
         else:
             note = ""
+        if curves and self.ctx.settings["encoder"] in encoder.ENCODERS and encoder.active():
+            note = (note + "\n" if note else "") + (
+                "While the encoder runs, a new headphone profile loads only after you switch "
+                "the encoder off (profiles load when every stream is stopped).")
         self.hp_prof_note.setText(note)
         self.hp_prof_note.setVisible(bool(note))
 
@@ -1106,10 +1109,7 @@ class PlaybackPage(Page):
                              else "Not set up in PipeWire")
         self.oo_default.setVisible(bool(node))
         self.oo_ok.setVisible(bool(node))
-        has_mirror = self.card.has(C.OPTICAL_MIRROR)
-        self.mirror_row.setVisible(has_mirror)
-        if has_mirror:
-            self.mirror.setCheckedSilently(bool(self.card.get(C.OPTICAL_MIRROR)))
+        self._refresh_plays(n)
         about = ("Apps can play to optical on its own, as a second output: 44.1–192 kHz, "
                  "16 or 24-bit stereo, with the main output carrying on as before. "
                  + ("While nothing plays to it, optical mirrors the main output. "
@@ -1139,6 +1139,75 @@ class PlaybackPage(Page):
             self.pt_lbl.setStyleSheet(f"color:{T.DANGER};" if pt else "")
             self.pt_clear.setVisible(bool(pt))
         return pipewire.optical_out_stream()
+
+    PLAYS = {
+        "own": "Its own output",
+        "mirror": "Mirror of the main output (bit-exact, no effects)",
+        encoder.FX: "Main output with effects (SBX / EQ)",
+        "enc": "Encoder: {}",
+    }
+
+    def _plays_choice(self):
+        mode = self.ctx.settings["encoder"]
+        if mode == encoder.FX:
+            return encoder.FX
+        if mode in encoder.ENCODERS:
+            return "enc"
+        return "mirror" if self._mirroring() and self.card.has(C.OPTICAL_MIRROR) else "own"
+
+    def _refresh_plays(self, n):
+        has_mirror = self.card.has(C.OPTICAL_MIRROR)
+        cur = self._plays_choice()
+        last = self.ctx.settings["encoder_last"]
+        last = last if last in encoder.ENCODERS else "ac3"
+        enc = self.ctx.settings["encoder"] if cur == "enc" else last
+        keys = ["own"] + (["mirror"] if has_mirror else [])
+        if (n.what_u_hear and n.optical_out) or cur == encoder.FX:
+            keys.append(encoder.FX)
+        keys.append("enc")
+        texts = [self.PLAYS[k].format(encoder.ENCODERS[enc][0]) for k in keys]
+        if not has_mirror:
+            texts[0] = "Its own output (mirrors the main output while idle)"
+        if [self.plays.itemText(k) for k in range(self.plays.count())] != texts:
+            self.plays.clear()
+            for k, t in zip(keys, texts):
+                self.plays.addItem(t, k)
+        self.plays.setCurrentIndex(max(0, self.plays.findData(cur)))
+        if cur == "own":
+            note = ("Optical plays only what apps send to AE-9 Optical Out." if has_mirror else
+                    "Optical plays what apps send to AE-9 Optical Out, and copies the main "
+                    "output while nothing does (driver 0.12.1 makes that a choice).")
+        elif cur == "mirror":
+            note = ("While nothing plays to AE-9 Optical Out, optical copies the main output "
+                    "as sent: before SBX and EQ, bit for bit.")
+        elif cur == encoder.FX:
+            playing = encoder.active() and pipewire.optical_out_stream() is not None
+            note = ("Optical plays the card's mix with SBX and EQ (What U Hear), "
+                    + ("now." if playing else "while the main output plays.")
+                    + " It runs about 20–45 ms behind the main output: with both audible "
+                    "you'll hear an echo. The headphone profile isn't in it.")
+            if not encoder.active():
+                note = (encoder.missing(encoder.FX, n)
+                        or f"Picked, but not running: see journalctl --user -u {encoder.UNIT}.")
+        else:
+            note = ("Surround to a receiver, encoded on the PC: the Encoder page has the "
+                    "details and the DTS choice.")
+        self.plays_note.setText(note)
+
+    def _pick_plays(self, i):
+        choice = self.plays.itemData(i)
+        if choice == self._plays_choice():
+            return
+        if choice == "enc":
+            last = self.ctx.settings["encoder_last"]
+            choice = last if last in encoder.ENCODERS else "ac3"
+        self.plays_note.setText("Switching…")
+        QApplication.processEvents()
+        ok, msg = encoder.set_optical(choice, mirror=lambda on: (
+            self.card.has(C.OPTICAL_MIRROR) and self.card.set(C.OPTICAL_MIRROR, on)))
+        self.refresh()
+        if not ok:
+            self.plays_note.setText(msg)
 
     def _mirroring(self):
         """Optical copies the main output while nothing plays to it: always
@@ -1316,6 +1385,18 @@ HP_PROFILE_TIP = ("Creative's EQ correction for your headphone model, the same c
                   "The curves are Creative's and aren't shipped with the driver: "
                   "ae9-get-firmware installs them from Creative's installer "
                   "(AECMDMasterInstaller_3.4.92.00.exe).")
+OPTICAL_PLAYS_TIP = (
+    "What the optical jack plays. One at a time:\n\n"
+    "• Its own output: only what apps send to AE-9 Optical Out.\n"
+    "• Mirror of the main output: the driver copies the stream sent to the main "
+    "output, bit for bit, before SBX and EQ (driver 0.12.1's mirror switch).\n"
+    "• Main output with effects: the card's mix after SBX and EQ (What U Hear) "
+    "looped to the optical output on the PC, as Windows' \"Play Stereo Mix to "
+    "Digital Output\" does. Runs only while the main output plays, so headphone "
+    "profiles still load when it stops. A little behind the speakers.\n"
+    "• Encoder: AC-3 (or DTS) surround for a receiver; see the Encoder page.\n\n"
+    "With the mirror, an app playing to AE-9 Optical Out takes the jack while it "
+    "plays; with effects, it's mixed in.")
 DAC_FILTER_TIP = (
     "The ES9038Q2M's digital interpolation filter. It runs in the DAC, so it "
     "applies in Direct Mode too; it is not an SBX effect. The names are the "
@@ -2322,6 +2403,8 @@ class EncoderPage(Page):
             "play to AE-9 Optical Out, and the mirror of the main output (if on) stops.\n"
             "• It adds a delay of about 0.1–0.2 s: fine for films and music, noticeable in "
             "games.\n"
+            "• While it runs, a new headphone profile loads only after you switch the encoder "
+            "off (profiles load when every stream is stopped).\n"
             "• It keeps running with this app closed and starts again at login, until you "
             "pick No Encoder.\n"
             "• 5.1 needs the card on its 5.1 stream with the inputs on, and driver 0.12.1 or "
@@ -2343,8 +2426,13 @@ class EncoderPage(Page):
 
     def _pick(self, i):
         mode = self.MODES[i][0]
-        if mode == self.ctx.settings["encoder"] and (mode == "off" or encoder.active()):
+        cur = self.ctx.settings["encoder"]
+        if mode == "off" and cur not in encoder.ENCODERS:
+            return              # no encoder already (Digital's effects loop is its own choice)
+        if mode == cur and (mode == "off" or encoder.active()):
             return
+        if mode != "off" and self.card.has(C.OPTICAL_MIRROR):
+            self.card.set(C.OPTICAL_MIRROR, False)
         self.status.setText("Starting…" if mode != "off" else "Stopping…")
         QApplication.processEvents()
         ok, msg = encoder.set_mode(mode)
@@ -2371,7 +2459,10 @@ class EncoderPage(Page):
         running = mode != "off" and encoder.active()
         src, ch = encoder.source(n)
         to_51 = encoder.surround_profile(n)
-        if mode == "off":
+        if mode == "off" and self.ctx.settings["encoder"] == encoder.FX:
+            self.status.setText("Off — optical plays the main output with effects "
+                                "(Playback > Digital)")
+        elif mode == "off":
             self.status.setText("Off — optical plays PCM")
         elif running:
             layout = {2: "stereo", 6: "5.1"}.get(ch, f"{ch} ch")

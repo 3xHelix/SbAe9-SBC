@@ -77,13 +77,14 @@ if command -v kpackagetool6 >/dev/null 2>&1; then
     fi
 fi
 
-# the optical encoder's user service (AC-3 / DTS over optical, driver 0.12.0+).
-# Installed, not enabled: the app's Encoder page enables it when you pick one.
+# the optical out's user service (driver 0.12.0+): the AC-3 / DTS encoder, or
+# the main output with effects looped to optical. Installed, not enabled: the
+# app enables it when you pick one (Encoder page, Playback > Digital).
 if command -v systemctl >/dev/null 2>&1; then
     mkdir -p "$HOME/.config/systemd/user"
     cat > "$HOME/.config/systemd/user/sbae9-sbc-encoder.service" <<UNIT
 [Unit]
-Description=Sound Blaster AE-9 optical encoder (AC-3 / DTS)
+Description=Sound Blaster AE-9 optical out (encoder / effects loop)
 After=pipewire.service wireplumber.service pipewire-pulse.service
 
 [Service]

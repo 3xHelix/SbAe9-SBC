@@ -35,8 +35,36 @@ PlasmoidItem {
         if (!ready) return "AE-9 not found"
         var parts = [st.direct ? "Direct Mode" : (st.sbx ? "DSP · SBX on" : "DSP · SBX off")]
         parts.push(st.live ? khz(st.live.rate) + (st.live.channels === 6 ? " · 5.1" : "") : "Idle")
+        if (st.recording) parts.push("Recording")
         if (st.phantom && st.phantom.on) parts.push("Phantom 48V on")
         return parts.join("\n")
+    }
+
+    // --- the panel icon: the card (Breeze's audio-card outline, 22 x 22 grid)
+    // with a DSP chip (Direct Mode off) or a bitstream (Direct Mode on),
+    // green when idle, yellow while playing, red while recording
+    readonly property var cardRects: [
+        [2, 2, 1, 18],                      // bracket
+        [3, 4, 17, 1], [3, 16, 17, 1], [19, 4, 1, 13],   // board
+        [9, 17, 9, 1]                       // edge connector
+    ]
+    readonly property var chipRects: [
+        [8, 7, 6, 7],                                   // the chip
+        [6, 8, 2, 1], [6, 10, 2, 1], [6, 12, 2, 1],     // pins
+        [14, 8, 2, 1], [14, 10, 2, 1], [14, 12, 2, 1],
+        [9, 6, 1, 1], [12, 6, 1, 1], [9, 14, 1, 1], [12, 14, 1, 1]
+    ]
+    readonly property var bitsRects: [   // a square wave (a bitstream): 0 1 0 1 0 1
+        [4, 13, 3, 1], [6, 8, 1, 6], [6, 8, 4, 1], [9, 8, 1, 6], [9, 13, 3, 1],
+        [11, 8, 1, 6], [11, 8, 4, 1], [14, 8, 1, 6], [14, 13, 3, 1], [16, 8, 1, 6],
+        [16, 8, 3, 1]
+    ]
+    readonly property color stateColor: !ready ? Kirigami.Theme.disabledTextColor
+        : st.recording ? "#da4453" : st.playing ? "#fdbc4b" : "#27ae60"
+
+    function stateText() {
+        if (!ready) return ""
+        return st.recording ? "Recording" : st.playing ? "Playing" : "Idle"
     }
 
     function shortRate() {
@@ -114,12 +142,41 @@ PlasmoidItem {
             id: row
             anchors.fill: parent
             spacing: Kirigami.Units.smallSpacing
-            Kirigami.Icon {
-                source: "audio-card"
+            Item {
+                id: cardIcon
                 Layout.fillHeight: true
                 Layout.preferredWidth: height
-                color: Kirigami.Theme.negativeTextColor     // used only as a mask (phantom on)
-                isMask: root.st.phantom && root.st.phantom.on
+                // whole pixels on the 22 grid where the panel allows it
+                readonly property real side: Math.min(width, height)
+                readonly property real u: side >= 22 ? Math.floor(side / 22) : side / 22
+                Item {
+                    width: 22 * cardIcon.u
+                    height: 22 * cardIcon.u
+                    anchors.centerIn: parent
+                    Repeater {
+                        model: root.cardRects.concat(root.st.direct ? root.bitsRects : root.chipRects)
+                        Rectangle {
+                            x: modelData[0] * cardIcon.u
+                            y: modelData[1] * cardIcon.u
+                            width: modelData[2] * cardIcon.u
+                            height: modelData[3] * cardIcon.u
+                            color: root.stateColor
+                            antialiasing: false
+                        }
+                    }
+                    // phantom power on: a red dot (the whole card used to turn red)
+                    Rectangle {
+                        visible: !!(root.st.phantom && root.st.phantom.on)
+                        width: 7 * cardIcon.u
+                        height: width
+                        radius: width / 2
+                        x: 15 * cardIcon.u
+                        y: 15 * cardIcon.u
+                        color: "#da4453"
+                        border.color: Kirigami.Theme.backgroundColor
+                        border.width: Math.max(1, cardIcon.u)
+                    }
+                }
             }
             PC.Label {
                 text: root.shortRate()
