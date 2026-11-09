@@ -3,7 +3,13 @@
 Sound Blaster Command for Linux: the UI for the Creative Sound Blaster AE-9
 driver ([SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv)).
 
-## Unreleased
+## 0.16.0 (2026-11-08)
+
+The Encoder page (AC-3, or experimental DTS, to a receiver over optical, in
+5.1 from driver 0.12.1's 6-channel What U Hear) and driver 0.12.1's optical
+mirror switch on Playback > Digital. Pairs with
+[SbAe9-Drv v0.12.1](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.1);
+kit 0.3.8.
 
 Thanks to Kaiba, DarkNikGr and HandsomeHans, whose reports, dumps, tests and
 code shaped the driver's 0.12.1 and this release with it.

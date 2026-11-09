@@ -118,7 +118,8 @@ and 7.1 output. The driver doesn't support these yet.
 - For the optical mirror switch (off by default, so optical and the main output
   are separate; turn it on under Playback > Digital) and 5.1 from the
   Encoder page (What U Hear with six channels, on the card's 5.1 stream with
-  the inputs on): driver 0.12.1 or newer.
+  the inputs on): driver
+  [v0.12.1](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.1) or newer.
 - For 176.4 kHz (stereo, Direct Mode): driver
   [v0.9.7](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.9.7) or newer
   (`pcm_176k4=Y`).
@@ -130,7 +131,7 @@ and 7.1 output. The driver doesn't support these yet.
   Creative's Sound Blaster Command installer (the app looks in
   `firmware/creative-ae9/hp` and `firmware/updates/creative-ae9/hp`).
   This release pairs with
-  [SbAe9-Drv v0.12.0](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.0).
+  [SbAe9-Drv v0.12.1](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.1).
 - For switching phantom power (48V) from the app and What U Hear at 96 kHz:
   driver [v0.9.5](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.9.5)
   or newer (`wuh_96k=Y`, the default).
