@@ -3,6 +3,33 @@
 Sound Blaster Command for Linux: the UI for the Creative Sound Blaster AE-9
 driver ([SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv)).
 
+## 0.18.0 (2026-11-10)
+
+A hint when headphones are plugged in but the card plays on speakers, and
+fixes for PipeWire 1.0 / WirePlumber 0.4 (Ubuntu 24.04, Mint 22). Pairs with
+[SbAe9-Drv v0.12.4](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.4).
+
+### Added
+
+- Playback: a hint when headphones are plugged into the head unit's 3.5 mm
+  jack but the card plays on Speakers ("Use Headphones" / "Not now", which
+  lasts until the next plug-in). The Headphones row says "3.5 mm jack:
+  plugged in" / "nothing plugged in", since the 1/4" jack doesn't report
+  plugs, and its tip says to check Output when the headphones are silent.
+
+### Fixed
+
+- PipeWire 1.0 / WirePlumber 0.4 (Ubuntu 24.04, Mint 22):
+  - Encoder (AC-3 / DTS): optical was silent there. The capture now always
+    reaches ffmpeg as raw samples (`pw-record --raw` only where it exists).
+  - Level meters stayed at the bottom: same `--raw` check.
+  - Mic and What U Hear sample rates did nothing on WirePlumber 0.4 (it reads
+    only Lua rules): each rule now also gets a Lua twin in
+    `~/.config/wireplumber/main.lua.d/`, removed with it on Automatic.
+  - "Optical out plays: main output with effects": WirePlumber 0.4 ignores
+    node.dont-fallback, so there its streams also never reconnect, and can't
+    end up on the mic or the analog output.
+
 ## 0.17.2 (2026-11-09)
 
 A quicker way to reset the card's power for Voice Clarity. Pairs with
