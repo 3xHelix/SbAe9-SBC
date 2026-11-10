@@ -51,6 +51,10 @@ class MicRateTest(S.AppTestCase):
             conf = f.read()
         self.assertIn('node.name = "alsa_input.pci-0000_06_00.0.analog-stereo"', conf)
         self.assertIn("audio.rate = 96000", conf)
+        with open(pipewire.MIC_LUA) as f:                   # WirePlumber 0.4's twin
+            lua = f.read()
+        self.assertIn('{ "node.name", "equals", "alsa_input.pci-0000_06_00.0.analog-stereo" }', lua)
+        self.assertIn('["audio.rate"] = 96000', lua)
         self.assertIn(("systemctl", "--user", "restart", "wireplumber"), S.PW.calls)
         self.assertEqual(pipewire.mic_rate_setting(), 96000)
         pg.refresh()
@@ -64,6 +68,7 @@ class MicRateTest(S.AppTestCase):
         pg._mic_rate(0)
         self.settle()
         self.assertFalse(os.path.exists(pipewire.MIC_CONF))
+        self.assertFalse(os.path.exists(pipewire.MIC_LUA))
         self.assertIn(("systemctl", "--user", "restart", "wireplumber"), S.PW.calls)
 
     def test_same_pick_does_nothing(self):

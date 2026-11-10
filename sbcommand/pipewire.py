@@ -29,6 +29,10 @@ RATES_CONF = os.path.expanduser("~/.config/pipewire/pipewire.conf.d/90-sbae9-sbc
 # The head unit mic input's own sample rate: a WirePlumber rule on that one source
 # (written only when you pick a rate; Automatic removes it).
 MIC_CONF = os.path.expanduser("~/.config/wireplumber/wireplumber.conf.d/91-sbae9-sbc-mic.conf")
+# WirePlumber 0.4 (Ubuntu 24.04, Mint 22) reads Lua only: each rule gets a Lua
+# twin, written and removed with it (harmless on 0.5, which doesn't read main.lua.d)
+LUA_DIR = os.path.expanduser("~/.config/wireplumber/main.lua.d")
+MIC_LUA = os.path.join(LUA_DIR, "51-sbae9-sbc-mic.lua")
 MIC_RATES = (48000, 96000)
 # Driver 0.11.0 makes What U Hear a card-profile source (no copied config to
 # set its rate in): a WirePlumber rule pins it, as for the mic.
@@ -37,7 +41,8 @@ INPUT_RULES = {
         "~/.config/wireplumber/wireplumber.conf.d/92-sbae9-sbc-what-u-hear.conf"),
         # the stereo source and the 5.1 profile's 6-channel one (0.12.1), by
         # name, as the driver's 61-ae9-names.conf matches them
-        "~alsa_input.pci-.*[.]what_u_hear(_51)?$", "What U Hear"),
+        "~alsa_input.pci-.*[.]what_u_hear(_51)?$", "What U Hear",
+        os.path.join(LUA_DIR, "52-sbae9-sbc-what-u-hear.lua"), "alsa_input.pci-*.what_u_hear*"),
 }
 # Where the driver's own PipeWire configs for optical in and What U Hear go
 PW_CONF_DIR = os.path.expanduser("~/.config/pipewire/pipewire.conf.d")
@@ -53,6 +58,53 @@ def _run(*args, timeout=3):
 
 def available():
     return shutil.which("pw-dump") is not None and shutil.which("wpctl") is not None
+
+
+# --- what the installed PipeWire / WirePlumber can do --------------------------------
+# Ubuntu 24.04 / Mint 22 ship PipeWire 1.0 and WirePlumber 0.4: no `pw-record
+# --raw` (1.4+; before it, "-" already writes raw samples, after it "-" without
+# --raw writes a Sun AU header), and WirePlumber 0.4 reads only Lua rules
+# (main.lua.d) and ignores node.dont-fallback.
+_TOOL_HELP = {}
+
+
+def has_option(tool, option):
+    """Whether a PipeWire tool lists a command-line option in its --help."""
+    if tool not in _TOOL_HELP:
+        try:
+            r = subprocess.run([tool, "--help"], capture_output=True, text=True, timeout=5,
+                               env=dict(os.environ, LC_ALL="C"))
+            _TOOL_HELP[tool] = r.stdout + r.stderr
+        except (OSError, subprocess.TimeoutExpired):
+            _TOOL_HELP[tool] = ""
+    return option in _TOOL_HELP[tool]
+
+
+def raw_flag():
+    """pw-record's arguments for raw samples on stdout, on any version."""
+    return ["--raw"] if has_option("pw-record", "--raw") else []
+
+
+_WP = []
+
+
+def wireplumber_version():
+    """(major, minor) of the installed WirePlumber, or None if unknown."""
+    if not _WP:
+        try:
+            out = subprocess.run(["wireplumber", "--version"], capture_output=True, text=True,
+                                 timeout=5).stdout
+        except (OSError, subprocess.TimeoutExpired):
+            out = ""
+        m = re.search(r"libwireplumber (\d+)\.(\d+)", out)
+        _WP.append((int(m.group(1)), int(m.group(2))) if m else None)
+    return _WP[0]
+
+
+def wireplumber_04():
+    """WirePlumber 0.4: Lua config only, no node.dont-fallback."""
+    v = wireplumber_version()
+    return bool(v) and v < (0, 5)
 
 
 def dump():
@@ -538,6 +590,24 @@ def mic_rate_setting():
     return int(m.group(1)) if m else None
 
 
+def _lua_rule(path, verb, name, rate, title):
+    """The WirePlumber 0.4 twin of a rate rule (None rate: remove it)."""
+    if not rate:
+        try:
+            os.remove(path)
+        except FileNotFoundError:
+            pass
+        return
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w") as f:
+        f.write(f"-- Written by Sound Blaster Command (sbae9-sbc): the AE-9 {title}\n"
+                "-- sample rate, for WirePlumber 0.4. Pick Automatic in the app to undo.\n"
+                "table.insert(alsa_monitor.rules, {\n"
+                f'  matches = {{ {{ {{ "node.name", "{verb}", "{name}" }} }} }},\n'
+                f'  apply_properties = {{ ["audio.rate"] = {int(rate)} }},\n'
+                "})\n")
+
+
 def set_mic_rate(source_name, rate):
     """Record the head unit mic at `rate` (None = follow PipeWire): a
     WirePlumber rule for that source. Rule props only apply when a node is
@@ -554,7 +624,9 @@ def set_mic_rate(source_name, rate):
                     f"    actions = {{ update-props = {{ audio.rate = {int(rate)} }} }}\n"
                     "  }\n"
                     "]\n")
+        _lua_rule(MIC_LUA, "equals", source_name, rate, "head unit mic's")
     else:
+        _lua_rule(MIC_LUA, "equals", source_name, None, "")
         try:
             os.remove(MIC_CONF)
         except FileNotFoundError:
@@ -613,7 +685,8 @@ def set_input_rule_rate(key, rate):
     """Record a card-profile input at `rate` (None = follow PipeWire): a
     WirePlumber rule, then a WirePlumber restart (rule props apply when the
     node is made), so audio on every device drops for a moment."""
-    path, pattern, title = INPUT_RULES[key]
+    path, pattern, title, lua, glob = INPUT_RULES[key]
+    _lua_rule(lua, "matches", glob, rate, title)
     if rate:
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, "w") as f:
@@ -808,7 +881,7 @@ class LevelMeter(QObject):
         self.stop()
         self._proc = QProcess(self)
         self._proc.readyReadStandardOutput.connect(self._read)
-        self._proc.start("pw-record", ["--raw", "--target", source_name, "--rate", "48000",
+        self._proc.start("pw-record", raw_flag() + ["--target", source_name, "--rate", "48000",
                                        "--channels", "2", "--format", "s16",
                                        "-P", '{ node.description="AE-9 level meter" node.dont-reconnect=true }',
                                        "-"])

@@ -73,7 +73,7 @@ class EncoderTest(Base):
 
     def test_pipeline_commands(self):
         rec, enc, out = encoder.commands("ac3", "alsa_input.x.what_u_hear", 6)
-        self.assertEqual(rec[:3], ["pw-record", "--target", "alsa_input.x.what_u_hear"])
+        self.assertEqual(rec[:4], ["pw-record", "--raw", "--target", "alsa_input.x.what_u_hear"])
         self.assertIn("5.1", enc)
         self.assertEqual(enc[enc.index("-c:a") + 1], "ac3")
         self.assertEqual(enc[enc.index("-b:a") + 1], "640k")
@@ -81,13 +81,20 @@ class EncoderTest(Base):
         self.assertIn("hw:AE9,4", out)
         self.assertEqual(rec[rec.index("--channel-map") + 1], "FL,FR,FC,LFE,RL,RR")
         self.assertEqual(rec[rec.index("--format") + 1], "s32")
-        self.assertEqual(enc[enc.index("-f") + 1], "au")     # pw-record's pipe output
+        self.assertEqual(enc[enc.index("-f") + 1], "s32le")  # raw samples from pw-record
+        self.assertEqual(enc[enc.index("-ar") + 1], "48000")
         self.assertEqual(rec[-1], "-")
         rec, enc, out = encoder.commands("dts", "x", 2)
         self.assertNotIn("--channel-map", rec)
         self.assertIn("stereo", enc)
         self.assertEqual(enc[enc.index("-c:a") + 1], "dca")
         self.assertIn("experimental", enc)
+
+    def test_pipewire_10_has_no_raw_option(self):
+        S.TOOLS["raw"] = False                    # PipeWire 1.0-1.2: "-" is raw already
+        rec, enc, _ = encoder.commands("ac3", "x", 2)
+        self.assertNotIn("--raw", rec)
+        self.assertEqual(enc[enc.index("-f") + 1], "s32le")
 
 
 class Surround51Test(Base):
@@ -232,6 +239,15 @@ class EffectsLoopTest(Base):
         self.assertIn('target.object="alsa_input.x.what_u_hear"', cap)
         self.assertIn('target.object="alsa_output.x.optical_out"', play)
         self.assertIn("stream.dont-remix=true", cap)
+
+    def test_wireplumber_04_also_never_reconnects(self):
+        cmd = encoder.fx_command("a", 2, "o")
+        self.assertNotIn("dont-reconnect", " ".join(cmd))   # 0.5 honours dont-fallback
+        S.TOOLS["wp"] = (0, 4)
+        cmd = encoder.fx_command("a", 2, "o")
+        for props in (cmd[cmd.index("--capture-props") + 1], cmd[cmd.index("--playback-props") + 1]):
+            self.assertIn("node.dont-reconnect=true", props)
+            self.assertIn("node.dont-fallback=true", props)
 
     def test_51_source_is_downmixed(self):
         cap = encoder.fx_command("alsa_input.x.what_u_hear_51", 6, "o")[4]

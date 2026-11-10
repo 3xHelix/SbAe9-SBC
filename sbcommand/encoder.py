@@ -208,7 +208,8 @@ def resume():
 def commands(mode, source, channels):
     """The three processes of the loop: capture, encode, play to optical."""
     layout = "5.1" if channels == 6 else "stereo"
-    rec = ["pw-record", "--target", source, "--rate", str(RATE), "--channels", str(channels),
+    rec = ["pw-record"] + pipewire.raw_flag() + [
+           "--target", source, "--rate", str(RATE), "--channels", str(channels),
            "--format", "s32", "-P", '{ node.description="AE-9 encoder" node.dont-reconnect=true }']
     if channels == 6:
         # the source's order (front-left, front-right, front-center, lfe,
@@ -217,9 +218,9 @@ def commands(mode, source, channels):
     rec.append("-")
     enc = (["ffmpeg", "-hide_banner", "-loglevel", "error", "-nostdin",
             "-fflags", "nobuffer", "-probesize", "32", "-analyzeduration", "0",
-            # pw-record writes a Sun AU stream to a pipe (a ".snd" header, then
-            # big-endian samples), not raw PCM: ffmpeg reads it as such
-            "-f", "au", "-ch_layout", layout, "-i", "-"]
+            # raw samples on any PipeWire: --raw on 1.4+ (without it "-" gets a
+            # Sun AU header); 1.0-1.2 have no --raw and write raw samples anyway
+            "-f", "s32le", "-ar", str(RATE), "-ch_layout", layout, "-i", "-"]
            + ENCODERS[mode][2] + ["-flush_packets", "1", "-f", "spdif", "-"])
     out = ["aplay", "-q", "-D", OPTICAL_PCM, "-f", "S16_LE", "-r", str(RATE), "-c", "2",
            "-t", "raw", "--buffer-time=100000", "-"]
@@ -359,7 +360,9 @@ def fx_command(source, channels, sink):
     node.dont-fallback (a missing target must not fall back to the mic, or to
     the analog output: a feedback howl) and node.linger (WirePlumber would
     otherwise remove such a stream when its target goes, e.g. on a profile
-    switch). The 6-channel What U Hear is downmixed to stereo by PipeWire."""
+    switch). WirePlumber 0.4 ignores node.dont-fallback, so there they also
+    get node.dont-reconnect; the service ends the loop once a target is gone.
+    The 6-channel What U Hear is downmixed to stereo by PipeWire."""
     cap = {"node.description": "AE-9 Effects to Optical (What U Hear)",
            "target.object": source, "node.dont-fallback": True, "node.linger": True,
            "audio.position": ["FL", "FR"]}
@@ -368,6 +371,8 @@ def fx_command(source, channels, sink):
     play = {"node.description": "AE-9 Effects to Optical",
             "target.object": sink, "node.dont-fallback": True, "node.linger": True,
             "stream.dont-remix": True, "audio.position": ["FL", "FR"]}
+    if pipewire.wireplumber_04():
+        cap["node.dont-reconnect"] = play["node.dont-reconnect"] = True
     return ["pw-loopback", "-n", FX_NAME, "--capture-props", _spa(cap),
             "--playback-props", _spa(play)]
 

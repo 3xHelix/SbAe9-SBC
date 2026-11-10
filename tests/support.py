@@ -226,8 +226,16 @@ pipewire.capture_stream = lambda card_id="AE9": PW.capture
 pipewire.RATES_CONF = os.path.join(_TMP, "pipewire", "90-sbae9-sbc-rates.conf")
 pipewire.MIC_CONF = os.path.join(_TMP, "wireplumber", "91-sbae9-sbc-mic.conf")
 pipewire.PW_CONF_DIR = os.path.join(_TMP, "pipewire")
-pipewire.INPUT_RULES = {k: (os.path.join(_TMP, "wireplumber", os.path.basename(v[0])),) + v[1:]
+pipewire.LUA_DIR = os.path.join(_TMP, "wireplumber", "main.lua.d")
+pipewire.MIC_LUA = os.path.join(pipewire.LUA_DIR, os.path.basename(pipewire.MIC_LUA))
+pipewire.INPUT_RULES = {k: (os.path.join(_TMP, "wireplumber", os.path.basename(v[0])),) + v[1:3]
+                       + (os.path.join(pipewire.LUA_DIR, os.path.basename(v[3])), v[4])
                        for k, v in pipewire.INPUT_RULES.items()}
+# the installed PipeWire / WirePlumber: current by default; tests set 1.0 / 0.4
+TOOLS = {"raw": True, "wp": (0, 5)}
+REAL_PROBES = (pipewire.has_option, pipewire.wireplumber_version)
+pipewire.has_option = lambda tool, opt: TOOLS["raw"] if opt == "--raw" else True
+pipewire.wireplumber_version = lambda: TOOLS["wp"]
 C.HP_DIRS = (os.path.join(_TMP, "firmware"),)   # headphone curves; tests add them
 C.module_param = lambda name: PARAMS.get(name)
 C.module_version = lambda: PARAMS.get("version")
@@ -290,6 +298,8 @@ def reset():
     for f in (pipewire.RATES_CONF, pipewire.MIC_CONF):
         if os.path.exists(f):
             os.remove(f)
+    shutil.rmtree(pipewire.LUA_DIR, ignore_errors=True)
+    TOOLS.update({"raw": True, "wp": (0, 5)})
 
 
 def process(ms=0):

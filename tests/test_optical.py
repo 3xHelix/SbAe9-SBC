@@ -464,10 +464,16 @@ class WhatUHearRuleRateTest(S.AppTestCase):
         self.assertIn('node.name = "~alsa_input.pci-.*[.]what_u_hear(_51)?$"', text)
         self.assertIn("audio.rate = 96000", text)
         self.assertEqual(pipewire.input_rule_rate("what_u_hear"), 96000)
+        lua = pipewire.INPUT_RULES["what_u_hear"][3]
+        with open(lua) as f:                          # WirePlumber 0.4's twin
+            text = f.read()
+        self.assertIn('{ "node.name", "matches", "alsa_input.pci-*.what_u_hear*" }', text)
+        self.assertIn('["audio.rate"] = 96000', text)
         self.assertIn(("systemctl", "--user", "restart", "wireplumber"), S.PW.calls)
         sec._pick_rate(sec.rate.findData(None))       # Automatic removes it
         self.settle()
         self.assertFalse(os.path.exists(self.path))
+        self.assertFalse(os.path.exists(lua))
 
     def test_cancel_changes_nothing(self):
         self.answer = False
