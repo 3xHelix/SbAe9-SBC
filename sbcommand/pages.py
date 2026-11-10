@@ -569,6 +569,18 @@ class PlaybackPage(Page):
         left.addLayout(dev)
 
         left.addWidget(label("Output", "sectionTitle"))
+        # headphones in the head unit's 3.5 mm jack while it plays on speakers:
+        # silent headphones are easy to mistake for a broken install
+        self.hp_hint = Banner("Headphones are plugged into the head unit, but the card plays "
+                              "on Speakers.", "Use Headphones")
+        self.hp_hint.button.clicked.connect(lambda: self.card.set(C.OUTPUT, 1))
+        later = QPushButton("Not now")
+        later.setCursor(Qt.PointingHandCursor)
+        later.clicked.connect(self._hp_hint_later)
+        self.hp_hint.layout().addWidget(later)
+        self.hp_hint.hide()
+        self._hp_hint_off = False      # "Not now": hidden until the next plug-in
+        left.addWidget(self.hp_hint)
         self.group = QButtonGroup(self)
         self.r_spk = QRadioButton()
         self.r_hp = QRadioButton()
@@ -1022,10 +1034,16 @@ class PlaybackPage(Page):
             return
         out = self.card.get(C.OUTPUT, 0)
         (self.r_hp if out == 1 else self.r_spk).setChecked(True)
+        plugged = self.card.has(C.HU_PHONES) and bool(self.card.get(C.HU_PHONES))
         if self.card.has(C.HU_PHONES):
-            self.hp_sub.setText("Plugged In" if self.card.get(C.HU_PHONES) else "Unplugged")
+            self.hp_sub.setText("3.5 mm jack: plugged in" if plugged else "3.5 mm jack: nothing plugged in")
+            self.hp_sub.setToolTip("Only the head unit's 3.5 mm headphone jack reports plugs, "
+                                   "not the 1/4\" jack")
         else:
             self.hp_sub.setText("Head unit")
+        if not plugged:
+            self._hp_hint_off = False
+        self.hp_hint.setVisible(plugged and out == 0 and not self._hp_hint_off)
         self.hp_auto_row.setVisible(self.card.has(C.HU_AUTO))
         if self.card.has(C.HU_AUTO):
             self.hp_auto.setCheckedSilently(bool(self.card.get(C.HU_AUTO)))
@@ -1067,6 +1085,10 @@ class PlaybackPage(Page):
             for k, it in enumerate(self.card.items(C.DAC_FILTER)):
                 self.filter.addItem(names.get(it, it), k)
         self.filter.setCurrentIndex(self.card.get(C.DAC_FILTER, 0) or 0)
+
+    def _hp_hint_later(self):
+        self._hp_hint_off = True
+        self.hp_hint.hide()
 
     def _refresh_hp_profile(self, out):
         has = self.card.has(C.HP_PROFILE)
@@ -1692,7 +1714,8 @@ DAC_FILTER_TIP = (
     "Fast/slow and phase differences are subtle: pick by ear."
 )
 HEADPHONES_TIP = ("The head unit's headphone jacks, 3.5 mm and 1/4\". "
-                  "\"Plugged In\" is the 3.5 mm jack; the 1/4\" doesn't report plugs.")
+                  "Only the 3.5 mm jack reports plugs; the 1/4\" doesn't. Nothing in the headphones? "
+                  "Check that Output is on Headphones (or hold the head unit's knob).")
 STREAM_TIP = ("Channels PipeWire sends to the card (its card profile). Picking 4.0, 4.1 or 5.1 "
               "speakers switches to the 5.1 stream, 2.0 or 2.1 back to stereo. The sound "
               "pauses for a moment while the stream reopens.")

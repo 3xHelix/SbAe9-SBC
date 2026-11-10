@@ -43,15 +43,49 @@ class HeadUnitTest(S.AppTestCase):
     def test_plugged_indicators_follow_the_jacks(self):
         self.add_all(phones=False, mic=True)
         pg = self.playback()
-        self.assertEqual(pg.hp_sub.text(), "Unplugged")
+        self.assertEqual(pg.hp_sub.text(), "3.5 mm jack: nothing plugged in")
         self.mixer.external(C.HU_PHONES, True)
         S.process(20)
         pg.refresh()
-        self.assertEqual(pg.hp_sub.text(), "Plugged In")
+        self.assertEqual(pg.hp_sub.text(), "3.5 mm jack: plugged in")
         rec = self.page(pages.RecordingPage)
         rec.show_tab(0)
         rec.refresh()
         self.assertEqual(rec.mic_jack.text(), "3.5 mm mic: plugged in")
+
+    def test_hint_when_headphones_plugged_on_speakers(self):
+        self.add_all(phones=False)
+        self.mixer.external(C.OUTPUT, 0)
+        pg = self.playback()
+        self.assertFalse(pg.hp_hint.isVisible())
+        self.mixer.external(C.HU_PHONES, True)
+        S.process(20)
+        pg.refresh()
+        self.assertTrue(pg.hp_hint.isVisible())
+        pg.hp_hint.button.click()
+        self.assertEqual(self.card(C.OUTPUT), 1)
+        S.process(20)
+        pg.refresh()
+        self.assertFalse(pg.hp_hint.isVisible())
+
+    def test_hint_not_now_lasts_until_the_next_plug(self):
+        self.add_all(phones=True)
+        self.mixer.external(C.OUTPUT, 0)
+        pg = self.playback()
+        self.assertTrue(pg.hp_hint.isVisible())
+        pg._hp_hint_later()
+        pg.refresh()
+        self.assertFalse(pg.hp_hint.isVisible())
+        for plugged in (False, True):
+            self.mixer.external(C.HU_PHONES, plugged)
+            S.process(20)
+            pg.refresh()
+        self.assertTrue(pg.hp_hint.isVisible())
+
+    def test_no_hint_without_the_plug_control(self):
+        self.mixer.external(C.OUTPUT, 0)
+        pg = self.playback()
+        self.assertFalse(pg.hp_hint.isVisible())
 
     def test_auto_switch_moves_the_output_selector(self):
         self.add_all(auto=True)
@@ -66,7 +100,7 @@ class HeadUnitTest(S.AppTestCase):
         self.mixer.add_bool("Head Unit Line In Plugged", True)
         pg = self.playback()
         self.assertTrue(self.ctx.card.has(C.HU_PHONES))
-        self.assertEqual(pg.hp_sub.text(), "Plugged In")
+        self.assertEqual(pg.hp_sub.text(), "3.5 mm jack: plugged in")
         rec = self.page(pages.RecordingPage)
         rec.show_tab(0)
         rec.refresh()
