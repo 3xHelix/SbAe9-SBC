@@ -5,8 +5,26 @@ driver ([SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv)).
 
 ## Unreleased
 
+### Added
+
+- Recording > Microphone and Mixer: Mic Gain offers +30 dB when the driver
+  does (0.12.7's opt-in `mic_boost_30`); otherwise 0 / +10 / +20 dB as before.
+
+### Changed
+
+- Recording > Microphone: with driver 0.12.7, which fixes the card's mic
+  monitor breaking Voice Clarity recordings, "Monitor" stays the card's own
+  monitor (no delay) with Voice Clarity on too, and turning Voice Clarity on
+  no longer asks. Older drivers keep the software Listen while Voice Clarity
+  is in use, as since 0.17.1.
+
 ### Fixed
 
+- Recording > Microphone: the card's Monitor stayed silent until something
+  played, after a driver reload, a wake or a Direct Mode switch. Its
+  warm-up (4 s of silence to the AE-9) only ran when no DSP-mode playback
+  had happened since boot; it now runs unless one has happened since the
+  DSP last loaded and Direct Mode was last switched on.
 - Playback > Headphones: with the driver built from source (no
   `ae9-hp-profile` command), "Make custom profile…" was greyed out and
   blamed the driver version. It now stays clickable and says how to

@@ -9,6 +9,7 @@ desktop volume slider) arrives as an ALSA event and is re-emitted as
 import errno
 import math
 import os
+import re
 import subprocess
 
 from PySide6.QtCore import QObject, QSocketNotifier, QTimer, Signal
@@ -92,6 +93,13 @@ VC_MICEQ = "Mic EQ Capture Enum"
 VC_MORPH = "Voice Morphing Capture Enum"
 
 
+def vc_needs_listen(card, change=None):
+    """Voice Clarity is in use on a driver before 0.12.7, where switching the
+    card's mic monitor off breaks Voice Clarity recordings until a power-off:
+    the Monitor uses the software Listen then. 0.12.7 fixed it in the driver."""
+    return vc_in_use(card, change) and not driver_at_least(0, 12, 7)
+
+
 def vc_in_use(card, change=None):
     """Voice Clarity is in use: the master, an effect, Mic EQ or a voice is on.
     `change` ({name: value}) asks what it would be after that write."""
@@ -167,21 +175,33 @@ def hp_item_files(items):
     return out
 
 
-DSP_PATH_LOG = r"switching the running stream to DSP mode|router chip stream format 0x31 ok"
+# a DSP-mode stream bind (the format code follows the stream's rate, bits and channels)
+DSP_PATH_LOG = (r"switching the running stream to DSP mode"
+                r"|router chip stream format (0x[0-9a-f]{2} ok|now 0x)")
+# what undoes it: a DSP (re)load (driver reload, wake) or Direct Mode on
+DSP_PATH_RESET_LOG = r"DSP firmware downloaded and running|Direct Mode on"
 
 
 def dsp_path_ready():
-    """True if the DSP's output path has been set up since boot (a playback
-    stream ran in DSP mode): the driver's mic monitor is silent until then.
-    From the kernel log; None when it can't be read."""
+    """True if the DSP's output path is set up: a playback stream ran in DSP
+    mode since the DSP last loaded and since Direct Mode was last switched
+    on. The driver's mic monitor is silent until then. From the kernel log;
+    None when it can't be read."""
     try:
-        r = subprocess.run(["journalctl", "-k", "-b", "-q", "--no-pager", "-g", DSP_PATH_LOG],
+        r = subprocess.run(["journalctl", "-k", "-b", "-q", "--no-pager", "-o", "cat",
+                            "-g", f"{DSP_PATH_LOG}|{DSP_PATH_RESET_LOG}"],
                            capture_output=True, text=True, timeout=5)
     except (OSError, subprocess.TimeoutExpired):
         return None
     if r.returncode not in (0, 1):
         return None
-    return bool(r.stdout.strip())
+    return dsp_path_from_log(r.stdout)
+
+
+def dsp_path_from_log(text):
+    """The latest of those kernel log lines says whether the path is up."""
+    lines = [ln for ln in text.splitlines() if ln.strip()]
+    return bool(lines) and re.search(DSP_PATH_LOG, lines[-1]) is not None
 
 
 def headphone_curves():

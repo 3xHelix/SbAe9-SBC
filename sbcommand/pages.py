@@ -1682,8 +1682,9 @@ VOICE_CLARITY_TIP = (
     "made for calls and chat. With one on, the mic records at 48 kHz. Changes apply when "
     "a recording starts, or at once on a 48 kHz recording already running. Works in "
     "Direct Mode too.\n\n"
-    "While Voice Clarity is on, the Microphone tab's Monitor uses Listen (through PipeWire, "
-    "with a short delay): the card's own mic monitor breaks Voice Clarity recordings until "
+    "With drivers before 0.12.7, while Voice Clarity is on the Microphone tab's Monitor uses "
+    "Listen (through PipeWire, with a short delay): there the card's own mic monitor breaks "
+    "Voice Clarity recordings until "
     "the PC is fully powered off, or after a 25 s suspend (sudo rtcwake -m mem -s 25), which "
     "also cuts the card's power.")
 HP_VIRT_TIP = (
@@ -1720,6 +1721,17 @@ DAC_FILTER_TIP = (
     "ringing, useful for testing.\n\n"
     "Fast/slow and phase differences are subtle: pick by ear."
 )
+MIC_GAIN_LABELS = {"0": "0 dB", "1": "+10 dB", "2": "+20 dB", "3": "+30 dB"}
+
+
+def mic_gain_steps(card):
+    """Mic Gain's steps: 0/+10/+20 dB, and +30 dB when the driver offers it
+    (0.12.7's mic_boost_30 option)."""
+    c = card.control(C.MIC_GAIN) if card.has(C.MIC_GAIN) else None
+    top = min(3, max(2, getattr(c, "max", 2) or 2))
+    return [str(v) for v in range(top + 1)], MIC_GAIN_LABELS
+
+
 HP_TOOL_MISSING = (
     "This needs the driver's ae9-hp-profile command, which isn't installed.\n\n"
     "The driver's packages (AUR, .deb, RPM) include it. For a driver built from source, "
@@ -2084,12 +2096,12 @@ class VoiceClarity(QWidget):
         self._rec_timer.timeout.connect(self._play_back)
 
     def _set(self, name, value):
-        """Write a Voice Clarity control. The card's mic monitor must not be on
-        while Voice Clarity is in use (driver 0.12.3 finding: once it has been
+        """Write a Voice Clarity control. Before driver 0.12.7 the card's mic
+        monitor must not be on while Voice Clarity is in use (once it has been
         on, Voice Clarity recordings break until a power cycle), so turning
         Voice Clarity on with it on asks first, then moves to the software Listen."""
-        if (bool(self.card.get(C.MIC_MONITOR, False)) and not C.vc_in_use(self.card)
-                and C.vc_in_use(self.card, {name: value})):
+        if (bool(self.card.get(C.MIC_MONITOR, False)) and not C.vc_needs_listen(self.card)
+                and C.vc_needs_listen(self.card, {name: value})):
             if QMessageBox.question(
                     self, "Voice Clarity",
                     "The card's mic monitor is on. Voice Clarity can't be used with it, so it "
@@ -2449,13 +2461,16 @@ class RecordingPage(Page):
         self.peak.setMinimumWidth(66)
         g.addWidget(self.peak, 2, 2)
         g.addWidget(label("Mic Gain"), 3, 0)
-        self.xlr = Segmented(["0", "1", "2"], labels={"0": "0 dB", "1": "+10 dB", "2": "+20 dB"})
+        steps, labels = mic_gain_steps(self.card)
+        self.xlr = Segmented(steps, labels=labels)
         self.xlr.selected.connect(lambda v: self.card.set(C.MIC_GAIN, int(v)))
         xr = QHBoxLayout()
         xr.addWidget(self.xlr)
         xr.addWidget(info_button("Mic preamp boost for the head unit's XLR/TRS jack and 3.5 mm mic "
                                  "jack (they share one input). Use +20 dB for quiet "
-                                 "dynamic mics, 0 dB for loud sources or condensers."))
+                                 "dynamic mics, 0 dB for loud sources or condensers.\n\n"
+                                 "+30 dB shows only with the driver's mic_boost_30 option "
+                                 "(0.12.7+): for very quiet mics; normal speech can clip."))
         xr.addStretch()
         g.addLayout(xr, 3, 1)
         self.listen_title = label("Listen")
@@ -2734,10 +2749,10 @@ class RecordingPage(Page):
             return False
         if self.card.get(C.MIC_MONITOR, False):
             return True
-        return not C.vc_in_use(self.card) and not self.ctx.monitor.running
+        return not C.vc_needs_listen(self.card) and not self.ctx.monitor.running
 
     def _listen(self, on):
-        if self._card_monitor() and not (on and C.vc_in_use(self.card)):
+        if self._card_monitor() and not (on and C.vc_needs_listen(self.card)):
             self.ctx.monitor.stop()
             self.card.set(C.MIC_MONITOR, on)
             if on and not C.dsp_path_ready():
@@ -2783,7 +2798,7 @@ class RecordingPage(Page):
                 why = (": through PipeWire in Direct Mode, with a short delay"
                        if self.card.get(C.DIRECT, True) else
                        ": through PipeWire while Voice Clarity is on, with a short delay"
-                       if C.vc_in_use(self.card) else ": through PipeWire, with a short delay")
+                       if C.vc_needs_listen(self.card) else ": through PipeWire, with a short delay")
             self.listen_lbl.setText("Hear the mic live (use headphones to avoid feedback)" + why)
             self.listen_lbl.setToolTip("Plays the mic through the default output")
             self.listen.setCheckedSilently(self.ctx.monitor.running)
@@ -2858,6 +2873,7 @@ class RecordingPage(Page):
                 "plugged in" if self.card.get(C.HU_MIC) else "nothing plugged in"))
         raw = self.card.get(C.MIC, 0)
         self.mic.set_state(raw / 99, muted, "muted" if raw == 0 else f"{C.mic_raw_to_db(raw):+d} dB")
+        self.xlr.set_options(*mic_gain_steps(self.card))
         self.xlr.set_value(str(self.card.get(C.MIC_GAIN, 1)))
 
 
@@ -3126,7 +3142,8 @@ class MixerPage(Page):
         g.addWidget(self.mic, r, 1)
         r += 1
         g.addWidget(label("Mic Gain"), r, 0)
-        self.xlr = Segmented(["0", "1", "2"], labels={"0": "0 dB", "1": "+10 dB", "2": "+20 dB"})
+        steps, labels = mic_gain_steps(self.card)
+        self.xlr = Segmented(steps, labels=labels)
         self.xlr.selected.connect(lambda v: self.card.set(C.MIC_GAIN, int(v)))
         xr = QHBoxLayout()
         xr.addWidget(self.xlr)
@@ -3230,6 +3247,7 @@ class MixerPage(Page):
         mraw = self.card.get(C.MIC, 0)
         mm = pipewire.get_volume(n.source["id"])[1] if n.source else False
         self.mic.set_state(mraw / 99, mm, "muted" if mraw == 0 else f"{C.mic_raw_to_db(mraw):+d} dB")
+        self.xlr.set_options(*mic_gain_steps(self.card))
         self.xlr.set_value(str(self.card.get(C.MIC_GAIN, 1)))
 
 

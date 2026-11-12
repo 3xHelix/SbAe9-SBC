@@ -286,6 +286,18 @@ class Segmented(QWidget):
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(0)
         self.buttons = {}
+        self.set_options(options, labels)
+
+    def set_options(self, options, labels=None):
+        """(Re)build the buttons; the checked one is kept if it's still there."""
+        if list(self.buttons) == list(options):
+            return
+        was = next((k for k, b in self.buttons.items() if b.isChecked()), None)
+        for b in self.buttons.values():
+            self.layout().removeWidget(b)
+            b.deleteLater()
+        self.buttons = {}
+        lay = self.layout()
         for i, opt in enumerate(options):
             b = QPushButton((labels or {}).get(opt, opt))
             b.setCheckable(True)
@@ -300,6 +312,8 @@ class Segmented(QWidget):
             b.clicked.connect(lambda _=False, o=opt: self._click(o))
             lay.addWidget(b)
             self.buttons[opt] = b
+        if was is not None:
+            self.set_value(was)
 
     def _click(self, opt):
         self.set_value(opt)

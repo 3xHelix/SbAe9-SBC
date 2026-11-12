@@ -111,6 +111,27 @@ class CardMonitorTest(S.AppTestCase):
         self.assertTrue(self.ctx.monitor.running)
 
 
+class DspPathTest(unittest.TestCase):
+    """The card's monitor needs a DSP-mode playback since the DSP last loaded
+    and since Direct Mode was last switched on (from the kernel log)."""
+    DSP = "SBX: switching the running stream to DSP mode (after 3000 ms)"
+    LOAD = "DSP firmware downloaded and running"
+
+    def test_latest_event_wins(self):
+        self.assertFalse(C.dsp_path_from_log(""))                        # nothing since boot
+        self.assertFalse(C.dsp_path_from_log(self.LOAD))
+        self.assertTrue(C.dsp_path_from_log(f"{self.LOAD}\n{self.DSP}"))
+        # Direct Mode on undoes it (both of the driver's wordings), until the next DSP playback
+        for line in ("Direct Mode on, SBX off (Surround 1)",
+                     "Direct Mode on (DSP mode hadn't started; the stream stays as it is)"):
+            self.assertFalse(C.dsp_path_from_log(f"{self.DSP}\n{line}"))
+            self.assertTrue(C.dsp_path_from_log(f"{self.DSP}\n{line}\n{self.DSP}"))
+        self.assertFalse(C.dsp_path_from_log(f"{self.DSP}\n{self.LOAD}"))   # driver reload, wake
+        for line in ("router chip stream format 0x31 ok", "router chip stream format 0x41 ok",
+                     "router chip stream format now 0x41 (96 kHz)"):
+            self.assertTrue(C.dsp_path_from_log(f"{self.LOAD}\n{line}"))
+
+
 class MonitorWithVoiceClarityTest(S.AppTestCase):
     """Driver 0.12.3 finding: the card's monitor breaks Voice Clarity recordings."""
     def setUp(self):
@@ -183,6 +204,38 @@ class MonitorWithVoiceClarityTest(S.AppTestCase):
         S.process(20)
         pg.refresh()
         self.assertFalse(pg.vc.used_note.isVisible())
+
+
+class MonitorWithVoiceClarityFixedTest(MonitorWithVoiceClarityTest):
+    """Driver 0.12.7 fixed it: the card's monitor and Voice Clarity together."""
+    def setUp(self):
+        super().setUp()
+        S.PARAMS["version"] = "0.12.7"
+
+    def test_voice_clarity_on_uses_listen(self):
+        self.mixer.external(C.VC, True)
+        pg = self.page(0)
+        self.assertEqual(pg.listen_title.text(), "Monitor")      # zero delay, still
+        pg.listen.setChecked(True)
+        self.assertIn((C.MIC_MONITOR, True), self.mixer.writes)
+        self.assertFalse(self.ctx.monitor.running)
+
+    def test_card_monitor_on_asks_then_moves_to_listen(self):
+        self.mixer.external(C.MIC_MONITOR, True)
+        pg = self.page(1)
+        pages.QMessageBox.question = lambda *a, **k: self.fail("asked")
+        pg.vc.master.setChecked(True)
+        self.assertIn((C.VC, True), self.mixer.writes)
+        self.assertNotIn((C.MIC_MONITOR, False), self.mixer.writes)
+        self.assertFalse(self.ctx.monitor.running)
+
+    def test_card_monitor_back_once_voice_clarity_is_off(self):
+        self.mixer.external(C.VC, True)
+        self.assertEqual(self.page(0).listen_title.text(), "Monitor")
+
+    def test_rc_builds_count(self):
+        S.PARAMS["version"] = "0.12.7-rc1"
+        self.test_voice_clarity_on_uses_listen()
 
 
 class VirtualizationTest(S.AppTestCase):

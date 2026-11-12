@@ -149,6 +149,23 @@ class MicGainTest(S.AppTestCase):
         pg.xlr.selected.emit("0")
         self.assertEqual(self.mixer.writes[-1], (C.MIC_GAIN, 0))
 
+    def test_plus_30_only_when_the_driver_offers_it(self):
+        pg = self.page(pages.RecordingPage)
+        pg.show_tab(0)
+        pg.refresh()
+        self.assertEqual(list(pg.xlr.buttons), ["0", "1", "2"])        # 0..2: no +30
+        self.mixer.remove("XLR Gain Capture Volume")
+        self.mixer._add(C.MIC_GAIN, 3, type=S.alsa.TYPE_INTEGER, min=0, max=3, items=[])
+        pg.refresh()                                     # driver 0.12.7, mic_boost_30=1
+        self.assertEqual(list(pg.xlr.buttons), ["0", "1", "2", "3"])
+        self.assertEqual(pg.xlr.buttons["3"].text(), "+30 dB")
+        self.assertTrue(pg.xlr.buttons["3"].isChecked())
+        pg.xlr.buttons["1"].click()
+        self.assertEqual(self.mixer.writes[-1], (C.MIC_GAIN, 1))
+        mix = self.page(pages.MixerPage)
+        mix.refresh()
+        self.assertEqual(list(mix.xlr.buttons), ["0", "1", "2", "3"])
+
 
 class PhantomPowerTest(S.AppTestCase):
     def rec(self, on=False, writable=True):
