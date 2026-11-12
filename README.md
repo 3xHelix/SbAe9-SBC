@@ -140,7 +140,7 @@ and 7.1 output. The driver doesn't support these yet.
   Creative's Sound Blaster Command installer (the app looks in
   `firmware/creative-ae9/hp` and `firmware/updates/creative-ae9/hp`).
   This release pairs with
-  [SbAe9-Drv v0.12.5](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.5).
+  [SbAe9-Drv v0.12.7](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.7).
 - For switching phantom power (48V) from the app and What U Hear at 96 kHz:
   driver [v0.9.5](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.9.5)
   or newer (`wuh_96k=Y`, the default).

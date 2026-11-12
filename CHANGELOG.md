@@ -3,7 +3,12 @@
 Sound Blaster Command for Linux: the UI for the Creative Sound Blaster AE-9
 driver ([SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv)).
 
-## Unreleased
+## 0.19.0 (2026-11-12)
+
+The card's own mic monitor (no delay) together with Voice Clarity, a monitor
+warm-up that works after a Direct Mode switch or driver reload, and +30 dB
+Mic Gain when the driver offers it. Pairs with
+[SbAe9-Drv v0.12.7](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.7).
 
 ### Added
 
