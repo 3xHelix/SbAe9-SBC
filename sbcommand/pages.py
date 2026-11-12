@@ -1116,12 +1116,13 @@ class PlaybackPage(Page):
                     it.setToolTip(f"No {key_file(files[i][0])}: reinstall it (ae9-get-firmware for "
                                   "Creative's, ae9-hp-profile for your own)")
         self.hp_prof.setCurrentIndex(max(0, self.hp_prof.findData(k)))
+        # shown with the driver's custom slots (0.12.2+); the command comes with
+        # the driver's packages, but a source install before 0.12.7 lacks it
         self.hp_make.setVisible(custom0 is not None)
-        self.hp_make.setEnabled(bool(shutil.which("ae9-hp-profile")))
         self.hp_make.setToolTip("Makes a profile for your headphones from AutoEQ's published "
                                 "measurements and installs it in a free custom slot"
-                                if self.hp_make.isEnabled() else
-                                "Needs the driver's ae9-hp-profile command (driver 0.12.2 or newer)")
+                                if shutil.which("ae9-hp-profile") else
+                                "The driver's ae9-hp-profile command isn't installed: click for how")
         curves = C.headphone_curves()
         direct = bool(self.card.get(C.DIRECT, True)) or self.card.inactive(C.HP_PROFILE)
         self.hp_prof.setEnabled(bool(curves) and not direct)
@@ -1154,6 +1155,12 @@ class PlaybackPage(Page):
             self.card.set(C.HP_PROFILE, i)
 
     def _make_hp_profile(self):
+        if not shutil.which("ae9-hp-profile"):
+            box = QMessageBox(QMessageBox.Information, "Make custom profile",
+                              HP_TOOL_MISSING, QMessageBox.Ok, self)
+            box.setTextInteractionFlags(Qt.TextSelectableByMouse)
+            box.exec()
+            return
         dlg = HpProfileDialog(self)
         if dlg.exec() and dlg.installed:
             self._reload_hp_slot(dlg.installed)
@@ -1713,6 +1720,13 @@ DAC_FILTER_TIP = (
     "ringing, useful for testing.\n\n"
     "Fast/slow and phase differences are subtle: pick by ear."
 )
+HP_TOOL_MISSING = (
+    "This needs the driver's ae9-hp-profile command, which isn't installed.\n\n"
+    "The driver's packages (AUR, .deb, RPM) include it. For a driver built from source, "
+    "run this in the driver's source folder:\n\n"
+    "  sudo install -m755 scripts/ae9-hp-profile /usr/local/bin/\n\n"
+    "(from driver 0.12.7 on, sudo scripts/dkms-install.sh installs it too). "
+    "Then click the button again.")
 HEADPHONES_TIP = ("The head unit's headphone jacks, 3.5 mm and 1/4\". "
                   "Only the 3.5 mm jack reports plugs; the 1/4\" doesn't. Nothing in the headphones? "
                   "Check that Output is on Headphones (or hold the head unit's knob).")

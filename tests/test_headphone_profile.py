@@ -140,6 +140,24 @@ class HeadphoneProfileTest(S.AppTestCase):
         self.assertEqual(pg.hp_prof.currentText(), "SENNHEISER HD 280 Pro (file missing)")
         self.assertIn("file is missing", pg.hp_prof_note.text())
 
+    def test_make_without_the_command_says_how_to_install_it(self):
+        self.full_list()
+        pg = self.playback()
+        self.assertTrue(pg.hp_make.isVisible())
+        shown = []
+        old_which, old_exec = pages.shutil.which, pages.QMessageBox.exec
+        self.addCleanup(setattr, pages.shutil, "which", old_which)
+        self.addCleanup(setattr, pages.QMessageBox, "exec", old_exec)
+        pages.shutil.which = lambda name: None
+        pages.QMessageBox.exec = lambda box: shown.append(box.text())
+        pg.refresh()
+        self.assertTrue(pg.hp_make.isEnabled())          # clickable, to say how
+        self.assertIn("isn't installed", pg.hp_make.toolTip())
+        pg.hp_make.click()
+        self.assertEqual(len(shown), 1)
+        self.assertIn("sudo install -m755 scripts/ae9-hp-profile /usr/local/bin/", shown[0])
+        self.assertNotIn("0.12.2", shown[0])
+
     def test_reload_after_install_picks_off_then_it_again(self):
         items = self.full_list()
         k = items.index("Beyerdynamic DT 990 Pro")

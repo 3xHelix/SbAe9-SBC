@@ -3,6 +3,17 @@
 Sound Blaster Command for Linux: the UI for the Creative Sound Blaster AE-9
 driver ([SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv)).
 
+## Unreleased
+
+### Fixed
+
+- Playback > Headphones: with the driver built from source (no
+  `ae9-hp-profile` command), "Make custom profile…" was greyed out and
+  blamed the driver version. It now stays clickable and says how to
+  install the command (packages include it; from source:
+  `sudo install -m755 scripts/ae9-hp-profile /usr/local/bin/`, or
+  `scripts/dkms-install.sh` from driver 0.12.7 on).
+
 ## 0.18.0 (2026-11-10)
 
 A hint when headphones are plugged in but the card plays on speakers, and
