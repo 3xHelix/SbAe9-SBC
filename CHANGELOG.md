@@ -12,9 +12,12 @@ driver ([SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv)).
   saying why: the card can't be detected, or the driver isn't loaded. The
   pages come back, on the page you were on, as soon as the card appears.
 - A card that stopped answering (driver 0.12.8: every change fails with
-  "No such device" until the driver is reloaded) gets the same screen,
-  saying how to reload the driver. `sbae9-sbc ctl` and the phantom power
-  switch say it too.
+  "No such device" until the driver is reloaded) gets the same screen, with
+  the full reload sequence (PipeWire and the card's services stopped first,
+  or modprobe -r says the driver is in use) and a Copy button. The app lets
+  go of the card's devices itself, and opens it again only once the driver
+  has gone away and come back (or on "Try again"). `sbae9-sbc ctl` and the
+  phantom power switch say the card stopped answering too.
 - Direct Mode switched off while a 44.1 kHz (or 88.2, 96 without dsp_96k…)
   stream plays: the driver keeps that stream direct and starts DSP mode with
   the next 48 kHz stream, so the effects seemed not to work. A note now says

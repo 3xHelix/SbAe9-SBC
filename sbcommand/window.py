@@ -6,7 +6,7 @@ import time
 
 from PySide6.QtCore import QEvent, QObject, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QIcon, QPainter
-from PySide6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QMainWindow, QPushButton, QStackedWidget,
+from PySide6.QtWidgets import (QApplication, QFrame, QHBoxLayout, QLabel, QMainWindow, QPushButton, QStackedWidget,
                                QToolButton, QVBoxLayout, QWidget)
 
 from sbae9kit import desktop, frame, glass
@@ -447,15 +447,18 @@ NO_CARD_TITLE = "Please connect a Sound Blaster AE-9."
 NO_CARD = "Your audio device cannot be detected. Please check your connection."
 NO_CARD_SUB = "The window fills in as soon as the card appears."
 NOT_ANSWERING_TITLE = "The Sound Blaster AE-9 stopped answering."
-NOT_ANSWERING_SUB = "The window fills in again once the driver is reloaded."
+NOT_ANSWERING_SUB = ("Changes no longer reach it. Reload the driver with these commands in a "
+                     "terminal (the window has already let go of the card), or power the PC "
+                     "off and on. The window fills in again once the card is back.")
+NOT_ANSWERING_BAR = "The sound card stopped answering. Reload the driver, or power the PC off and on."
 NO_DRIVER = ("The AE-9 driver (snd-hda-codec-creative-ae9) isn't loaded. "
              "Install or load it, and the card shows up here.")
 
 
 def no_card_reason(card):
     """The bottom strip's text while the card is missing or not answering."""
-    if card.present:
-        return C.NOT_ANSWERING
+    if not card.answering:
+        return NOT_ANSWERING_BAR
     return NO_CARD if C.driver_loaded() else NO_DRIVER
 
 
@@ -474,7 +477,37 @@ class NoCardPage(QWidget):
         self.sub = label(NO_CARD_SUB, "muted", wrap=True)
         self.sub.setAlignment(Qt.AlignCenter)
         lay.addWidget(self.sub)
+
+        # not answering: how to reload the driver
+        self.steps_box = QWidget()
+        sb = QVBoxLayout(self.steps_box)
+        sb.setContentsMargins(40, 12, 40, 0)
+        self.steps = QLabel(C.RELOAD_STEPS)
+        self.steps.setObjectName("reloadSteps")
+        self.steps.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        self.steps.setWordWrap(True)
+        sb.addWidget(self.steps)
+        row = QHBoxLayout()
+        row.addStretch()
+        self.copy_btn = QPushButton("Copy commands")
+        self.copy_btn.setCursor(Qt.PointingHandCursor)
+        self.copy_btn.clicked.connect(lambda: QApplication.clipboard().setText(C.RELOAD_STEPS))
+        row.addWidget(self.copy_btn)
+        self.retry_btn = QPushButton("Try again")
+        self.retry_btn.setObjectName("accentButton")
+        self.retry_btn.setCursor(Qt.PointingHandCursor)
+        self.retry_btn.setToolTip("Open the card again now (e.g. after reloading the driver some other way)")
+        row.addWidget(self.retry_btn)
+        row.addStretch()
+        sb.addLayout(row)
+        lay.addWidget(self.steps_box)
+        self.steps_box.hide()
         lay.addStretch()
+
+    def show_state(self, answering):
+        self.title.setText(NO_CARD_TITLE if answering else NOT_ANSWERING_TITLE)
+        self.sub.setText(NO_CARD_SUB if answering else NOT_ANSWERING_SUB)
+        self.steps_box.setVisible(not answering)
 
 
 class MainWindow(QMainWindow):
@@ -580,6 +613,7 @@ class MainWindow(QMainWindow):
             add(entry)
         mid.addWidget(side)
         self.no_card = NoCardPage()
+        self.no_card.retry_btn.clicked.connect(self.card.retry)
         self.body = QStackedWidget()
         self.body.addWidget(self.stack)
         self.body.addWidget(self.no_card)
@@ -753,9 +787,7 @@ class MainWindow(QMainWindow):
         self._show_card(present)
         self._refresh_dsp_wait()
         if not present:
-            gone = not self.card.present
-            self.no_card.title.setText(NO_CARD_TITLE if gone else NOT_ANSWERING_TITLE)
-            self.no_card.sub.setText(NO_CARD_SUB if gone else NOT_ANSWERING_SUB)
+            self.no_card.show_state(self.card.answering)
             self.no_card_bar.setText(no_card_reason(self.card))
             self.dot.set_color(T.DIM)
             self.profile_lbl.setText("No device")

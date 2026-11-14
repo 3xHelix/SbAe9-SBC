@@ -267,8 +267,19 @@ def mic_raw_to_db(raw):
 
 
 NOT_ANSWERING = ("The sound card stopped answering, so changes don't reach it. Reload the driver "
-                 "(sudo modprobe -r snd-hda-codec-creative-ae9 && sudo modprobe snd-hda-codec-creative-ae9) "
-                 "or power the PC off and on.")
+                 "(Sound Blaster Command shows the steps) or power the PC off and on.")
+# Reloading the driver: everything that holds the card's ALSA devices has to
+# let go first, or modprobe -r says the module is in use. The app lets go by
+# itself while the card isn't answering.
+_UNITS = "pipewire.socket pipewire-pulse.socket pipewire pipewire-pulse wireplumber"
+_OURS = "sbae9-sbc-encoder.service ae9-headroom.service"
+RELOAD_STEPS = (
+    f"systemctl --user stop {_OURS} {_UNITS}\n"
+    "sudo systemctl stop alsa-state\n"
+    "sudo modprobe -r snd-hda-codec-creative-ae9 && sudo modprobe snd-hda-codec-creative-ae9\n"
+    "sleep 25    # the DSP firmware loads\n"
+    "sudo systemctl start alsa-state\n"
+    f"systemctl --user start {_UNITS} {_OURS}")
 
 
 class AE9(QObject):
@@ -284,6 +295,7 @@ class AE9(QObject):
         self.longname = ""
         self.answering = True     # False: writes fail with ENODEV (driver 0.12.8: codecs
                                   # stopped answering, or the card dropped off the bus)
+        self._reload_seen = False  # while not answering: the driver went away since
         self._notifier = None
         self._retry = QTimer(self, interval=3000)
         self._retry.timeout.connect(self._try_open)
@@ -295,6 +307,16 @@ class AE9(QObject):
         return self.mixer is not None
 
     def _try_open(self):
+        if not self.answering:
+            # Not answering: the card's devices stay closed (an open one keeps
+            # modprobe -r from unloading the driver), and only /sys and /proc
+            # are looked at until the driver has gone away and come back.
+            here = driver_loaded() and card_listed()
+            if not self._reload_seen:
+                self._reload_seen = not here
+                return
+            if not here:
+                return
         idx = alsa.find_card("AE9", "Sound Blaster AE-9", "AE-9")
         if idx < 0:
             self._retry.start()
@@ -313,7 +335,7 @@ class AE9(QObject):
         self._notifier.activated.connect(self._on_events)
         self.connection_changed.emit(True)
 
-    def _lost(self):
+    def _close(self):
         if self._notifier:
             self._notifier.setEnabled(False)
             self._notifier.deleteLater()
@@ -321,8 +343,22 @@ class AE9(QObject):
         if self.mixer:
             self.mixer.close()
         self.mixer = None
+
+    def _lost(self):
+        self._close()
         self.connection_changed.emit(False)
         self._retry.start()
+
+    def _stopped_answering(self):
+        """ENODEV: let go of the card so the driver can be reloaded."""
+        self._reload_seen = False
+        self._set_answering(False)
+        self._lost()
+
+    def retry(self):
+        """The user's "Try again": open the card now, reloaded or not."""
+        self._reload_seen = True
+        self._try_open()
 
     def _on_events(self, *_):
         if not self.mixer:
@@ -406,7 +442,9 @@ class AE9(QObject):
             return e.errno or errno.EIO
 
     def _write_failed(self, e):
-        if e.errno == errno.ENODEV:
+        if e.errno == errno.ENODEV and self.answering:
+            # after the caller's write returns: it may still use the mixer
+            QTimer.singleShot(0, self._stopped_answering)
             self._set_answering(False)
 
     def _set_answering(self, ok):
@@ -518,6 +556,11 @@ def dsp_waiting_rate(card, live):
     if rate == 48000 or (rate == 96000 and dsp_96k()):
         return None
     return rate
+
+
+def card_listed(card_id="AE9"):
+    """The card is in /proc/asound (looked up without opening a device)."""
+    return os.path.exists(f"/proc/asound/{card_id}")
 
 
 def driver_loaded():

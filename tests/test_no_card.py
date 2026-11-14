@@ -76,21 +76,69 @@ class NotAnsweringTest(AppTestCase):
     """Driver 0.12.8: the card stays on the bus but stops answering; every
     control write fails with ENODEV until the driver is reloaded."""
 
-    def test_enodev_shows_the_no_card_screen_with_how_to_fix(self):
-        w = self.window()
+    def stop(self):
         self.mixer.set = enodev
         self.assertFalse(self.ctx.card.set(C.SBX, True))
         process()
+
+    def test_enodev_shows_the_no_card_screen_with_how_to_fix(self):
+        w = self.window()
+        self.stop()
         self.assertFalse(self.ctx.card.answering)
         self.assertIs(w.body.currentWidget(), w.no_card)
         self.assertEqual(w.no_card.title.text(), window.NOT_ANSWERING_TITLE)
-        self.assertIn("sudo modprobe -r snd-hda-codec-creative-ae9", w.no_card_bar.text())
+        self.assertEqual(w.no_card_bar.text(), window.NOT_ANSWERING_BAR)
+        self.assertTrue(w.no_card.steps_box.isVisible())
+        steps = w.no_card.steps.text()
+        for want in ("systemctl --user stop", "wireplumber", "sudo systemctl stop alsa-state",
+                     "sudo modprobe -r snd-hda-codec-creative-ae9 && sudo modprobe snd-hda-codec-creative-ae9",
+                     "sudo systemctl start alsa-state", "systemctl --user start"):
+            self.assertIn(want, steps)
         self.assertFalse(w.bottom_bar.isVisible())
+
+    def test_the_app_lets_go_of_the_card(self):
+        mixer = self.mixer
+        closed = []
+        mixer.close = lambda: closed.append(True)
+        self.stop()
+        self.assertTrue(closed)
+        self.assertIsNone(self.ctx.card.mixer)
+
+    def test_no_reopen_until_the_driver_went_away_and_came_back(self):
+        from sbcommand import alsa
+        looks = []
+        real = alsa.find_card
+        alsa.find_card = lambda *h: looks.append(h) or real(*h)
+        try:
+            self.stop()
+            card = self.ctx.card
+            card._try_open()                      # driver still there: hands off
+            self.assertFalse(looks)
+            self.assertIsNone(card.mixer)
+            support.DRIVER["loaded"] = False      # modprobe -r
+            card._try_open()
+            self.assertIsNone(card.mixer)
+            support.DRIVER["loaded"] = True       # modprobe
+            card._try_open()
+            self.assertTrue(looks)
+            self.assertIsNotNone(card.mixer)
+            self.assertTrue(card.answering)
+        finally:
+            alsa.find_card = real
+
+    def test_try_again_opens_now(self):
+        w = self.window()
+        self.stop()
+        w.no_card.retry_btn.click()
+        process()
+        self.assertTrue(self.ctx.card.answering)
+        self.assertIs(w.body.currentWidget(), w.stack)
 
     def test_write_returns_enodev(self):
         self.mixer.set = enodev
         self.assertEqual(self.ctx.card.write(C.SBX, True), errno.ENODEV)
         self.assertFalse(self.ctx.card.answering)
+        process()
 
     def test_other_errors_dont_count(self):
         def ebusy(*_):
@@ -105,7 +153,9 @@ class NotAnsweringTest(AppTestCase):
         self.mixer.set = enodev
         self.ctx.card.set(C.SBX, True)
         process()
-        self.ctx.card._lost()           # modprobe -r
+        support.DRIVER["listed"] = False
+        self.ctx.card._try_open()       # modprobe -r
+        support.DRIVER["listed"] = True
         self.ctx.card._try_open()       # modprobe
         process()
         self.assertTrue(self.ctx.card.answering)
@@ -114,7 +164,7 @@ class NotAnsweringTest(AppTestCase):
 
     def test_ctl_says_how_to_fix(self):
         from sbcommand import ctl
-        self.assertIn("modprobe", ctl.ERRORS[errno.ENODEV])
+        self.assertIn("Reload the driver", ctl.ERRORS[errno.ENODEV])
 
 
 class DspWaitsFor48kTest(AppTestCase):

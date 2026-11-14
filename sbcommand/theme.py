@@ -95,6 +95,10 @@ QMainWindow, #root {{ background: {"transparent" if GLASS else MAIN_TOP}; }}
 #bottomBar {{ background: {surface(BOTTOM_BG)};{GLASS_EDGE_TOP} }}
 #noCardBar {{ background: {ACCENT}; color: {ACCENT_TEXT}; font-size: 15px; padding: 8px 16px; }}
 #noCardTitle {{ font-size: 24px; font-weight: 700; }}
+#reloadSteps {{
+    font-family: "JetBrains Mono", "DejaVu Sans Mono", monospace; font-size: 13px;
+    background: {rgba(OVERLAY, 0.06)}; border: 1px solid {rgba(OVERLAY, 0.12)}; border-radius: 4px; padding: 10px;
+}}
 #pageTitle {{ font-size: 23px; font-weight: 700; }}
 #sectionTitle {{ font-size: 15px; font-weight: 700; }}
 #subTitle {{ font-size: 16px; font-weight: 700; }}
