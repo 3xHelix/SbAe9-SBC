@@ -266,16 +266,24 @@ def mic_raw_to_db(raw):
     return raw - 90  # 99 -> +9 dB
 
 
+NOT_ANSWERING = ("The sound card stopped answering, so changes don't reach it. Reload the driver "
+                 "(sudo modprobe -r snd-hda-codec-creative-ae9 && sudo modprobe snd-hda-codec-creative-ae9) "
+                 "or power the PC off and on.")
+
+
 class AE9(QObject):
     changed = Signal(str)         # control name whose value changed
     info_changed = Signal(str)    # control name whose active state changed
     connection_changed = Signal(bool)
+    answering_changed = Signal(bool)
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.mixer = None
         self.card_index = -1
         self.longname = ""
+        self.answering = True     # False: writes fail with ENODEV (driver 0.12.8: codecs
+                                  # stopped answering, or the card dropped off the bus)
         self._notifier = None
         self._retry = QTimer(self, interval=3000)
         self._retry.timeout.connect(self._try_open)
@@ -297,6 +305,7 @@ class AE9(QObject):
             self._retry.start()
             return
         self._retry.stop()
+        self._set_answering(True)
         self.card_index = idx
         self.longname = alsa.card_longname(idx)
         fd = self.mixer.subscribe()
@@ -376,8 +385,10 @@ class AE9(QObject):
             if not force and self.mixer.get(name) == value:
                 return True
             self.mixer.set(name, value)
+            self._set_answering(True)
             return True
-        except OSError:
+        except OSError as e:
+            self._write_failed(e)
             return False
 
     def write(self, name, value):
@@ -388,9 +399,20 @@ class AE9(QObject):
             return errno.ENOENT
         try:
             self.mixer.set(name, value)
+            self._set_answering(True)
             return 0
         except OSError as e:
+            self._write_failed(e)
             return e.errno or errno.EIO
+
+    def _write_failed(self, e):
+        if e.errno == errno.ENODEV:
+            self._set_answering(False)
+
+    def _set_answering(self, ok):
+        if ok != self.answering:
+            self.answering = ok
+            self.answering_changed.emit(ok)
 
     def iec958(self, name):
         """An IEC958 control's 24 channel-status bytes, or None."""
@@ -482,6 +504,25 @@ class AE9(QObject):
             if any(abs(a - b) > 0.55 for a, b in zip(self.eq_db(), profile["eq"])):
                 self.set_eq_db(profile["eq"])
             self.set(EQ_ON, bool(profile.get("eq_on", True)))
+
+
+def dsp_waiting_rate(card, live):
+    """Direct Mode is off but the stream still plays direct, at this rate (Hz):
+    the driver puts only 48 kHz streams (and 96 kHz with dsp_96k) through
+    the DSP, so DSP mode and the effects start with the next 48 kHz stream.
+    None when DSP mode is on, Direct Mode is on, or nothing plays (the
+    switch then happens at the next stream by itself)."""
+    if not live or not card.present or card.get(DIRECT, True):
+        return None
+    rate = live[0]
+    if rate == 48000 or (rate == 96000 and dsp_96k()):
+        return None
+    return rate
+
+
+def driver_loaded():
+    """The AE-9 driver module is loaded (the card can still be missing)."""
+    return os.path.isdir(ae9.MODULE)
 
 
 def module_param(name):

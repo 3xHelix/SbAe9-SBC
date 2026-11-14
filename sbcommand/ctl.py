@@ -38,6 +38,7 @@ from . import card as C
 ERRORS = {
     errno.EBUSY: "Phantom power can't be switched on yet (card just started); try again in a few seconds.",
     errno.EAGAIN: "The head unit hasn't reported in yet; try again in a moment.",
+    errno.ENODEV: C.NOT_ANSWERING,
 }
 
 

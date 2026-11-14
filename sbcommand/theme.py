@@ -93,6 +93,8 @@ QMainWindow, #root {{ background: {"transparent" if GLASS else MAIN_TOP}; }}
                                 stop:1 {surface(MAIN_BOTTOM, 0.85)});
 }}
 #bottomBar {{ background: {surface(BOTTOM_BG)};{GLASS_EDGE_TOP} }}
+#noCardBar {{ background: {ACCENT}; color: {ACCENT_TEXT}; font-size: 15px; padding: 8px 16px; }}
+#noCardTitle {{ font-size: 24px; font-weight: 700; }}
 #pageTitle {{ font-size: 23px; font-weight: 700; }}
 #sectionTitle {{ font-size: 15px; font-weight: 700; }}
 #subTitle {{ font-size: 16px; font-weight: 700; }}

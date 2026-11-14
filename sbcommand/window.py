@@ -443,6 +443,40 @@ def blur_behind(win):
 TitleBar, EdgeGrip = frame.TitleBar, frame.EdgeGrip
 
 
+NO_CARD_TITLE = "Please connect a Sound Blaster AE-9."
+NO_CARD = "Your audio device cannot be detected. Please check your connection."
+NO_CARD_SUB = "The window fills in as soon as the card appears."
+NOT_ANSWERING_TITLE = "The Sound Blaster AE-9 stopped answering."
+NOT_ANSWERING_SUB = "The window fills in again once the driver is reloaded."
+NO_DRIVER = ("The AE-9 driver (snd-hda-codec-creative-ae9) isn't loaded. "
+             "Install or load it, and the card shows up here.")
+
+
+def no_card_reason(card):
+    """The bottom strip's text while the card is missing or not answering."""
+    if card.present:
+        return C.NOT_ANSWERING
+    return NO_CARD if C.driver_loaded() else NO_DRIVER
+
+
+class NoCardPage(QWidget):
+    """What the window shows while the AE-9 is missing (as Windows' SBC)."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setObjectName("content")
+        lay = QVBoxLayout(self)
+        lay.addStretch()
+        self.title = label(NO_CARD_TITLE, "noCardTitle", wrap=True)
+        self.title.setMinimumWidth(1)
+        self.title.setAlignment(Qt.AlignCenter)
+        lay.addWidget(self.title)
+        self.sub = label(NO_CARD_SUB, "muted", wrap=True)
+        self.sub.setAlignment(Qt.AlignCenter)
+        lay.addWidget(self.sub)
+        lay.addStretch()
+
+
 class MainWindow(QMainWindow):
     def __init__(self, ctx):
         super().__init__()
@@ -485,10 +519,12 @@ class MainWindow(QMainWindow):
             self.win_buttons.append(b)
         v.addWidget(title)
 
-        self.missing = pages.Banner("Sound Blaster AE-9 not found. Is the snd-hda-codec-creative-ae9 "
-                                    "driver loaded? Waiting for the card…", warn=True)
-        self.missing.layout().setContentsMargins(16, 8, 16, 8)
-        v.addWidget(self.missing)
+        # Direct Mode off, but the stream plays on direct until a 48 kHz one
+        self.dsp_wait = pages.Banner("", action="Use 48 kHz")
+        self.dsp_wait.layout().setContentsMargins(16, 8, 16, 8)
+        self.dsp_wait.button.setToolTip("Sets Playback's sample rate to 48 kHz")
+        self.dsp_wait.button.clicked.connect(self._use_48k)
+        v.addWidget(self.dsp_wait)
 
         mid = QHBoxLayout()
         mid.setSpacing(0)
@@ -501,11 +537,22 @@ class MainWindow(QMainWindow):
         sl = QVBoxLayout(side)
         sl.setContentsMargins(0, 10, 0, 12)
         sl.setSpacing(2)
-        sl.addWidget(label("Sound Experience", "sideCaption"))
+        self.side_caption = label("Sound Experience", "sideCaption")
+        sl.addWidget(self.side_caption)
         sl.addSpacing(4)
         self.stack = QStackedWidget()
         self.stack.setObjectName("content")
         self.buttons = []
+        self.nav_seps = []
+
+        # no card: "My Devices" stands in for the pages, which need the card
+        self.devices_btn = QPushButton("My Devices")
+        self.devices_btn.setCheckable(True)
+        self.devices_btn.setIcon(icons.icon("speaker", T.TEXT, active=T.ACCENT_HI, size=22))
+        self.devices_btn.setIconSize(QSize(22, 22))
+        self.devices_btn.setCursor(Qt.PointingHandCursor)
+        self.devices_btn.clicked.connect(self._show_no_card)
+        sl.addWidget(self.devices_btn)
 
         def add(entry):
             name, ic, cls = entry
@@ -522,15 +569,21 @@ class MainWindow(QMainWindow):
 
         for entry in NAV:
             if entry is None:
-                sl.addWidget(pages.hline())
+                self.nav_seps.append(pages.hline())
+                sl.addWidget(self.nav_seps[-1])
             else:
                 add(entry)
+        self.n_card_pages = len(self.buttons)
         sl.addStretch()
         sl.addWidget(pages.hline())
         for entry in NAV_BOTTOM:
             add(entry)
         mid.addWidget(side)
-        mid.addWidget(self.stack, 1)
+        self.no_card = NoCardPage()
+        self.body = QStackedWidget()
+        self.body.addWidget(self.stack)
+        self.body.addWidget(self.no_card)
+        mid.addWidget(self.body, 1)
 
         # bottom bar
         bottom = self.bottom_bar = QFrame()
@@ -571,12 +624,18 @@ class MainWindow(QMainWindow):
         self.vol.muteToggled.connect(lambda m: self.card.set(C.MASTER_SW, not m))
         bl.addWidget(self.vol)
         v.addWidget(bottom)
+        self.no_card_bar = label("", "noCardBar", wrap=True)
+        self.no_card_bar.setAlignment(Qt.AlignCenter)
+        self.no_card_bar.setMinimumHeight(56)
+        v.addWidget(self.no_card_bar)
 
         self.card.changed.connect(self._on_card)
         self.card.info_changed.connect(self._on_card)
         self.card.connection_changed.connect(self._on_card)
+        self.card.answering_changed.connect(self._on_card)
         ctx.profile_changed.connect(self.refresh)
         ctx.pw.updated.connect(self._refresh_mic_mute)
+        ctx.pw.updated.connect(self._refresh_dsp_wait)
 
         start = ctx.settings["page"]
         self.go(start if isinstance(start, int) and 0 <= start < self.stack.count() else 0)
@@ -631,10 +690,35 @@ class MainWindow(QMainWindow):
             self._place_grips()
 
     def go(self, idx):
+        self.body.setCurrentWidget(self.stack)
         self.stack.setCurrentIndex(idx)
         for i, b in enumerate(self.buttons):
             b.setChecked(i == idx)
-        self.ctx.settings["page"] = idx
+        self.devices_btn.setChecked(False)
+        if self.card.present:      # without the card only Settings opens; keep the saved page
+            self.ctx.settings["page"] = idx
+
+    def _show_no_card(self):
+        self.body.setCurrentWidget(self.no_card)
+        for b in self.buttons:
+            b.setChecked(False)
+        self.devices_btn.setChecked(True)
+
+    def _show_card(self, present):
+        """Swap between the card's pages and the "no card" screen."""
+        if present == getattr(self, "_shown_present", None):
+            return
+        self._shown_present = present
+        for w in self.buttons[:self.n_card_pages] + self.nav_seps + [self.side_caption]:
+            w.setVisible(present)
+        self.devices_btn.setVisible(not present)
+        self.bottom_bar.setVisible(present)
+        self.no_card_bar.setVisible(not present)
+        if present:
+            start = self.ctx.settings["page"]
+            self.go(start if isinstance(start, int) and 0 <= start < self.stack.count() else 0)
+        else:
+            self._show_no_card()
 
     def _mic_mute(self, muted):
         n = self.ctx.pw.nodes
@@ -644,6 +728,19 @@ class MainWindow(QMainWindow):
     def _on_card(self, *_):
         self.refresh()
 
+    def _refresh_dsp_wait(self, *_):
+        rate = self.card.answering and C.dsp_waiting_rate(self.card, pipewire.card_stream())
+        if rate:
+            self.dsp_wait.text.setText(
+                f"DSP mode and the effects start with the next 48 kHz stream: the one playing now "
+                f"is {rate / 1000:g} kHz, so it stays direct. Set the sample rate to 48 kHz "
+                f"(or: pw-metadata -n settings 0 clock.force-rate 48000).")
+        self.dsp_wait.setVisible(bool(rate))
+
+    def _use_48k(self):
+        self.ctx.settings["rate_mode"] = 48000
+        self.ctx.apply_rate(user=True)
+
     def _refresh_mic_mute(self, *_):
         n = self.ctx.pw.nodes
         if n.source and self.card.present:
@@ -651,10 +748,15 @@ class MainWindow(QMainWindow):
             self.mic.set_state(self.card.get(C.MIC, 0) / 99, muted)
 
     def refresh(self):
-        present = self.card.present
-        self.missing.setVisible(not present)
-        self.stack.setEnabled(present)
+        # a card that stopped answering (driver 0.12.8) is as good as missing
+        present = self.card.present and self.card.answering
+        self._show_card(present)
+        self._refresh_dsp_wait()
         if not present:
+            gone = not self.card.present
+            self.no_card.title.setText(NO_CARD_TITLE if gone else NOT_ANSWERING_TITLE)
+            self.no_card.sub.setText(NO_CARD_SUB if gone else NOT_ANSWERING_SUB)
+            self.no_card_bar.setText(no_card_reason(self.card))
             self.dot.set_color(T.DIM)
             self.profile_lbl.setText("No device")
             return

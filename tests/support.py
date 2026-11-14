@@ -241,6 +241,8 @@ C.module_param = lambda name: PARAMS.get(name)
 C.module_version = lambda: PARAMS.get("version")
 DSP_PATH = {"ready": True}      # the kernel log: a playback ran in DSP mode since boot
 C.dsp_path_ready = lambda: DSP_PATH["ready"]
+DRIVER = {"loaded": True}       # /sys/module/snd_hda_codec_creative_ae9 exists
+C.driver_loaded = lambda: DRIVER["loaded"]
 PCMS = set()   # extra capture devices the fake driver has (1 = optical in, 2 = What U Hear)
 C.has_capture_pcm = lambda device, card_id="AE9": device in PCMS
 PLAYBACK_PCMS = set()   # extra playback devices (4 = the separate optical out)
@@ -288,6 +290,7 @@ def reset():
     PW.__init__()
     PARAMS.clear()
     DSP_PATH["ready"] = True
+    DRIVER["loaded"] = True
     PCMS.clear()
     PLAYBACK_PCMS.clear()
     ENCODER.update({"ffmpeg": {"ac3", "dca"}, "active": False, "calls": []})
