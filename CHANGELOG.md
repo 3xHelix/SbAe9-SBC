@@ -3,7 +3,12 @@
 Sound Blaster Command for Linux: the UI for the Creative Sound Blaster AE-9
 driver ([SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv)).
 
-## Unreleased
+## 0.21.0 (2026-11-14)
+
+The "stopped answering" screen shows the moment the card stops, by
+following driver 0.12.9's Card Answering control, and gives the driver's
+`ae9-reload` as the one command to run. Pairs with
+[SbAe9-Drv v0.12.9](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.9).
 
 ### Changed
 - Driver 0.12.9's "Card Answering": the "stopped answering" screen shows the
