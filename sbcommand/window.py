@@ -450,6 +450,10 @@ NOT_ANSWERING_TITLE = "The Sound Blaster AE-9 stopped answering."
 NOT_ANSWERING_SUB = ("Changes no longer reach it. Reload the driver with these commands in a "
                      "terminal (the window has already let go of the card), or power the PC "
                      "off and on. The window fills in again once the card is back.")
+RELOAD_TOOL_SUB = ("Changes no longer reach it. Run this in a terminal. It reloads the driver: "
+                   "stops PipeWire and the AE-9 services, reloads, starts them again. If it says "
+                   "the card didn't start, power the PC off (PSU switch) for 15-30 s. The window "
+                   "fills in again once the card is back.")
 NOT_ANSWERING_BAR = "The sound card stopped answering. Reload the driver, or power the PC off and on."
 NO_DRIVER = ("The AE-9 driver (snd-hda-codec-creative-ae9) isn't loaded. "
              "Install or load it, and the card shows up here.")
@@ -491,7 +495,7 @@ class NoCardPage(QWidget):
         row.addStretch()
         self.copy_btn = QPushButton("Copy commands")
         self.copy_btn.setCursor(Qt.PointingHandCursor)
-        self.copy_btn.clicked.connect(lambda: QApplication.clipboard().setText(C.RELOAD_STEPS))
+        self.copy_btn.clicked.connect(lambda: QApplication.clipboard().setText(self.steps.text()))
         row.addWidget(self.copy_btn)
         self.retry_btn = QPushButton("Try again")
         self.retry_btn.setObjectName("accentButton")
@@ -506,7 +510,11 @@ class NoCardPage(QWidget):
 
     def show_state(self, answering):
         self.title.setText(NO_CARD_TITLE if answering else NOT_ANSWERING_TITLE)
-        self.sub.setText(NO_CARD_SUB if answering else NOT_ANSWERING_SUB)
+        tool = None if answering else C.reload_tool()
+        self.sub.setText(NO_CARD_SUB if answering else RELOAD_TOOL_SUB if tool else NOT_ANSWERING_SUB)
+        # ae9-reload (driver 0.12.9+) when it's there; the commands by hand before it
+        self.steps.setText(C.RELOAD_TOOL if tool else C.RELOAD_STEPS)
+        self.copy_btn.setText("Copy command" if tool else "Copy commands")
         self.steps_box.setVisible(not answering)
 
 

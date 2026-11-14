@@ -10,6 +10,7 @@ import errno
 import math
 import os
 import re
+import shutil
 import subprocess
 
 from PySide6.QtCore import QObject, QSocketNotifier, QTimer, Signal
@@ -84,6 +85,9 @@ MIC_MONITOR = "Mic Monitor Playback Switch"     # the mic mixed in the DSP, no d
 # read-only (0.12.3): the monitor was on since the DSP loaded. After that, a Voice
 # Clarity recording made with the monitor off comes out broken until a power cycle.
 MIC_MONITOR_USED = "Mic Monitor Used Since Power-up"
+# read-only, driver 0.12.9+: off (with a change event) the moment the card
+# stops answering or drops off the bus. Missing on older drivers: answering.
+CARD_ANSWERING = "Card Answering"
 # Voice Clarity (Recording, 0.12.2): the master and its effects
 VC = "Voice Clarity Capture Switch"
 VC_AEC = "Acoustic Echo Cancellation Capture Switch"
@@ -273,6 +277,14 @@ NOT_ANSWERING = ("The sound card stopped answering, so changes don't reach it. R
 # itself while the card isn't answering.
 _UNITS = "pipewire.socket pipewire-pulse.socket pipewire pipewire-pulse wireplumber"
 _OURS = "sbae9-sbc-encoder.service ae9-headroom.service"
+RELOAD_TOOL = "ae9-reload"     # driver 0.12.9+: the whole sequence below in one command
+
+
+def reload_tool():
+    """The driver's ae9-reload, if it's installed (driver 0.12.9+)."""
+    return shutil.which(RELOAD_TOOL)
+
+
 RELOAD_STEPS = (
     f"systemctl --user stop {_OURS} {_UNITS}\n"
     "sudo systemctl stop alsa-state\n"
@@ -326,6 +338,12 @@ class AE9(QObject):
         except OSError:
             self._retry.start()
             return
+        if not self._card_answering():
+            # already stopped (e.g. "Try again" too early): let go at once
+            self._close()
+            self._reload_seen = False
+            self._set_answering(False)
+            return
         self._retry.stop()
         self._set_answering(True)
         self.card_index = idx
@@ -348,6 +366,15 @@ class AE9(QObject):
         self._close()
         self.connection_changed.emit(False)
         self._retry.start()
+
+    def _card_answering(self):
+        """The driver's "Card Answering" (0.12.9+); True without it."""
+        if not (self.mixer and self.mixer.has(CARD_ANSWERING)):
+            return True
+        try:
+            return bool(self.mixer.get(CARD_ANSWERING))
+        except OSError:
+            return True       # a failed read: the ENODEV write path still catches it
 
     def _stopped_answering(self):
         """ENODEV: let go of the card so the driver can be reloaded."""
@@ -388,6 +415,9 @@ class AE9(QObject):
                 self.mixer.refresh_info(numid)
                 self.info_changed.emit(c.name)
             if mask & alsa.EVENT_MASK_VALUE:
+                if c.name == CARD_ANSWERING and not self._card_answering():
+                    self._stopped_answering()
+                    return
                 self.changed.emit(c.name)
 
     # --- generic access ----------------------------------------------------------

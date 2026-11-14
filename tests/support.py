@@ -244,6 +244,7 @@ C.dsp_path_ready = lambda: DSP_PATH["ready"]
 DRIVER = {"loaded": True, "listed": True}   # /sys/module/snd_hda_codec_creative_ae9, /proc/asound/AE9
 C.driver_loaded = lambda: DRIVER["loaded"]
 C.card_listed = lambda card_id="AE9": DRIVER["listed"]
+C.reload_tool = lambda: "/usr/bin/ae9-reload" if DRIVER["reload_tool"] else None
 PCMS = set()   # extra capture devices the fake driver has (1 = optical in, 2 = What U Hear)
 C.has_capture_pcm = lambda device, card_id="AE9": device in PCMS
 PLAYBACK_PCMS = set()   # extra playback devices (4 = the separate optical out)
@@ -291,7 +292,7 @@ def reset():
     PW.__init__()
     PARAMS.clear()
     DSP_PATH["ready"] = True
-    DRIVER.update({"loaded": True, "listed": True})
+    DRIVER.update({"loaded": True, "listed": True, "reload_tool": False})
     PCMS.clear()
     PLAYBACK_PCMS.clear()
     ENCODER.update({"ffmpeg": {"ac3", "dca"}, "active": False, "calls": []})

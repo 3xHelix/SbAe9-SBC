@@ -96,6 +96,22 @@ class NotAnsweringTest(AppTestCase):
             self.assertIn(want, steps)
         self.assertFalse(w.bottom_bar.isVisible())
 
+    def test_ae9_reload_when_installed(self):
+        support.DRIVER["reload_tool"] = True
+        w = self.window()
+        self.stop()
+        self.assertEqual(w.no_card.steps.text(), "ae9-reload")
+        self.assertIn("power the PC off (PSU switch)", w.no_card.sub.text())
+        w.no_card.copy_btn.click()
+        from PySide6.QtWidgets import QApplication
+        self.assertEqual(QApplication.clipboard().text(), "ae9-reload")
+
+    def test_the_commands_without_ae9_reload(self):
+        w = self.window()
+        self.stop()
+        self.assertEqual(w.no_card.steps.text(), C.RELOAD_STEPS)
+        self.assertEqual(w.no_card.copy_btn.text(), "Copy commands")
+
     def test_the_app_lets_go_of_the_card(self):
         mixer = self.mixer
         closed = []
@@ -165,6 +181,58 @@ class NotAnsweringTest(AppTestCase):
     def test_ctl_says_how_to_fix(self):
         from sbcommand import ctl
         self.assertIn("Reload the driver", ctl.ERRORS[errno.ENODEV])
+
+
+class CardAnsweringControlTest(AppTestCase):
+    """Driver 0.12.9: "Card Answering" goes off with a change event the
+    moment the card stops; the window switches without a failed write."""
+
+    def test_the_event_shows_the_screen_without_a_click(self):
+        self.mixer.add_bool(C.CARD_ANSWERING, True, writable=False)
+        w = self.window()
+        mixer = self.mixer
+        self.mixer.external(C.CARD_ANSWERING, False)
+        process(20)
+        self.assertFalse(self.ctx.card.answering)
+        self.assertIsNone(self.ctx.card.mixer)        # let go of the card
+        self.assertIs(w.body.currentWidget(), w.no_card)
+        self.assertEqual(w.no_card.title.text(), window.NOT_ANSWERING_TITLE)
+        self.assertFalse([n for n, _ in mixer.writes])
+
+    def test_on_is_just_a_value(self):
+        self.mixer.add_bool(C.CARD_ANSWERING, False, writable=False)
+        self.mixer.values[C.CARD_ANSWERING] = True
+        w = self.window()
+        self.mixer.external(C.CARD_ANSWERING, True)
+        process(20)
+        self.assertTrue(self.ctx.card.answering)
+        self.assertIs(w.body.currentWidget(), w.stack)
+
+    def test_a_card_already_stopped_at_open(self):
+        from sbcommand import alsa
+        real = alsa.Mixer
+
+        class Stopped(real):
+            def __init__(self, *a, **k):
+                super().__init__(*a, **k)
+                self.add_bool(C.CARD_ANSWERING, False, writable=False)
+
+        w = self.window()
+        self.ctx.card._lost()
+        alsa.Mixer = Stopped
+        try:
+            self.ctx.card._try_open()
+            process()
+        finally:
+            alsa.Mixer = real
+        self.assertFalse(self.ctx.card.answering)
+        self.assertIsNone(self.ctx.card.mixer)
+        self.assertIs(w.body.currentWidget(), w.no_card)
+        self.assertEqual(w.no_card.title.text(), window.NOT_ANSWERING_TITLE)
+
+    def test_older_drivers_have_no_control(self):
+        self.assertFalse(self.mixer.has(C.CARD_ANSWERING))
+        self.assertTrue(self.ctx.card._card_answering())
 
 
 class DspWaitsFor48kTest(AppTestCase):
