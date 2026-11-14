@@ -3,7 +3,12 @@
 Sound Blaster Command for Linux: the UI for the Creative Sound Blaster AE-9
 driver ([SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv)).
 
-## Unreleased
+## 0.20.0 (2026-11-14)
+
+A "no card" screen like Sound Blaster Command on Windows, for a missing card
+and for a card that stopped answering (with a reload that works while the
+window is open), and a note when DSP mode waits for a 48 kHz stream. Pairs
+with [SbAe9-Drv v0.12.8](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.8).
 
 ### Changed
 - No card, no pages: while the AE-9 is missing, the window shows a "Please
