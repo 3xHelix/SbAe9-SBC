@@ -3,7 +3,11 @@
 Sound Blaster Command for Linux: the UI for the Creative Sound Blaster AE-9
 driver ([SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv)).
 
-## Unreleased
+## 0.21.1 (2026-11-15)
+
+Headphone profiles load while audio plays on driver 0.12.10, and the app
+says so. Pairs with
+[SbAe9-Drv v0.12.10](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.10).
 
 ### Changed
 - Headphone Profile: with driver 0.12.10 (its hp_live_upload option, on by
