@@ -101,6 +101,36 @@ class HeadphoneProfileTest(S.AppTestCase):
         pg.refresh()
         self.assertNotIn("encoder", pg.hp_prof_note.text())
 
+    def test_live_uploads_drop_the_wait(self):
+        """Driver 0.12.10: hp_live_upload=Y, curves load while audio plays."""
+        S.PARAMS["hp_live_upload"] = "Y"
+        self.add(value=1)
+        S.ENCODER["active"] = True
+        self.ctx.settings["encoder"] = "ac3"
+        pg = self.playback()
+        self.assertNotIn("encoder", pg.hp_prof_note.text())
+        self.assertIn("even while audio plays", pages.hp_profile_tip())
+        self.assertNotIn("waits until nothing is playing", pages.hp_profile_tip())
+
+    def test_without_live_uploads_the_tip_says_it_waits(self):
+        for value in (None, "N", "0"):
+            S.PARAMS.pop("hp_live_upload", None)
+            if value:
+                S.PARAMS["hp_live_upload"] = value
+            self.assertFalse(C.hp_live_upload(), value)
+            self.assertIn("waits until nothing is playing", pages.hp_profile_tip())
+        S.PARAMS["hp_live_upload"] = "1"
+        self.assertTrue(C.hp_live_upload())
+
+    def test_encoder_page_hint_follows_the_driver(self):
+        texts = lambda pg: " ".join(l.text() for l in pg.findChildren(pages.QLabel))
+        pg = self.page(pages.EncoderPage)
+        self.assertIn("switch the encoder off", texts(pg))
+        S.PARAMS["hp_live_upload"] = "Y"
+        pg2 = pages.EncoderPage(self.ctx)
+        self.assertNotIn("switch the encoder off", texts(pg2))
+        pg2.deleteLater()
+
 
     def full_list(self, slots="DT990=Beyerdynamic DT 990 Pro;;;"):
         """Driver 0.12.2: Off + Creative's 32 + 4 custom slots."""

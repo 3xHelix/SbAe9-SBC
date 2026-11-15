@@ -636,6 +636,13 @@ def surround_max():
     return 192000 if module_param("surround_192k") == "1" else 96000
 
 
+def hp_live_upload():
+    """Headphone profiles load while audio plays (driver 0.12.10's default,
+    its hp_live_upload option). N or missing (0.11.0-0.12.9): a new curve
+    waits until every stream has stopped."""
+    return module_param("hp_live_upload") in ("Y", "1")
+
+
 def dsp_96k():
     """DSP mode (Direct Mode off) takes 96 kHz as well as 48 (driver 0.9.4+,
     its dsp_96k option, on by default)."""

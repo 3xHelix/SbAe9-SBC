@@ -654,7 +654,7 @@ class PlaybackPage(Page):
         self.hp_prof.setMinimumWidth(250)
         self.hp_prof.activated.connect(self._pick_hp_profile)
         pr.addWidget(self.hp_prof, 0, 1)
-        pr.addWidget(info_button(HP_PROFILE_TIP), 0, 2)
+        pr.addWidget(info_button(hp_profile_tip()), 0, 2)
         self.hp_make = QPushButton("Make custom profile…")
         self.hp_make.clicked.connect(self._make_hp_profile)
         pr.addWidget(self.hp_make, 1, 1, Qt.AlignLeft)
@@ -1139,7 +1139,8 @@ class PlaybackPage(Page):
             note = f"Acts at 48 kHz; the card is playing at {live[0] / 1000:g} kHz now."
         else:
             note = ""
-        if curves and self.ctx.settings["encoder"] in encoder.ENCODERS and encoder.active():
+        if (curves and self.ctx.settings["encoder"] in encoder.ENCODERS and encoder.active()
+                and not C.hp_live_upload()):
             note = (note + "\n" if note else "") + (
                 "While the encoder runs, a new headphone profile loads only after you switch "
                 "the encoder off (profiles load when every stream is stopped).")
@@ -1648,13 +1649,23 @@ def confirm_phantom(parent):
     return box.clickedButton() is yes
 
 
-HP_PROFILE_TIP = ("Creative's EQ correction for your headphone model, the same curves as "
-                  "Sound Blaster Command on Windows.\n\n"
-                  "It acts with Direct Mode off, on Headphones, while the card plays at 48 kHz. "
-                  "On speakers it rests, and comes back when you switch to headphones.\n\n"
-                  "The card loads a curve about a second after you stop on it (driver 0.10.1+); "
-                  "from driver 0.11.0 it waits until nothing is playing, so pick it, then "
-                  "start the music. If loading fails, that profile's EQ stays off, so audio "
+def hp_profile_tip():
+    """The Headphone Profile tip, for how the loaded driver loads curves."""
+    if C.hp_live_upload():
+        when = ("The card loads a curve about a second after you stop on it, even while "
+                "audio plays (driver 0.12.10+). ")
+    else:
+        when = ("The card loads a curve about a second after you stop on it (driver 0.10.1+); "
+                "from driver 0.11.0 it waits until nothing is playing, so pick it, then "
+                "start the music. ")
+    return HP_PROFILE_TIP_HEAD + when + HP_PROFILE_TIP_TAIL
+
+
+HP_PROFILE_TIP_HEAD = ("Creative's EQ correction for your headphone model, the same curves as "
+                       "Sound Blaster Command on Windows.\n\n"
+                       "It acts with Direct Mode off, on Headphones, while the card plays at 48 kHz. "
+                       "On speakers it rests, and comes back when you switch to headphones.\n\n")
+HP_PROFILE_TIP_TAIL = ("If loading fails, that profile's EQ stays off, so audio "
                   "stays clean, and the kernel log says why.\n\n"
                   "The curves are Creative's and aren't shipped with the driver: "
                   "ae9-get-firmware installs them from Creative's installer "
@@ -2996,8 +3007,9 @@ class EncoderPage(Page):
             "play to AE-9 Optical Out, and the mirror of the main output (if on) stops.\n"
             "• It adds a delay of about 0.1–0.2 s: fine for films and music, noticeable in "
             "games.\n"
-            "• While it runs, a new headphone profile loads only after you switch the encoder "
-            "off (profiles load when every stream is stopped).\n"
+            + ("" if C.hp_live_upload() else
+               "• While it runs, a new headphone profile loads only after you switch the encoder "
+               "off (profiles load when every stream is stopped).\n") +
             "• It keeps running with this app closed and starts again at login, until you "
             "pick No Encoder.\n"
             "• 5.1 needs the card on its 5.1 stream with the inputs on, and driver 0.12.1 or "

@@ -3,6 +3,14 @@
 Sound Blaster Command for Linux: the UI for the Creative Sound Blaster AE-9
 driver ([SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv)).
 
+## Unreleased
+
+### Changed
+- Headphone Profile: with driver 0.12.10 (its hp_live_upload option, on by
+  default) a curve loads while audio plays, as on Windows. The tip says so,
+  and the "loads only after you switch the encoder off" notes (Playback and
+  Encoder pages) go away. Older drivers keep the old wording.
+
 ## 0.21.0 (2026-11-14)
 
 The "stopped answering" screen shows the moment the card stops, by
