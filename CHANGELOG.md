@@ -3,7 +3,12 @@
 Sound Blaster Command for Linux: the UI for the Creative Sound Blaster AE-9
 driver ([SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv)).
 
-## Unreleased
+## 0.21.2 (2026-11-16)
+
+DSP mode plays at Direct Mode's level on driver 0.12.11, so the app warns
+once to turn the volume down before the first switch; and setting changes
+apply faster on 0.12.10+. Pairs with
+[SbAe9-Drv v0.12.11](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.11).
 
 ### Added
 - Driver 0.12.11 plays DSP mode (Direct Mode off) at Direct Mode's level;
