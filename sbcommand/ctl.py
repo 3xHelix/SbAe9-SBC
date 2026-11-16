@@ -312,7 +312,13 @@ def main(argv):
         ok, msg = change(card, settings, cmd, arg, argv[2:])
         print(json.dumps({"ok": ok, "error": msg}))
         if show:
-            notify(state_text(card, cmd) if ok else msg, error=not ok)
+            text = state_text(card, cmd) if ok else msg
+            if (ok and cmd == "direct" and not card.get(C.DIRECT, True)
+                    and C.dsp_full_level() and not settings["dsp_louder_seen"]):
+                # a shortcut can't ask first: say it once, as it switches
+                text += "\n" + C.DSP_LOUDER
+                settings["dsp_louder_seen"] = True
+            notify(text, error=not ok)
             return 0      # a shortcut: the notification said what happened
         return 0 if ok else 1
     finally:

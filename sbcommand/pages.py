@@ -218,7 +218,7 @@ class SbxPage(Page):
         self.header("SBX Profile", self.sbx, [self.combo, plus, dots, self.modified])
 
         self.banner = Banner("", "Turn Direct Mode off", warn=True)
-        self.banner.button.clicked.connect(lambda: self.ctx.set_direct(False))
+        self.banner.button.clicked.connect(lambda: set_direct_checked(self, self.ctx, False))
         self.lay.addWidget(self.banner)
 
         self.carousel = ProfileCarousel()
@@ -691,12 +691,13 @@ class PlaybackPage(Page):
         left.addSpacing(6)
         dm = QHBoxLayout()
         dm.addWidget(label("Direct Mode", "sectionTitle"))
-        dm.addWidget(info_button(DIRECT_TIP + ("" if C.restarts_stream_on_direct() else DIRECT_PAUSE_TIP)))
+        dm.addWidget(info_button(DIRECT_TIP + ("" if C.restarts_stream_on_direct() else DIRECT_PAUSE_TIP)
+                                 + (DIRECT_LEVEL_TIP if C.dsp_full_level() else "")))
         dm.addStretch()
         left.addLayout(dm)
         dmr = QHBoxLayout()
         self.direct = ToggleSwitch()
-        self.direct.toggled.connect(lambda on: self.ctx.set_direct(on))
+        self.direct.toggled.connect(self._direct_toggled)
         self.direct_lbl = label("", "bigValue")
         dmr.addWidget(self.direct)
         dmr.addWidget(self.direct_lbl)
@@ -1354,6 +1355,10 @@ class PlaybackPage(Page):
             return bool(self.card.get(C.OPTICAL_MIRROR))
         return True
 
+    def _direct_toggled(self, on):
+        if not set_direct_checked(self, self.ctx, on):
+            self.direct.setCheckedSilently(True)
+
     def _refresh_optical(self, layout):
         has = self.card.has(C.OPTICAL_OUT)
         self.optical_box.setVisible(has)
@@ -1429,6 +1434,8 @@ DIRECT_TIP = ("Direct Mode sends audio straight to the ESS DAC at the stream's o
               "(up to 384 kHz), bypassing the DSP. SBX effects and the EQ are not heard.\n\n"
               "With Direct Mode off, audio goes through the Sound Core3D DSP at 48 or 96 kHz "
               "(48 kHz only before driver 0.9.4), so SBX, the EQ and Scout Mode work.")
+DIRECT_LEVEL_TIP = ("\n\nDSP mode plays at the same level as Direct Mode (driver 0.12.11+; "
+                    "older drivers played it 6 dB lower).")
 # drivers before 0.9.4 don't restart a playing stream when Direct Mode turns on
 DIRECT_PAUSE_TIP = ("\n\nSwitching Direct Mode on during playback goes silent until the stream "
                     "restarts (pause and play), same as on Windows.")
@@ -1610,6 +1617,26 @@ DEVICE_PARAMS = ("pcm_rates", "pcm_bits", "dac_441", "surround", "surround_96k",
                   "dsp_96k", "wuh_96k", "pcm_176k4", "src_reclock")
 
 INPUT_RATES = (48000, 96000)   # What U Hear: 48, or 96 kHz with the driver's wuh_96k
+
+
+def confirm_dsp_louder(parent, ctx):
+    """Before the first switch to DSP mode on driver 0.12.11+, which plays it
+    6 dB louder than older drivers did: True to go ahead."""
+    if not C.dsp_full_level() or ctx.settings["dsp_louder_seen"]:
+        return True
+    if QMessageBox.question(parent, "DSP mode is louder",
+                            C.DSP_LOUDER + "\n\nSwitch to DSP mode now?") != QMessageBox.Yes:
+        return False
+    ctx.settings["dsp_louder_seen"] = True
+    return True
+
+
+def set_direct_checked(parent, ctx, on):
+    """Direct Mode from a switch: the louder-DSP warning first when it turns off."""
+    if on or confirm_dsp_louder(parent, ctx):
+        ctx.set_direct(on)
+        return True
+    return False
 
 
 def confirm_wireplumber_restart(parent, what):
@@ -1822,7 +1849,7 @@ class SpeakerSetup(QWidget):
         self.direct_banner = Banner("Speaker setup is done by the DSP, so it works with "
                                     "Direct Mode off. Your settings are kept for then.",
                                     "Turn Direct Mode off")
-        self.direct_banner.button.clicked.connect(lambda: self.ctx.set_direct(False))
+        self.direct_banner.button.clicked.connect(lambda: set_direct_checked(self, self.ctx, False))
         lay.addWidget(self.direct_banner)
 
         self.box = QWidget()
@@ -2930,8 +2957,9 @@ class ScoutPage(Page):
         self.lay.addStretch()
 
     def _enable(self):
-        self.card.set(C.SBX, True)
-        self.ctx.set_direct(False)
+        if confirm_dsp_louder(self, self.ctx):
+            self.card.set(C.SBX, True)
+            self.ctx.set_direct(False)
 
     def refresh(self):
         if not self.card.present:

@@ -18,6 +18,18 @@ from . import theme as T
 from .widgets import ApplyOverlay, Throttle, VolumeRow, label
 
 
+CARD_MIN_MS = 2000
+
+
+def card_pace(ms):
+    """The least wait after a change that rebuilds the card's stream. Driver
+    0.12.10 fixed the stale-RIRB reads behind the card wearing down under
+    rapid switching (760 back-to-back reconfigs clean), so 2 s is plenty
+    there; older drivers keep the longer wait. PipeWire / WirePlumber
+    restarts (the input rates) keep theirs: those wait for the restart."""
+    return min(ms, CARD_MIN_MS) if C.driver_at_least(0, 12, 10) else ms
+
+
 class Context(QObject):
     """Shared state handed to every page."""
     profile_changed = Signal()
@@ -126,7 +138,7 @@ class Context(QObject):
 
         text = "Sample rate: automatic" if not eff else f"Sample rate: {eff / 1000:g} kHz"
         self.applier.submit(Change(
-            "rate", text, run, 4000, settled,
+            "rate", text, run, card_pace(4000), settled,
             lambda: (pipewire.current_force_rate(), pipewire.current_quantum()) != want))
 
     def _recheck_rate(self):
@@ -146,7 +158,7 @@ class Context(QObject):
             return
         self.applier.submit(Change(
             "direct", "Direct Mode on" if on else "Direct Mode off",
-            lambda: self.card.set(C.DIRECT, on), 5000,
+            lambda: self.card.set(C.DIRECT, on), card_pace(5000),
             lambda: bool(self.card.get(C.DIRECT)) == on and self._sink_ok(),
             lambda: bool(self.card.get(C.DIRECT)) != on))
 
@@ -154,7 +166,7 @@ class Context(QObject):
         items = self.card.items(C.SPEAKER_CFG)
         name = items[k] if 0 <= k < len(items) else str(k)
         self.applier.submit(Change(
-            "speakers", f"Speakers: {name}", lambda: self.card.set(C.SPEAKER_CFG, k), 4000,
+            "speakers", f"Speakers: {name}", lambda: self.card.set(C.SPEAKER_CFG, k), card_pace(4000),
             lambda: self.card.get(C.SPEAKER_CFG) == k and self._sink_ok(),
             lambda: self.card.get(C.SPEAKER_CFG) != k))
 
@@ -181,7 +193,7 @@ class Context(QObject):
                     and (live is None or live[1] == chans))
 
         self.applier.submit(Change("profile", "5.1 Stream" if surround else "Stereo Stream",
-                                   run, 5000, settled,
+                                   run, card_pace(5000), settled,
                                    lambda: bool(pipewire.layout_profile(self.pw.nodes, surround))))
         return True
 
@@ -194,7 +206,7 @@ class Context(QObject):
             # the depth is taken when the card opens: reopen it now
             self.depth_pending = not pipewire.reopen_sink(self.pw.nodes)
 
-        self.applier.submit(Change("depth", f"Bit depth: {name}", run, 4000, self._sink_ok,
+        self.applier.submit(Change("depth", f"Bit depth: {name}", run, card_pace(4000), self._sink_ok,
                                    lambda: self.card.get(C.BIT_DEPTH) != k))
 
     def set_mic_rate(self, rate):
@@ -247,7 +259,7 @@ class Context(QObject):
             self.card.set(C.CAP_BIT_DEPTH, k)
             pipewire.reopen_source(self.pw.nodes)   # taken when the capture opens
 
-        self.applier.submit(Change("cap_depth", f"Mic bit depth: {name}", run, 4000, self._sink_ok,
+        self.applier.submit(Change("cap_depth", f"Mic bit depth: {name}", run, card_pace(4000), self._sink_ok,
                                    lambda: self.card.get(C.CAP_BIT_DEPTH) != k))
 
     def restore_rate(self):
@@ -403,7 +415,7 @@ class DirectSwitch(PillSwitch):
         return not self.card.get(C.DIRECT, True)
 
     def toggle(self):
-        self.ctx.set_direct(self.right())
+        pages.set_direct_checked(self, self.ctx, self.right())
 
 
 class StatusDot(QWidget):

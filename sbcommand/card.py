@@ -643,6 +643,18 @@ def hp_live_upload():
     return module_param("hp_live_upload") in ("Y", "1")
 
 
+# Driver 0.12.11 routes all of the DSP's DAC lanes: DSP mode (Direct Mode
+# off) plays at Direct Mode's level. Before, it played 6 dB low.
+DSP_LOUDER = ("DSP mode is 6 dB louder than before (driver 0.12.11+), on the headphones "
+              "too: lower the volume before switching.")
+
+
+def dsp_full_level():
+    """DSP mode plays at the same level as Direct Mode (driver 0.12.11+);
+    older drivers play it 6 dB low."""
+    return driver_at_least(0, 12, 11)
+
+
 def dsp_96k():
     """DSP mode (Direct Mode off) takes 96 kHz as well as 48 (driver 0.9.4+,
     its dsp_96k option, on by default)."""

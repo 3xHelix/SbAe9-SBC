@@ -3,6 +3,24 @@
 Sound Blaster Command for Linux: the UI for the Creative Sound Blaster AE-9
 driver ([SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv)).
 
+## Unreleased
+
+### Added
+- Driver 0.12.11 plays DSP mode (Direct Mode off) at Direct Mode's level;
+  older drivers played it 6 dB low. The first switch to DSP mode on 0.12.11+
+  asks first: "DSP mode is 6 dB louder than before (driver 0.12.11+), on the
+  headphones too: lower the volume before switching." The keyboard shortcut
+  can't ask, so its notification says it once. The Direct Mode info button
+  notes the matched level.
+
+### Changed
+- "Applying changes…" is quicker on driver 0.12.10+: a change that
+  rebuilds the card's stream (sample rate, Direct Mode, speakers, stereo /
+  5.1, bit depths) waits at least 2 s instead of 4-5 s. One at a time and
+  the latest pick per setting, as before. 0.12.10 fixed the stale reads
+  behind the card wearing down under rapid switching; older drivers keep the
+  longer wait, and the input sample rates (a PipeWire restart) keep theirs.
+
 ## 0.21.1 (2026-11-15)
 
 Headphone profiles load while audio plays on driver 0.12.10, and the app

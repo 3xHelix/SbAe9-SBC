@@ -71,6 +71,7 @@ DEFAULTS = {
     "glass_opacity": 70,     # percent, see theme.GLASS_RANGE
     "encoder": "off",        # optical out service: "off", "fx" (effects loop), "ac3" or "dts"
     "encoder_last": "ac3",   # the encoder last picked, for Playback > Digital's choice
+    "dsp_louder_seen": False,  # driver 0.12.11's "DSP mode is 6 dB louder" warning was shown
 }
 
 

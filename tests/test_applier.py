@@ -108,5 +108,37 @@ class OverlayTest(S.AppTestCase):
         self.assertFalse(self.ctx.applier.busy)
 
 
+class CardPaceTest(S.AppTestCase):
+    """Driver 0.12.10: 2 s least wait for card stream changes; older drivers
+    keep 4-5 s; PipeWire restarts keep theirs."""
+
+    def submitted(self):
+        got = []
+        real = self.ctx.applier.submit
+        self.ctx.applier.submit = lambda c: got.append(c) or real(c)
+        return got
+
+    def test_new_driver_two_seconds(self):
+        S.PARAMS["version"] = "0.12.10"
+        got = self.submitted()
+        self.ctx.set_direct(False)
+        self.assertEqual(got[-1].min_ms, 2000)
+
+    def test_old_driver_keeps_the_long_wait(self):
+        S.PARAMS["version"] = "0.12.9"
+        got = self.submitted()
+        self.ctx.set_direct(False)
+        self.assertEqual(got[-1].min_ms, 5000)
+
+    def test_pace(self):
+        from sbcommand.window import card_pace
+        S.PARAMS["version"] = "0.12.10"
+        self.assertEqual((card_pace(4000), card_pace(5000), card_pace(1000)), (2000, 2000, 1000))
+        S.PARAMS["version"] = "0.12.10-rc1"
+        self.assertEqual(card_pace(5000), 2000)
+        S.PARAMS["version"] = "0.12.9"
+        self.assertEqual(card_pace(5000), 5000)
+
+
 if __name__ == "__main__":
     unittest.main()
