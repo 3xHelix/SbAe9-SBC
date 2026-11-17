@@ -245,6 +245,10 @@ DRIVER = {"loaded": True, "listed": True}   # /sys/module/snd_hda_codec_creative
 C.driver_loaded = lambda: DRIVER["loaded"]
 C.card_listed = lambda card_id="AE9": DRIVER["listed"]
 C.reload_tool = lambda: "/usr/bin/ae9-reload" if DRIVER["reload_tool"] else None
+# ae9-reload's notice (driver 0.12.13): a temp file, never the real runtime dir
+RELOAD_NOTICE = os.path.join(_TMP, "ae9-reload")
+C.reload_notice_path = lambda: RELOAD_NOTICE
+C.RELOAD_SETTLE_MS = 10
 PCMS = set()   # extra capture devices the fake driver has (1 = optical in, 2 = What U Hear)
 C.has_capture_pcm = lambda device, card_id="AE9": device in PCMS
 PLAYBACK_PCMS = set()   # extra playback devices (4 = the separate optical out)
@@ -293,6 +297,8 @@ def reset():
     PARAMS.clear()
     DSP_PATH["ready"] = True
     DRIVER.update({"loaded": True, "listed": True, "reload_tool": False})
+    if os.path.exists(RELOAD_NOTICE):
+        os.remove(RELOAD_NOTICE)
     PCMS.clear()
     PLAYBACK_PCMS.clear()
     ENCODER.update({"ffmpeg": {"ac3", "dca"}, "active": False, "calls": []})

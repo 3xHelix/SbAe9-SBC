@@ -12,6 +12,7 @@ import os
 import re
 import shutil
 import subprocess
+import time
 
 from PySide6.QtCore import QObject, QSocketNotifier, QTimer, Signal
 
@@ -285,6 +286,36 @@ def reload_tool():
     return shutil.which(RELOAD_TOOL)
 
 
+# ae9-reload (driver 0.12.13+) writes its PID here while it reloads: every
+# app holding the card lets go, so a healthy card can be reloaded too.
+RELOAD_NOTICE = "ae9-reload"
+RELOAD_NOTICE_MAX_S = 120     # an empty / unreadable notice counts this long (ae9-reload waits 90)
+RELOAD_NOTICE_POLL_MS = 250   # ae9-reload waits 5 s for the card to be let go
+RELOAD_BACK_WAIT_S = 30       # after the notice: how long to watch for the card to come back
+RELOAD_SETTLE_MS = 1000       # the card is back: settle, then reopen
+
+
+def reload_notice_path():
+    run = os.environ.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}"
+    return os.path.join(run, RELOAD_NOTICE)
+
+
+def reload_notice_active(path=None):
+    """ae9-reload is reloading the driver: its notice is there and its PID is
+    alive. An empty or unreadable notice counts for RELOAD_NOTICE_MAX_S."""
+    path = path or reload_notice_path()
+    try:
+        mtime = os.stat(path).st_mtime
+    except OSError:
+        return False
+    try:
+        with open(path) as f:
+            pid = int(f.read().split()[0])
+    except (OSError, ValueError, IndexError):
+        return time.time() - mtime < RELOAD_NOTICE_MAX_S
+    return pid > 0 and os.path.exists(f"/proc/{pid}")
+
+
 RELOAD_STEPS = (
     f"systemctl --user stop {_OURS} {_UNITS}\n"
     "sudo systemctl stop alsa-state\n"
@@ -299,6 +330,7 @@ class AE9(QObject):
     info_changed = Signal(str)    # control name whose active state changed
     connection_changed = Signal(bool)
     answering_changed = Signal(bool)
+    reloading_changed = Signal(bool)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -311,14 +343,56 @@ class AE9(QObject):
         self._notifier = None
         self._retry = QTimer(self, interval=3000)
         self._retry.timeout.connect(self._try_open)
-        self._try_open()
+        # ae9-reload's notice (driver 0.12.13+): let go of the card while it reloads
+        self.reloading = False
+        self._back_by = None      # after the notice: watch for the card until then
+        self._notice = QTimer(self, interval=RELOAD_NOTICE_POLL_MS)
+        self._notice.timeout.connect(self._check_notice)
+        self._notice.start()
+        if reload_notice_active():
+            self._start_reloading()
+        else:
+            self._try_open()
 
     # --- connection ---------------------------------------------------------
     @property
     def present(self):
         return self.mixer is not None
 
+    def _check_notice(self):
+        active = reload_notice_active()
+        if active and not self.reloading:
+            self._start_reloading()
+        elif not active and self.reloading:
+            self._set_reloading(False)
+            self._reload_seen = True      # the driver went away and is coming back
+            self._back_by = time.monotonic() + RELOAD_BACK_WAIT_S
+        if self._back_by is not None and not self.reloading:
+            if driver_loaded() and card_listed():
+                self._back_by = None
+                QTimer.singleShot(RELOAD_SETTLE_MS, self._try_open)
+            elif time.monotonic() > self._back_by:
+                self._back_by = None      # not back: the usual retry looks from now on
+                self._retry.start()
+
+    def _start_reloading(self):
+        """ae9-reload is reloading: close everything, touch nothing until it's done."""
+        self._back_by = None
+        self._retry.stop()
+        had = self.mixer is not None
+        self._close()
+        self._set_reloading(True)
+        if had:
+            self.connection_changed.emit(False)
+
+    def _set_reloading(self, on):
+        if on != self.reloading:
+            self.reloading = on
+            self.reloading_changed.emit(on)
+
     def _try_open(self):
+        if self.reloading or self.mixer is not None:
+            return
         if not self.answering:
             # Not answering: the card's devices stay closed (an open one keeps
             # modprobe -r from unloading the driver), and only /sys and /proc
@@ -365,7 +439,8 @@ class AE9(QObject):
     def _lost(self):
         self._close()
         self.connection_changed.emit(False)
-        self._retry.start()
+        if not self.reloading:
+            self._retry.start()
 
     def _card_answering(self):
         """The driver's "Card Answering" (0.12.9+); True without it."""
@@ -384,6 +459,8 @@ class AE9(QObject):
 
     def retry(self):
         """The user's "Try again": open the card now, reloaded or not."""
+        if self.reloading:
+            return
         self._reload_seen = True
         self._try_open()
 

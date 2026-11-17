@@ -467,12 +467,18 @@ RELOAD_TOOL_SUB = ("Changes no longer reach it. Run this in a terminal. It reloa
                    "the card didn't start, power the PC off (PSU switch) for 15-30 s. The window "
                    "fills in again once the card is back.")
 NOT_ANSWERING_BAR = "The sound card stopped answering. Reload the driver, or power the PC off and on."
+RELOADING_TITLE = "Reloading the AE-9 driver…"
+RELOADING_SUB = ("ae9-reload is reloading the driver. Sound Blaster Command has let go of the "
+                 "card and fills the window in again once it's back.")
+RELOADING_BAR = "Reloading the driver…"
 NO_DRIVER = ("The AE-9 driver (snd-hda-codec-creative-ae9) isn't loaded. "
              "Install or load it, and the card shows up here.")
 
 
 def no_card_reason(card):
     """The bottom strip's text while the card is missing or not answering."""
+    if card.reloading:
+        return RELOADING_BAR
     if not card.answering:
         return NOT_ANSWERING_BAR
     return NO_CARD if C.driver_loaded() else NO_DRIVER
@@ -520,7 +526,12 @@ class NoCardPage(QWidget):
         self.steps_box.hide()
         lay.addStretch()
 
-    def show_state(self, answering):
+    def show_state(self, answering, reloading=False):
+        if reloading:
+            self.title.setText(RELOADING_TITLE)
+            self.sub.setText(RELOADING_SUB)
+            self.steps_box.hide()
+            return
         self.title.setText(NO_CARD_TITLE if answering else NOT_ANSWERING_TITLE)
         tool = None if answering else C.reload_tool()
         self.sub.setText(NO_CARD_SUB if answering else RELOAD_TOOL_SUB if tool else NOT_ANSWERING_SUB)
@@ -687,6 +698,7 @@ class MainWindow(QMainWindow):
         self.card.info_changed.connect(self._on_card)
         self.card.connection_changed.connect(self._on_card)
         self.card.answering_changed.connect(self._on_card)
+        self.card.reloading_changed.connect(self._on_card)
         ctx.profile_changed.connect(self.refresh)
         ctx.pw.updated.connect(self._refresh_mic_mute)
         ctx.pw.updated.connect(self._refresh_dsp_wait)
@@ -807,7 +819,7 @@ class MainWindow(QMainWindow):
         self._show_card(present)
         self._refresh_dsp_wait()
         if not present:
-            self.no_card.show_state(self.card.answering)
+            self.no_card.show_state(self.card.answering, self.card.reloading)
             self.no_card_bar.setText(no_card_reason(self.card))
             self.dot.set_color(T.DIM)
             self.profile_lbl.setText("No device")

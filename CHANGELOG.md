@@ -3,6 +3,17 @@
 Sound Blaster Command for Linux: the UI for the Creative Sound Blaster AE-9
 driver ([SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv)).
 
+## Unreleased
+
+### Added
+- `ae9-reload` can reload a healthy card with Sound Blaster Command open
+  (driver 0.12.13+). While its reload notice is up
+  (`$XDG_RUNTIME_DIR/ae9-reload`, with a live PID), the app lets go of the
+  card, shows "Reloading the AE-9 driver…" instead of an error, and opens the
+  card again about a second after it's back. A notice left by a killed reload
+  (dead PID) is ignored; an empty one counts for at most 2 minutes. Older
+  drivers never write the notice, so nothing changes there.
+
 ## 0.21.3 (2026-11-17)
 
 Ready for drivers that drop their old feature options: on driver 0.12.11+
