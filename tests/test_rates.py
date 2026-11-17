@@ -338,7 +338,7 @@ class Driver097Test(RateBase):
         super().setUp()
         S.PARAMS.update({"version": "0.9.7", "pcm_rates": "2", "surround_96k": "1",
                          "surround_192k": "1", "dac_441": "Y", "dsp_96k": "Y",
-                         "pcm_176k4": "Y", "src_reclock": "Y"})
+                         "pcm_176k4": "Y"})
 
     def offered(self, pg):
         q = pg.quality
@@ -393,7 +393,6 @@ class Driver097Test(RateBase):
         pg.refresh()
         text = pg.info.text()
         self.assertIn("pcm_176k4=Y", text)
-        self.assertIn("src_reclock=Y", text)
         self.assertIn("44.1/48/88.2/96/176.4/192/384 kHz", text)
 
 
@@ -446,3 +445,46 @@ class RatePickerUiTest(S.AppTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class VersionGatesTest(S.AppTestCase):
+    """Driver 0.12.11+: the version, not the options, says every rate
+    feature is on (0.12.12+ drops the options SBC used to read)."""
+
+    def test_new_driver_without_options(self):
+        S.PARAMS.clear()
+        S.PARAMS.update({"version": "0.12.12", "pcm_rates": "2"})
+        self.assertTrue(C.surround_96k_stable())
+        self.assertEqual(C.surround_max(), 192000)
+        self.assertTrue(C.dsp_96k())
+        self.assertTrue(C.plays_176k4())
+        self.assertTrue(C.plays_cd_rates())
+        self.assertTrue(C.restarts_stream_on_direct())
+        self.assertTrue(C.hp_live_upload())
+
+    def test_old_driver_reads_the_options(self):
+        S.PARAMS.clear()
+        S.PARAMS.update({"version": "0.12.10", "pcm_rates": "2", "surround_96k": "1"})
+        self.assertTrue(C.surround_96k_stable())
+        self.assertEqual(C.surround_max(), 96000)
+        self.assertFalse(C.dsp_96k())
+        self.assertFalse(C.plays_176k4())
+        self.assertFalse(C.plays_cd_rates())
+        self.assertFalse(C.restarts_stream_on_direct())
+        self.assertFalse(C.hp_live_upload())
+
+    def test_device_tab_without_the_options(self):
+        S.PARAMS.clear()
+        S.PARAMS.update({"version": "0.12.12", "pcm_rates": "2", "pcm_bits": "32"})
+        pg = self.page(pages.SettingsPage)
+        pg.refresh()
+        text = pg.info.text()
+        self.assertIn("44.1/48/88.2/96/176.4/192/384 kHz", text)
+        self.assertIn("5.1 rates: 48/96/192 kHz", text)
+        self.assertIn("DSP mode: 48/96 kHz", text)
+        self.assertIn("pcm_rates=2", text)
+        self.assertNotIn("src_reclock", text)
+        S.PARAMS.clear()
+        S.PARAMS.update({"version": "0.12.12"})
+        pg.refresh()
+        self.assertIn("Driver options: none", pg.info.text())

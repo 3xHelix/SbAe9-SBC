@@ -1614,7 +1614,7 @@ def output_name(node):
 
 # driver options shown read-only on Settings → Device
 DEVICE_PARAMS = ("pcm_rates", "pcm_bits", "dac_441", "surround", "surround_96k", "surround_192k",
-                  "dsp_96k", "wuh_96k", "pcm_176k4", "src_reclock")
+                  "dsp_96k", "wuh_96k", "pcm_176k4")
 
 INPUT_RATES = (48000, 96000)   # What U Hear: 48, or 96 kHz with the driver's wuh_96k
 
@@ -3592,8 +3592,9 @@ class SettingsPage(Page):
                 True, True, rates or "1", C.surround_max())) + " kHz"
             " · DSP mode: " + "/".join(f"{r / 1000:g}" for r in pipewire.playable_rates(
                 False, False, rates or "1", dsp_96k=C.dsp_96k())) + " kHz",
-            "Driver options: " + " · ".join(
-                f"{p}={C.module_param(p)}" for p in DEVICE_PARAMS if C.module_param(p) is not None),
+            "Driver options: " + (" · ".join(
+                f"{p}={C.module_param(p)}" for p in DEVICE_PARAMS if C.module_param(p) is not None)
+                or "none"),
             f"PipeWire sink: {n.sink['name'] if n.sink else '—'}",
             f"PipeWire source: {n.source['name'] if n.source else '—'}",
             f"Sound Blaster Command for Linux {__version__}",

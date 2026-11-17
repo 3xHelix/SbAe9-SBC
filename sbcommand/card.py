@@ -622,15 +622,27 @@ def driver_at_least(*want):
     return ae9.driver_at_least(*want, version=module_version() or "")
 
 
+def all_rates_on():
+    """Every rate feature is on in driver 0.12.11+ (5.1 at 96 and 192 kHz,
+    DSP mode at 96 kHz, 176.4 kHz, 44.1 / 88.2 kHz, live headphone-profile
+    upload): the version says so, and the driver will drop the options that
+    used to. Older drivers: read the options."""
+    return driver_at_least(0, 12, 11)
+
+
 def surround_96k_stable():
     """Driver 0.7.0 fixed 5.1 at 96 kHz and turned it on by default
     (surround_96k=1). Before that the option was an unstable experiment."""
+    if all_rates_on():
+        return True
     return driver_at_least(0, 7, 0) and module_param("surround_96k") == "1"
 
 
 def surround_max():
     """The highest rate 5.1 plays at: 192 kHz with the driver's surround_192k
     option on (0.9.4+), 96 kHz with a stable surround_96k (0.7.0+), else 48."""
+    if all_rates_on():
+        return 192000
     if not surround_96k_stable():
         return 48000
     return 192000 if module_param("surround_192k") == "1" else 96000
@@ -640,7 +652,7 @@ def hp_live_upload():
     """Headphone profiles load while audio plays (driver 0.12.10's default,
     its hp_live_upload option). N or missing (0.11.0-0.12.9): a new curve
     waits until every stream has stopped."""
-    return module_param("hp_live_upload") in ("Y", "1")
+    return all_rates_on() or module_param("hp_live_upload") in ("Y", "1")
 
 
 # Driver 0.12.11 routes all of the DSP's DAC lanes: DSP mode (Direct Mode
@@ -658,7 +670,7 @@ def dsp_full_level():
 def dsp_96k():
     """DSP mode (Direct Mode off) takes 96 kHz as well as 48 (driver 0.9.4+,
     its dsp_96k option, on by default)."""
-    return module_param("dsp_96k") in ("Y", "1")
+    return all_rates_on() or module_param("dsp_96k") in ("Y", "1")
 
 
 def wuh_96k():
@@ -669,15 +681,15 @@ def wuh_96k():
 
 def plays_176k4():
     """The driver plays 176.4 kHz (0.9.7+, its pcm_176k4 option)."""
-    return module_param("pcm_176k4") in ("Y", "1")
+    return all_rates_on() or module_param("pcm_176k4") in ("Y", "1")
 
 
 def plays_cd_rates():
     """The driver can play 44.1 and 88.2 kHz (0.9.4+, its dac_441 option)."""
-    return module_param("dac_441") is not None
+    return all_rates_on() or module_param("dac_441") is not None
 
 
 def restarts_stream_on_direct():
     """Drivers with surround_192k (0.9.4+) restart a playing stream when
     Direct Mode turns on, so no pause and play is needed."""
-    return module_param("surround_192k") is not None
+    return all_rates_on() or module_param("surround_192k") is not None
