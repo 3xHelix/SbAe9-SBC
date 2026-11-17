@@ -3,6 +3,20 @@
 Sound Blaster Command for Linux: the UI for the Creative Sound Blaster AE-9
 driver ([SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv)).
 
+## 0.21.3 (2026-11-17)
+
+Ready for drivers that drop their old feature options: on driver 0.12.11+
+the app goes by the driver's version. Pairs with
+[SbAe9-Drv v0.12.12](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.12).
+
+### Changed
+- On driver 0.12.11+ the app takes 5.1 at 96 and 192 kHz, DSP mode at
+  96 kHz, 176.4 kHz, 44.1 / 88.2 kHz and live headphone-profile upload from
+  the driver's version instead of its module options (driver 0.12.12 drops
+  many options; a later one drops these). Older drivers still read them.
+- Settings → Device no longer lists `src_reclock` (gone in driver 0.12.12,
+  always on). With no options listed it says "none".
+
 ## 0.21.2 (2026-11-16)
 
 DSP mode plays at Direct Mode's level on driver 0.12.11, so the app warns
