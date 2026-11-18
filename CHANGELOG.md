@@ -16,6 +16,10 @@ driver ([SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv)).
 - Shared kit 0.3.9: the notice rules now come from `sbae9kit.ae9`, the same
   code SbAe9-AudioMon uses.
 
+### Changed
+- What U Hear at 96 kHz goes by the driver's version on 0.12.11+, like the
+  other rate features, not by its `wuh_96k` option (a later driver drops it).
+
 ## 0.21.3 (2026-11-17)
 
 Ready for drivers that drop their old feature options: on driver 0.12.11+

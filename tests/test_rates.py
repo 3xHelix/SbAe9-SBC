@@ -461,6 +461,7 @@ class VersionGatesTest(S.AppTestCase):
         self.assertTrue(C.plays_cd_rates())
         self.assertTrue(C.restarts_stream_on_direct())
         self.assertTrue(C.hp_live_upload())
+        self.assertTrue(C.wuh_96k())
 
     def test_old_driver_reads_the_options(self):
         S.PARAMS.clear()
@@ -472,6 +473,7 @@ class VersionGatesTest(S.AppTestCase):
         self.assertFalse(C.plays_cd_rates())
         self.assertFalse(C.restarts_stream_on_direct())
         self.assertFalse(C.hp_live_upload())
+        self.assertFalse(C.wuh_96k())
 
     def test_device_tab_without_the_options(self):
         S.PARAMS.clear()

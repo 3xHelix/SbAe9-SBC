@@ -740,8 +740,9 @@ def dsp_96k():
 
 def wuh_96k():
     """What U Hear can record at 96 kHz as well as 48 (driver 0.9.5+, its
-    wuh_96k option, on by default)."""
-    return module_param("wuh_96k") in ("Y", "1")
+    wuh_96k option, on by default; always on in 0.12.11+, which will drop
+    the option)."""
+    return all_rates_on() or module_param("wuh_96k") in ("Y", "1")
 
 
 def plays_176k4():
