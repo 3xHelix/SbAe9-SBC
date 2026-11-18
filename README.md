@@ -2,28 +2,132 @@
 
 ![Sound Blaster Command for Linux: the SBX Profile page](docs/screenshot.png)
 
-A desktop control panel for the Creative Sound Blaster AE-9, styled after
-Creative's *Sound Blaster Command*. This is the UI half of
-[SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv): it drives the card through that
-driver (`snd-hda-codec-creative-ae9`, 0.6.x; 0.6.7+ for 5.1, 0.6.8+ for
-bit depth, 0.7.0+ for 5.1 at 96 kHz, 0.9.4+ for 44.1/88.2 kHz and 5.1 at
-192 kHz) and
-works with the normal Linux audio stack: apps play to the AE-9 through
-PipeWire as usual. The effects run on the card's own DSP, and this app
-switches and adjusts them.
+A desktop control panel for the **Creative Sound Blaster AE-9**, styled after
+Creative's *Sound Blaster Command* for Windows.
 
-## What it controls
+It's the companion app to the AE-9 Linux driver,
+[SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv). Your apps keep playing
+through PipeWire as usual. The effects run on the card's own DSP, and this app
+switches and tunes them.
 
-| Page | What it does | How |
-|---|---|---|
-| **SBX Profile** | SBX on/off; Surround, Crystalizer, Bass, Smart Volume (Night/Normal/Loud), Dialog+; built-in and personal profiles | card DSP (ALSA `SBX Switch`, `FX …`) |
-| **Equalizer** | 10-band EQ + pre-gain, Creative's 20 presets, your own saved curves | card DSP (`EQ …`) |
-| **Playback** | Speakers / headphones, speaker config (2.0 – 5.1) with matching stereo / 5.1 stream, Direct Mode, DAC filter, sample rate and bit depth, default device, spoken speaker test; Headphone Profile (Creative's EQ curve per headphone model, or your own made from AutoEQ), headphone virtualization (Virtual 7.1, also on Line Out); **Speaker Setup** tab: bass redirect (Speaker Type / crossover, subwoofer boost), level and distance per speaker; **Digital** tab: what optical out plays (its own output, the mirror of the main output, the main output with SBX/EQ, or the encoder; driver 0.12.0+), passthrough state | ALSA + PipeWire |
-| **Recording** | Head unit mic (XLR/TRS or 3.5 mm mic jack): level, mic gain (0/+10/+20 dB), phantom power 48V (asks first), live input meter, mute, "listen to mic" (or the card's own monitor, no delay, with driver 0.12.2; with Voice Clarity on too from driver 0.12.7), sample rate (48 / 96 kHz), default device; **Voice Clarity** tab (driver 0.12.2): echo cancellation, noise reduction, smart volume, Mic EQ, Voice Morph with a test; **Other Input** tab: optical in, What U Hear (48 / 96 kHz), head unit rear RCA | ALSA + PipeWire |
-| **Scout Mode** | Creative's Scout Mode (footstep EQ + Smart Volume) | card DSP |
-| **Encoder** | No Encoder / AC-3 encoder (Dolby Digital compatible) / DTS encoder (experimental): the card's mix encoded on the PC by your ffmpeg and sent over optical, as Windows does | ffmpeg + PipeWire + ALSA |
-| **Mixer** | Output volume (same as the head-unit knob), mute, per-channel levels (Front Left / Right, …), mic level | ALSA + PipeWire |
-| **Settings** | **Application** tab: colour palette (Command, Helix, Albino or Wololo), UI scale (70–150%), own title bar or the desktop frame, start at login; **Device** tab: driver/device info, every ALSA control (including inactive ones), reset | ALSA |
+This release pairs with
+[SbAe9-Drv v0.12.12](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.12).
+
+---
+
+## Highlights
+
+- **SBX effects and a 10-band EQ**: Surround, Crystalizer, Bass, Smart Volume
+  and Dialog+, with Creative's presets and profiles plus your own.
+- **Speakers and headphones**: 2.0 to 5.1 speaker setups, bass redirect,
+  per-speaker level and distance, headphone profiles and Virtual 7.1.
+- **Sample rate and bit depth**: 44.1 to 384 kHz, 24 or 32-bit, and Direct
+  Mode for bit-perfect playback.
+- **Microphone**: gain, phantom power (always asks first), live meter, mic
+  monitor, Voice Clarity and Voice Morph.
+- **Optical out and in**, What U Hear, and an encoder that sends your 5.1 mix
+  to a receiver over optical (encoded on your PC by your own ffmpeg).
+- **Stays in sync**: changes made with the head unit's knob, `alsamixer` or
+  the desktop volume slider show up in the app immediately.
+- **Panel widget** for KDE Plasma and a **top bar extension** for GNOME.
+- Four colour palettes, a frosted **Glass** look, and UI scaling.
+
+---
+
+## Install
+
+The app is plain Python and installs the same way on every distro. Only the
+package names in step 2 differ.
+
+**1. Install the AE-9 driver.** Follow
+[SbAe9-Drv's install steps](https://github.com/3xHelix/SbAe9-Drv) for your
+distro. The latest release is best; see [Driver versions](#driver-versions).
+
+**2. Install what the app needs.** Pick your distro *(💡 most desktops
+already have everything except PySide6, so this often installs just that)*:
+
+| Distro | Command |
+|---|---|
+| **Fedora** | `sudo dnf install python3-pyside6 pipewire-utils wireplumber alsa-utils pulseaudio-utils libnotify` |
+| **Ubuntu 26.04+, Debian 13+** | `sudo apt install python3-pyside6.qtwidgets python3-pyside6.qtsvg pipewire-bin wireplumber alsa-utils pulseaudio-utils libnotify-bin` |
+| **Arch, Manjaro, EndeavourOS** | `sudo pacman -S pyside6 pipewire pipewire-audio wireplumber alsa-utils libpulse libnotify` |
+| **openSUSE Tumbleweed** | `sudo zypper install python313-pyside6 pipewire-tools wireplumber alsa-utils pulseaudio-utils libnotify-tools` |
+
+<details>
+<summary>Ubuntu 24.04, Linux Mint 22 and other distros without a PySide6 package</summary>
+
+Install the other packages from the Ubuntu row above, leaving out the two
+`python3-pyside6` ones, then install PySide6 for your user with pip:
+
+```sh
+sudo apt install python3-pip
+pip install --user --break-system-packages PySide6
+```
+
+`--break-system-packages` only means pip installs into your home folder
+(`~/.local`) next to the system's Python packages. It doesn't touch the
+system's own files.
+
+</details>
+
+**Optional:** for the Encoder page (sending your mix over optical as AC-3 or
+DTS), also install `ffmpeg` from your distro. Fedora users get the full
+`ffmpeg` from [RPM Fusion](https://rpmfusion.org/).
+
+**3. Download and install the app.** Grab the `.tar.gz` from the
+[latest release](https://github.com/3xHelix/SbAe9-SBC/releases/latest), or
+clone it:
+
+```sh
+git clone https://github.com/3xHelix/SbAe9-SBC.git
+cd SbAe9-SBC
+./install.sh
+```
+
+You don't need `sudo`: everything installs in your home folder. You get a
+menu entry, the app icon, `~/.local/bin/sbae9-sbc`, and the panel widget on
+KDE or the top bar extension on GNOME. To update, pull or download the new
+release and run `./install.sh` again.
+
+You can also run it straight from the source folder:
+
+```sh
+./sbae9-sbc                   # run from the source folder
+./sbae9-sbc --palette helix   # one launch in another palette
+./sbae9-sbc --scale 80        # one launch at 80% size
+```
+
+`install.sh` copies the app to `~/.local/share/sbae9-sbc`, so the menu entry
+always runs the version you last installed, not a half-edited source folder.
+
+---
+
+## What's in the app
+
+| Page | What you can do |
+|---|---|
+| **SBX Profile** | Turn SBX on or off; set Surround, Crystalizer, Bass, Smart Volume (Night / Normal / Loud) and Dialog+; pick a built-in profile or save your own. |
+| **Equalizer** | 10-band EQ with pre-gain, Creative's 20 presets, and your own saved curves. |
+| **Playback** | Speakers or headphones, speaker setup (2.0 to 5.1), Direct Mode, DAC filter, sample rate and bit depth, default device, and a spoken speaker test. Headphone Profile and Virtual 7.1.<br>**Speaker Setup** tab: bass redirect and each speaker's level and distance.<br>**Digital** tab: what optical out plays. |
+| **Recording** | Head unit mic: level, gain, phantom power (48V), live meter, mute, listen-to-mic, sample rate.<br>**Voice Clarity** tab: echo cancellation, noise reduction, Mic EQ, Voice Morph.<br>**Other Input** tab: optical in, What U Hear, rear RCA input. |
+| **Scout Mode** | Creative's Scout Mode (footstep EQ with Smart Volume). |
+| **Encoder** | Send the card's mix over optical as AC-3 or DTS (experimental), encoded on your PC by your ffmpeg. |
+| **Mixer** | Output volume (the same as the head unit's knob), mute, per-channel levels, mic level. |
+| **Settings** | Palette, UI scale, Glass, title bar style, start at login. The **Device** tab shows driver info and every ALSA control. |
+
+### Direct Mode, in short
+
+- **Direct Mode on**: audio goes straight to the DAC at the source's own rate
+  (up to 384 kHz in stereo), with no effects.
+- **Direct Mode off (DSP mode)**: audio goes through the card's DSP at 48 or
+  96 kHz, so SBX, the EQ and Scout Mode are heard.
+
+The app remembers your effect settings either way. Your chosen sample rate
+comes back when you switch Direct Mode on again.
+
+Not available on Linux yet: Super X-Fi and 7.1 output.
+
+---
 
 ## Screenshots
 
@@ -38,11 +142,10 @@ switches and adjusts them.
   </tr>
 </table>
 
-Shown in the Helix palette, on a 5.1 setup. Regenerate them with
-`python3 tools/screenshots.py [palette]`.
+Shown in the Helix palette on a 5.1 setup.
 
-**Glass** (Settings → Application): frosted, see-through backgrounds on any
-palette, here Helix at 70% and 50% over a Cyberpunk 2077 wallpaper.
+**Glass** (Settings → Application) gives any palette a frosted, see-through
+background. Here it's Helix at 70% and 50%:
 
 <table>
   <tr>
@@ -51,170 +154,110 @@ palette, here Helix at 70% and 50% over a Cyberpunk 2077 wallpaper.
   </tr>
 </table>
 
-Regenerate them on a KDE desktop with `python3 tools/glass_screenshots.py BACKDROP.png`.
+---
 
-Volume, mute and output changes made with the head-unit knob, `alsamixer` or the
-desktop slider show up in the app immediately (it listens to ALSA control events).
+## Panel widget and top bar extension
 
-**Direct Mode on** = audio goes straight to the DAC at the source's rate
-(44.1 to 384 kHz in stereo, 176.4 kHz with driver 0.9.7+; 5.1 at
-48/96/192 kHz with driver 0.9.4+, up to
-96 kHz with 0.7.0+, 48 kHz before) with no effects. **Direct Mode off** =
-audio goes through the DSP at 48 or 96 kHz (48 kHz before driver 0.9.4),
-and SBX, the EQ and Scout Mode are heard. The app keeps your effect settings either way, and your chosen sample
-rate comes back when Direct Mode is switched on again.
+`install.sh` also adds quick controls to your desktop, so you don't need the
+app open for everyday switching:
 
-Not available on Linux (yet): Super X-Fi, Dolby Digital Live / DTS encoding,
-and 7.1 output. The driver doesn't support these yet.
+- DSP / Direct Mode and SBX
+- sample rate, bit depth and PipeWire quantum (with the latency)
+- phantom power 48V (after a warning)
+- the current sample rate, shown on the panel
 
-## Requirements
+**KDE Plasma 6:** right-click the panel → *Add Widgets* → **Sound Blaster
+AE-9**. Right-click it → *Configure* to choose which rates and quantum values
+it lists, and to add a quick preset button.
 
-- The AE-9 driver loaded ([SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv)), with the "Stereo Output + Stereo
-  Input" PipeWire profile.
-- For 5.1 (4.0 / 4.1 / 5.1 speakers, the stereo / 5.1 stream switch) and a
-  speaker test on every channel: driver
-  [v0.6.7](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.6.7) or newer
-  with its PipeWire profile set installed
-  ([setup step 4](https://github.com/3xHelix/SbAe9-Drv#4-pipewire-profiles-stereo-and-51)).
-  Older drivers work as before, in stereo.
-- For the full sample-rate picker (48–384 kHz out of the box), picking the
-  bit depth (24 / 32-bit) and the EQ presets in A–Z order with the game
-  presets last: driver
-  [v0.6.8](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.6.8) or newer
-  (it adds the "PCM Bit Depth" control and reorders the presets). With older
-  drivers the depth is set by the driver's `pcm_bits` option and shown greyed
-  out, and the presets keep the driver's old order.
-- For 5.1 at 96 kHz: driver
-  [v0.7.0](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.7.0) or newer
-  (with its `surround_96k` option on, the default). Older drivers play 5.1 at
-  48 kHz.
-- For 44.1 and 88.2 kHz (stereo, Direct Mode), 5.1 at 192 kHz and 96 kHz
-  with Direct Mode off: driver
-  [v0.9.4](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.9.4) or newer
-  (options `pcm_rates=2`, `surround_192k=1` and `dsp_96k=Y`, all the default). With it, switching Direct Mode on while playing no
-  longer needs a pause and play.
-- For recording at 96 kHz and 32-bit: driver
-  [v0.9.1](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.9.1) or newer.
-- For optical (S/PDIF) out and in: driver
-  [v0.8.0](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.8.0) or newer.
-  On driver 0.10.x, optical in also needs the driver's
-  `config/ae9-optical-in.conf` in `~/.config/pipewire/pipewire.conf.d/`.
-- For What U Hear: driver
-  [v0.9.0](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.9.0) or newer (on 0.10.x and
-  older, with its `config/ae9-what-u-hear.conf` in the same folder).
-- From driver 0.11 ([v0.11.1](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.11.1)) the driver adds optical in, What U Hear and the
-  rear RCA input to PipeWire itself (its card profile, installed with its
-  packages): the copied `ae9-*.conf` files above aren't needed and make
-  each input show up twice, so delete them. It also has seven DAC filters
-  under Creative's names (older drivers: Default / Fast / Slow).
-- For the head unit's rear RCA input and the subwoofer boost switch: driver
-  [v0.10.1](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.10.1) or newer (on 0.10.x,
-  with its `config/ae9-rear-rca-in.conf` in the same folder).
-- For optical out as its own output ("AE-9 Optical Out", alongside the
-  mirror of the main output) and its passthrough status: driver
-  [v0.12.0](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.0) or newer.
-  The driver's card profile owns that output: don't add the old
-  `ae9-optical-out.conf` drop-in.
-- For the optical mirror switch (off by default, so optical and the main output
-  are separate; turn it on under Playback > Digital) and 5.1 from the
-  Encoder page (What U Hear with six channels, on the card's 5.1 stream with
-  the inputs on): driver
-  [v0.12.1](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.1) or newer.
-- For Voice Clarity and Voice Morph, the card's own mic monitor, headphone
-  virtualization (Virtual 7.1, and on Line Out), and your own headphone
-  profiles ("Make custom profile…", from AutoEQ's measurements, with the
-  driver's `ae9-hp-profile`): driver
-  [v0.12.2](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.2) or newer.
-  With [v0.12.3](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.3),
-  the Voice Clarity tab also says when the card's monitor was used since the
-  PC started (Voice Clarity recordings then need a full power-off, or a 25 s
-  suspend that cuts the card's power: `sudo rtcwake -m mem -s 25`).
-- For 176.4 kHz (stereo, Direct Mode): driver
-  [v0.9.7](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.9.7) or newer
-  (`pcm_176k4=Y`).
-- For Speaker Setup (bass redirect, speaker levels and distances) and the
-  Headphone Profile picker: driver
-  [v0.10.0](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.10.0) or newer.
-  The headphone profiles also need Creative's curves, which the driver's
-  `sudo ae9-get-firmware AECMDMasterInstaller_3.4.92.00.exe` installs from
-  Creative's Sound Blaster Command installer (the app looks in
-  `firmware/creative-ae9/hp` and `firmware/updates/creative-ae9/hp`).
-  This release pairs with
-  [SbAe9-Drv v0.12.12](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.12).
-- For switching phantom power (48V) from the app and What U Hear at 96 kHz:
-  driver [v0.9.5](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.9.5)
-  or newer (`wuh_96k=Y`, the default).
-- For the head unit's plug indicators (3.5 mm headphone and mic jacks), the
-  auto switch on headphone plug and the "Mic Gain" control name: driver
-  [v0.9.3](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.9.3) or newer.
-  Older drivers hide the plug features and use their "XLR Gain" control.
-- `alsa-utils` for the spoken speaker test (it brings the "Front Left…"
-  voice files); without it the test plays a tone.
-- Python 3, PySide6 (`sudo dnf install python3-pyside6`), PipeWire tools
-  (`pw-dump`, `wpctl`, `pw-metadata`, `pw-play`, `pw-record`, `pw-loopback`),
-  and `libasound`. All of these come with Fedora's standard desktop install.
-
-## Panel widget (KDE Plasma 6) and top bar extension (GNOME)
-
-`install.sh` also installs a panel widget, **Sound Blaster AE-9**: right-click
-the panel > Add Widgets. It shows the running rate on the panel. Its popup has
-DSP / Direct Mode, SBX (with Direct Mode off, as in the app), sample rate, bit
-depth, PipeWire quantum (with the latency) and phantom power 48V (after a
-warning). It works through `sbae9-sbc ctl`, the app's command line, so it
-follows the same rules; the app doesn't need to be open. Its settings
-(right-click > Configure) pick the sample rates and quantum values it lists
-and an optional quick preset button.
-
-Keyboard shortcuts (KDE): Toggle Direct Mode / DSP, Toggle Speakers /
-Headphones and Toggle SBX, with no keys set. Set them in System Settings >
-Keyboard > Shortcuts > Sound Blaster Command.
-
-On GNOME (45 to 50), `install.sh` installs the same thing as a Shell
-extension, **Sound Blaster AE-9** in the top bar: turn it on in the Extensions
-app after logging out and back in, or with
-`gnome-extensions enable sbae9-sbc@3xhelix.github.io`. Its preferences (the
-Extensions app, or `gnome-extensions prefs sbae9-sbc@3xhelix.github.io`) have
-the same lists and quick preset, and the keyboard shortcuts.
-
-## Run / install
+**GNOME 45 to 50:** log out and back in, then turn on **Sound Blaster AE-9**
+in the Extensions app, or run:
 
 ```sh
-./sbae9-sbc            # run from this folder
-./install.sh           # installs a copy: menu entry, app icon, ~/.local/bin/sbae9-sbc
-./sbae9-sbc --palette helix   # one launch in the Helix palette (saved choice unchanged)
-./sbae9-sbc --scale 80        # one launch at 80% size (saved UI scale unchanged)
+gnome-extensions enable sbae9-sbc@3xhelix.github.io
 ```
 
-`install.sh` copies the app to `~/.local/share/sbae9-sbc` (like SbAe9-AudioMon
-does), so the menu app is always the build you last installed, never a
-half-edited working tree. Re-run it after each tested change.
+Its preferences have the same options.
 
-## Tests
+**Keyboard shortcuts:** *Toggle Direct Mode / DSP*, *Toggle Speakers /
+Headphones* and *Toggle SBX*. They're there but have no keys yet. Set them in
+System Settings → Keyboard → Shortcuts → Sound Blaster Command on KDE, or in
+the extension's preferences on GNOME.
+
+---
+
+## Driver versions
+
+The app works with older drivers and hides or greys out what they can't do.
+For everything, use the latest
+[SbAe9-Drv release](https://github.com/3xHelix/SbAe9-Drv/releases).
+
+<details>
+<summary>Which driver version each feature needs</summary>
+
+| Feature | Driver |
+|---|---|
+| Basic control (SBX, EQ, volume, Direct Mode) | 0.6.x |
+| 5.1 speakers and the stereo / 5.1 switch (with the driver's [PipeWire profiles](https://github.com/3xHelix/SbAe9-Drv#4-pipewire-profiles-stereo-and-51)) | [0.6.7](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.6.7) |
+| Full sample-rate picker, 24 / 32-bit, EQ presets in A–Z order | [0.6.8](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.6.8) |
+| 5.1 at 96 kHz | [0.7.0](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.7.0) |
+| Optical out and in | [0.8.0](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.8.0) |
+| What U Hear | [0.9.0](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.9.0) |
+| Recording at 96 kHz and 32-bit | [0.9.1](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.9.1) |
+| Head unit plug indicators and auto switch on headphone plug | [0.9.3](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.9.3) |
+| 44.1 / 88.2 kHz, 5.1 at 192 kHz, DSP mode at 96 kHz | [0.9.4](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.9.4) |
+| Phantom power from the app, What U Hear at 96 kHz | [0.9.5](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.9.5) |
+| 176.4 kHz | [0.9.7](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.9.7) |
+| Speaker Setup and Headphone Profile | [0.10.0](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.10.0) |
+| Rear RCA input, subwoofer boost | [0.10.1](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.10.1) |
+| Inputs set up in PipeWire by the driver, Creative's seven DAC filters | [0.11.1](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.11.1) |
+| Optical out as its own output, passthrough status | [0.12.0](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.0) |
+| Optical mirror switch, 5.1 from the Encoder page | [0.12.1](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.1) |
+| Voice Clarity, Voice Morph, the card's mic monitor, Virtual 7.1, custom headphone profiles | [0.12.2](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.2) |
+| Recovery when the card stops answering, `ae9-reload` | [0.12.9](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.9) |
+| Headphone profiles load while audio plays | [0.12.10](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.10) |
+| DSP mode at the same level as Direct Mode | [0.12.11](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.11) |
+
+</details>
+
+**Upgrading from driver 0.10.x?** From 0.11 the driver sets up optical in,
+What U Hear and the rear RCA input in PipeWire itself. Delete any old
+`ae9-*.conf` files you copied into `~/.config/pipewire/pipewire.conf.d/`,
+or each input shows up twice.
+
+**Headphone profiles** also need Creative's EQ curves. The driver's tool
+installs them from Creative's Windows installer:
+
+```sh
+sudo ae9-get-firmware AECMDMasterInstaller_3.4.92.00.exe
+```
+
+---
+
+## Files it writes
+
+| File | When |
+|---|---|
+| `~/.config/sbae9-sbc/settings.json` | Always: your profiles, EQ presets, last page. |
+| `~/.config/pipewire/pipewire.conf.d/90-sbae9-sbc-rates.conf` | Only if you pick a sample rate. Delete it to go back to PipeWire's defaults. |
+| `~/.config/wireplumber/wireplumber.conf.d/91-sbae9-sbc-mic.conf` | Only if you pick a mic sample rate. Choosing *Automatic* removes it. |
+| `~/.config/autostart/sbae9-sbc.desktop` | Only while "Start at login" is on. |
+
+---
+
+## For developers
+
+### Tests
 
 ```sh
 python3 -m unittest discover -s tests
 ```
 
-About 90 tests, a few seconds, no card needed. They run against a fake AE-9
-(control shapes copied from a real card on driver 0.6.8) and a fake
-PipeWire, with settings in a temp folder: nothing touches your card, your
-PipeWire or `~/.config`. They cover the rate rules (caps, quantum, hands off
-what others set), the stereo / 5.1 profile sync, "Applying changes…", the
-EQ preset list, per-channel volume and the speaker test.
+About 300 tests, done in under half a minute, no card needed. They run
+against a fake AE-9 and a fake PipeWire with settings in a temp folder, so
+nothing touches your card, your PipeWire or `~/.config`.
 
-## Files it writes
-
-- `~/.config/sbae9-sbc/settings.json` — your profiles, EQ presets, last page.
-- `~/.config/pipewire/pipewire.conf.d/90-sbae9-sbc-rates.conf` — only if you
-  pick an *Audio Quality* setting (PipeWire's allowed/forced sample rate).
-  Delete it to go back to PipeWire's defaults.
-- `~/.config/wireplumber/wireplumber.conf.d/91-sbae9-sbc-mic.conf` — only
-  if you pick a mic sample rate (Recording → Microphone). Automatic removes
-  it.
-- `~/.config/autostart/sbae9-sbc.desktop` — only while "Start Sound Blaster
-  Command when you log in" is on.
-
-## Layout
+### Layout
 
 ```
 sbcommand/
@@ -226,28 +269,34 @@ sbcommand/
   widgets.py    dial, toggle switch, EQ graph, profile carousel, meters
   window.py     sidebar, page stack, bottom bar
   theme.py      the active palette + Qt style sheet
-sbae9kit/       the shared kit (see below); don't edit here
+sbae9kit/       the shared kit (don't edit here, see below)
 appicon/        the app icon, 16-512 px
-tools/          README screenshots (plain and Glass)
+tools/          README screenshot scripts
 ```
 
 ### The shared kit
 
-Sound Blaster Command and SbAe9-AudioMon (the AE-9's level meters) are built
-on one base, **SbAe9-Kit**: the palettes, Glass, UI scale and XWayland
-handling, the frameless window parts, AE-9 detection, the ALSA binding and
-the icon tool. `sbae9kit/` is a vendored copy of it, written by SbAe9-Kit's
-`tools/sync_kit.py`; a test fails if it's edited here instead. Both apps also
-share their conventions: copy-install, `~/.config/<app>/`, the same options,
-tests and release format.
+Sound Blaster Command and SbAe9-AudioMon (the AE-9's level meters) share one
+base, **SbAe9-Kit**: palettes, Glass, UI scale, the frameless window, AE-9
+detection, the ALSA binding and the icon tool. `sbae9kit/` is a copy written
+by SbAe9-Kit's `tools/sync_kit.py`. A test fails if it's edited here
+instead.
+
+### Screenshots
+
+```sh
+python3 tools/screenshots.py [palette]               # the plain ones
+python3 tools/glass_screenshots.py BACKDROP.png      # Glass, on a KDE desktop
+```
+
+---
 
 ## Related tools
 
-- [Helvum](https://gitlab.freedesktop.org/pipewire/helvum): a patchbay for
-  PipeWire (`sudo dnf install helvum`). It draws every app, device and port
-  and the links between them, which makes it easy to see where audio is
-  going, e.g. that a 5.1 stream really reaches all six of the AE-9's
-  channels. A good companion to this app.
+- [Helvum](https://gitlab.freedesktop.org/pipewire/helvum), a PipeWire
+  patchbay (`sudo dnf install helvum`). It draws every app, device and link,
+  so you can see where your audio is going: for example, that a 5.1 stream
+  really reaches all six of the AE-9's channels.
 
 ## License
 
@@ -256,5 +305,5 @@ GPL-2.0-only, same as the driver. See [LICENSE](LICENSE).
 ## Disclaimer
 
 Not affiliated with Creative. "Sound Blaster", "SBX" and related names are
-Creative Technology's trademarks; the look is a nod to their app, with no
-Creative code or artwork included.
+Creative Technology's trademarks. The look is a nod to their app; no Creative
+code or artwork is included.
