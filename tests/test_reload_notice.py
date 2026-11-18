@@ -3,18 +3,18 @@
 lets go of the card, then opens it again once the card is back."""
 
 import os
-import time
 
 import support
 from support import AppTestCase, process
 
+from sbae9kit import testing as kit
 from sbcommand import card as C
 from sbcommand import window
 
 
-def write_notice(text):
-    with open(support.RELOAD_NOTICE, "w") as f:
-        f.write(text)
+def write_notice(pid=None, age_s=0):
+    """The kit's fake notice: None = this process (a live reload)."""
+    kit.write_reload_notice(support.RELOAD_NOTICE, pid, age_s)
 
 
 def clear_notice():
@@ -23,11 +23,11 @@ def clear_notice():
 
 class NoticeTest(AppTestCase):
     def test_live_pid_counts(self):
-        write_notice(f"{os.getpid()}\n")
+        write_notice()
         self.assertTrue(C.reload_notice_active())
 
     def test_dead_pid_is_stale(self):
-        write_notice("999999999\n")
+        write_notice(kit.dead_pid())
         self.assertFalse(C.reload_notice_active())
 
     def test_no_file(self):
@@ -36,14 +36,13 @@ class NoticeTest(AppTestCase):
     def test_empty_counts_for_a_while_only(self):
         write_notice("")
         self.assertTrue(C.reload_notice_active())
-        old = time.time() - C.RELOAD_NOTICE_MAX_S - 5
-        os.utime(support.RELOAD_NOTICE, (old, old))
+        write_notice("", age_s=C.RELOAD_NOTICE_MAX_S + 5)
         self.assertFalse(C.reload_notice_active())
 
 
 class ReloadTest(AppTestCase):
     def start(self):
-        write_notice(f"{os.getpid()}\n")
+        write_notice()
         self.ctx.card._check_notice()
         process()
 
@@ -99,7 +98,7 @@ class ReloadTest(AppTestCase):
 
     def test_killed_reload_releases_the_hold(self):
         self.start()
-        write_notice("999999999\n")               # its PID died, the file stayed
+        write_notice(kit.dead_pid())               # its PID died, the file stayed
         self.ctx.card._check_notice()
         process(50)
         self.assertFalse(self.ctx.card.reloading)
@@ -121,7 +120,7 @@ class ReloadTest(AppTestCase):
         self.assertLessEqual(self.ctx.card._notice.interval(), 500)
 
     def test_notice_at_start(self):
-        write_notice(f"{os.getpid()}\n")
+        write_notice()
         from sbcommand.card import AE9
         card = AE9()
         try:

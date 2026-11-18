@@ -286,34 +286,22 @@ def reload_tool():
     return shutil.which(RELOAD_TOOL)
 
 
-# ae9-reload (driver 0.12.13+) writes its PID here while it reloads: every
-# app holding the card lets go, so a healthy card can be reloaded too.
-RELOAD_NOTICE = "ae9-reload"
-RELOAD_NOTICE_MAX_S = 120     # an empty / unreadable notice counts this long (ae9-reload waits 90)
+# ae9-reload (driver 0.12.13+) writes its PID while it reloads (the rules
+# live in the kit: sbae9kit.ae9.reload_notice_*); every app holding the card
+# lets go, so a healthy card can be reloaded too. The timings are this app's.
+RELOAD_NOTICE_MAX_S = ae9.RELOAD_NOTICE_MAX_S
 RELOAD_NOTICE_POLL_MS = 250   # ae9-reload waits 5 s for the card to be let go
 RELOAD_BACK_WAIT_S = 30       # after the notice: how long to watch for the card to come back
 RELOAD_SETTLE_MS = 1000       # the card is back: settle, then reopen
 
 
 def reload_notice_path():
-    run = os.environ.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}"
-    return os.path.join(run, RELOAD_NOTICE)
+    return ae9.reload_notice_path()
 
 
-def reload_notice_active(path=None):
-    """ae9-reload is reloading the driver: its notice is there and its PID is
-    alive. An empty or unreadable notice counts for RELOAD_NOTICE_MAX_S."""
-    path = path or reload_notice_path()
-    try:
-        mtime = os.stat(path).st_mtime
-    except OSError:
-        return False
-    try:
-        with open(path) as f:
-            pid = int(f.read().split()[0])
-    except (OSError, ValueError, IndexError):
-        return time.time() - mtime < RELOAD_NOTICE_MAX_S
-    return pid > 0 and os.path.exists(f"/proc/{pid}")
+def reload_notice_active():
+    """ae9-reload is reloading the driver (see sbae9kit.ae9.reload_notice_active)."""
+    return ae9.reload_notice_active(reload_notice_path())
 
 
 RELOAD_STEPS = (

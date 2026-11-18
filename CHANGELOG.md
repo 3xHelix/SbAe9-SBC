@@ -13,6 +13,8 @@ driver ([SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv)).
   card again about a second after it's back. A notice left by a killed reload
   (dead PID) is ignored; an empty one counts for at most 2 minutes. Older
   drivers never write the notice, so nothing changes there.
+- Shared kit 0.3.9: the notice rules now come from `sbae9kit.ae9`, the same
+  code SbAe9-AudioMon uses.
 
 ## 0.21.3 (2026-11-17)
 
