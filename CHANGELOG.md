@@ -3,7 +3,11 @@
 Sound Blaster Command for Linux: the UI for the Creative Sound Blaster AE-9
 driver ([SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv)).
 
-## Unreleased
+## 0.21.4 (2026-11-18)
+
+Sound Blaster Command steps aside while `ae9-reload` reloads the driver, and
+What U Hear at 96 kHz goes by the driver version. Pairs with
+[SbAe9-Drv v0.12.13](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.13).
 
 ### Added
 - `ae9-reload` can reload a healthy card with Sound Blaster Command open
