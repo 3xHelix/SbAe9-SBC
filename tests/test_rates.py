@@ -388,11 +388,11 @@ class Driver097Test(RateBase):
             self.pick(44100)
             self.assertNotIn("176400", S.PW.settings["clock.allowed-rates"])
 
-    def test_device_tab_lists_the_new_options(self):
+    def test_device_tab_shows_176k4_in_the_rates(self):
         pg = self.page(pages.SettingsPage)
         pg.refresh()
         text = pg.info.text()
-        self.assertIn("pcm_176k4=Y", text)
+        self.assertNotIn("pcm_176k4=", text)      # a feature flag, not a setting
         self.assertIn("44.1/48/88.2/96/176.4/192/384 kHz", text)
 
 
@@ -490,3 +490,47 @@ class VersionGatesTest(S.AppTestCase):
         S.PARAMS.update({"version": "0.12.12"})
         pg.refresh()
         self.assertIn("Driver options: none", pg.info.text())
+
+    # modinfo of driver 0.12.14-rc3: the 9 feature options are gone
+    OPTIONS_0_12_14 = (
+        "acm_heartbeat_ms bus_reset cap_bits dac_start_skip debug dma_pad dma_trace "
+        "dsp_fail_inject eq_headroom fx_spk_cfg hp_custom hu_auto_switch hu_master "
+        "hung_inject mic_boost_30 mmio_log optical_mirror pcm_bits pcm_periods pcm_rates "
+        "posted_flush ring_order rirb_inject rirb_inject_us scp_full_inject spdif_out "
+        "surround surround_ports verb_log").split()
+    REMOVED_0_12_14 = ("surround_96k", "surround_192k", "hp_live_upload", "dsp_96k",
+                       "pcm_176k4", "dac_441", "router_poll", "rt_dsp_walk", "wuh_96k")
+
+    def test_driver_0_12_14_option_set(self):
+        S.PARAMS.clear()
+        S.PARAMS.update({p: "0" for p in self.OPTIONS_0_12_14})
+        S.PARAMS.update({"version": "0.12.14", "pcm_rates": "2", "pcm_bits": "24",
+                         "surround": "1", "hp_custom": ""})
+        for gate in (C.surround_96k_stable, C.dsp_96k, C.plays_176k4, C.plays_cd_rates,
+                     C.restarts_stream_on_direct, C.hp_live_upload, C.wuh_96k):
+            self.assertTrue(gate(), gate.__name__)
+        self.assertEqual(C.surround_max(), 192000)
+        pg = self.page(pages.SettingsPage)
+        pg.refresh()
+        text = pg.info.text()
+        self.assertIn("Driver options: pcm_rates=2 · pcm_bits=24 · surround=1", text)
+        self.assertIn("44.1/48/88.2/96/176.4/192/384 kHz", text)
+        self.assertIn("5.1 rates: 48/96/192 kHz", text)
+        self.assertIn("DSP mode: 48/96 kHz", text)
+        for p in self.REMOVED_0_12_14:
+            self.assertNotIn(p, text)
+
+    def test_driver_0_12_13_option_set_still_works(self):
+        """0.12.13 still has the feature options (all on): same result."""
+        S.PARAMS.clear()
+        S.PARAMS.update({"version": "0.12.13", "pcm_rates": "2", "pcm_bits": "24",
+                         "surround": "1", "surround_96k": "1", "surround_192k": "1",
+                         "hp_live_upload": "Y", "dsp_96k": "Y", "pcm_176k4": "Y",
+                         "dac_441": "1", "wuh_96k": "Y"})
+        for gate in (C.surround_96k_stable, C.dsp_96k, C.plays_176k4, C.plays_cd_rates,
+                     C.restarts_stream_on_direct, C.hp_live_upload, C.wuh_96k):
+            self.assertTrue(gate(), gate.__name__)
+        self.assertEqual(C.surround_max(), 192000)
+        pg = self.page(pages.SettingsPage)
+        pg.refresh()
+        self.assertIn("Driver options: pcm_rates=2 · pcm_bits=24 · surround=1", pg.info.text())

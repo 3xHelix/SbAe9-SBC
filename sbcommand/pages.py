@@ -1612,11 +1612,13 @@ def output_name(node):
     return short_name(node, "Sound Blaster AE-9")
 
 
-# driver options shown read-only on Settings → Device
-DEVICE_PARAMS = ("pcm_rates", "pcm_bits", "dac_441", "surround", "surround_96k", "surround_192k",
-                  "dsp_96k", "wuh_96k", "pcm_176k4")
+# driver options shown read-only on Settings → Device: the user settings that
+# 0.12.14 keeps. Its removed feature options (surround_96k, surround_192k,
+# dsp_96k, wuh_96k, pcm_176k4, dac_441, ...) are on for good from 0.12.11, so
+# the rate lines above the options already say what they did.
+DEVICE_PARAMS = ("pcm_rates", "pcm_bits", "surround")
 
-INPUT_RATES = (48000, 96000)   # What U Hear: 48, or 96 kHz with the driver's wuh_96k
+INPUT_RATES = (48000, 96000)   # What U Hear: 48, or 96 kHz too (C.wuh_96k)
 
 
 def confirm_dsp_louder(parent, ctx):

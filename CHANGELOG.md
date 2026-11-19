@@ -3,6 +3,16 @@
 Sound Blaster Command for Linux: the UI for the Creative Sound Blaster AE-9
 driver ([SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv)).
 
+## Unreleased
+
+### Changed
+- Settings → Device lists only the driver options that are still settings
+  (`pcm_rates`, `pcm_bits`, `surround`). Driver 0.12.14 removes the old
+  feature options (`surround_96k`, `surround_192k`, `dsp_96k`, `wuh_96k`,
+  `pcm_176k4`, `dac_441`, `hp_live_upload` and more), which have been on for
+  good since 0.12.11; the app already goes by the driver version there, so it
+  works the same on 0.12.13 and 0.12.14.
+
 ## 0.21.4 (2026-11-18)
 
 Sound Blaster Command steps aside while `ae9-reload` reloads the driver, and
