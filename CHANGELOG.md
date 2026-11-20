@@ -3,7 +3,12 @@
 Sound Blaster Command for Linux: the UI for the Creative Sound Blaster AE-9
 driver ([SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv)).
 
-## Unreleased
+## 0.22.1 (2026-11-20)
+
+Native DSD switched off stays off after a reboot on driver 0.12.15, which
+turns it on by default. If you switched it off with 0.22.0, switch it off
+once more. Also GNOME 51 for the panel extension. Pairs with
+[SbAe9-Drv v0.12.15](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.15).
 
 ### Fixed
 - Native DSD switched off now stays off after a reboot on driver 0.12.15,
