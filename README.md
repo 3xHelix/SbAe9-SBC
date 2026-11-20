@@ -11,7 +11,7 @@ through PipeWire as usual. The effects run on the card's own DSP, and this app
 switches and tunes them.
 
 This release pairs with
-[SbAe9-Drv v0.12.13](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.13).
+[SbAe9-Drv v0.12.14](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.14).
 
 ---
 
@@ -217,6 +217,8 @@ For everything, use the latest
 | Recovery when the card stops answering, `ae9-reload` | [0.12.9](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.9) |
 | Headphone profiles load while audio plays | [0.12.10](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.10) |
 | DSP mode at the same level as Direct Mode | [0.12.11](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.11) |
+| `ae9-reload` with the app open | [0.12.13](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.13) |
+| Native DSD64 (experimental, for players that open the card directly) | [0.12.14](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.14) |
 
 </details>
 

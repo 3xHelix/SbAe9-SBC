@@ -3,7 +3,12 @@
 Sound Blaster Command for Linux: the UI for the Creative Sound Blaster AE-9
 driver ([SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv)).
 
-## Unreleased
+## 0.22.0 (2026-11-20)
+
+Native DSD64 for players that open the card directly, and Settings → Device
+lists only the driver options that are still settings. Pairs with
+[SbAe9-Drv v0.12.14](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.14)
+(the native DSD switch needs it).
 
 ### Added
 - Native DSD64 (driver 0.12.14+, experimental). Settings → Device has a
