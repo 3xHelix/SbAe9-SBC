@@ -10,6 +10,7 @@ import errno
 import math
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import time
@@ -665,6 +666,45 @@ def driver_loaded():
 
 def module_param(name):
     return ae9.module_param(name)
+
+
+# Native DSD64 (driver 0.12.14+, its pcm_dsd option, off by default): the
+# card also offers DSD_U32_BE at "88200" to players that open hw:AE9,0
+# directly. Set live through /sys, and kept for the next boot in DSD_CONF
+# (the file the driver's docs/USING.md names).
+PCM_DSD = "pcm_dsd"
+DSD_CONF = "/etc/modprobe.d/ae9-dsd.conf"
+DSD_CONF_TEXT = ("# Written by Sound Blaster Command: native DSD64 on the AE-9 (driver 0.12.14+)\n"
+                 "options snd-hda-codec-creative-ae9 pcm_dsd=1\n")
+
+
+def has_native_dsd():
+    """The driver can play native DSD64 (it has the pcm_dsd option)."""
+    return module_param(PCM_DSD) is not None
+
+
+def native_dsd_on():
+    return module_param(PCM_DSD) in ("Y", "1")
+
+
+def native_dsd_script(on):
+    """The root shell script that turns native DSD on or off now and for the
+    next boot (run through pkexec)."""
+    path = os.path.join(MODULE_PARAMS, PCM_DSD)
+    if on:
+        return f"echo 1 > {path} && printf %s {shlex.quote(DSD_CONF_TEXT)} > {DSD_CONF}"
+    return f"echo 0 > {path} && rm -f {DSD_CONF}"
+
+
+def set_native_dsd(on):
+    """Turn native DSD on or off (asks for the password). True if it took."""
+    if not shutil.which("pkexec"):
+        return False
+    try:
+        subprocess.run(["pkexec", "sh", "-c", native_dsd_script(on)], timeout=120)
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return native_dsd_on() == on
 
 
 def has_playback_pcm(device, card_id="AE9"):

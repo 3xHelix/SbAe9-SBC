@@ -979,7 +979,10 @@ class PlaybackPage(Page):
         if outside:
             note = (note + " " if note else "") + f"PipeWire is set to {eff / 1000:g} kHz outside the app."
         if self.ctx.depth_pending:
-            note = (note + " " if note else "") + "New bit depth applies to the next stream."
+            other = pipewire.card_held_by_other()
+            note = (note + " " if note else "") + (
+                f"New bit depth applies once {other} lets go of the card." if other
+                else "New bit depth applies to the next stream.")
         self.rate_note.setText(note)
         self.rate_note.setVisible(bool(note))
 
@@ -1003,7 +1006,10 @@ class PlaybackPage(Page):
                                   "change it here")
 
         live = pipewire.card_stream()
-        if live:
+        dsd = None if live else pipewire.card_dsd()
+        if dsd:
+            self.now_playing.setText(f"Running now: {dsd_text(dsd)}")
+        elif live:
             rate, ch = live
             chans = {1: "mono", 2: "stereo", 6: "5.1"}.get(ch, f"{ch} ch")
             self.now_playing.setText(f"Running now: {rate / 1000:g} kHz · {bits} · {chans}")
@@ -1224,6 +1230,8 @@ class PlaybackPage(Page):
             why.append(f"{rate / 1000:g} kHz")
         if layout == "surround" or (live and live[1] > 2):
             why.append("5.1 stream")
+        if not live and pipewire.card_dsd():
+            why.append("native DSD")      # RCA out and headphones only
         return why
 
     def _optical_default(self):
@@ -1633,9 +1641,32 @@ def confirm_dsp_louder(parent, ctx):
     return True
 
 
+def dsd_text(dsd):
+    """ "DSD64 (native) · 2.8224 MHz · stereo · via mpd" for pipewire.card_dsd()."""
+    ch = {1: "mono", 2: "stereo"}.get(dsd["channels"], f"{dsd['channels']} ch")
+    parts = [f"{dsd['name']} (native)", f"{dsd['bit_clock'] / 1e6:g} MHz", ch]
+    if dsd.get("app"):
+        parts.append(f"via {dsd['app']}")
+    return " · ".join(parts)
+
+
+def confirm_stop_dsd(parent):
+    """Before Direct Mode turns off while native DSD plays (the driver stops
+    the DSD stream then): True to go ahead."""
+    dsd = pipewire.card_dsd()
+    if not dsd:
+        return True
+    who = f" ({dsd['app']})" if dsd.get("app") else ""
+    return QMessageBox.question(
+        parent, "Native DSD is playing",
+        f"Native DSD is playing{who}: Direct Mode off stops it.\n\n"
+        "Turn Direct Mode off anyway?") == QMessageBox.Yes
+
+
 def set_direct_checked(parent, ctx, on):
-    """Direct Mode from a switch: the louder-DSP warning first when it turns off."""
-    if on or confirm_dsp_louder(parent, ctx):
+    """Direct Mode from a switch: when it turns off, the native DSD and
+    louder-DSP warnings first."""
+    if on or (confirm_stop_dsd(parent) and confirm_dsp_louder(parent, ctx)):
         ctx.set_direct(on)
         return True
     return False
@@ -1655,6 +1686,13 @@ def confirm_pipewire_restart(parent, what):
         "(music, calls, everything).\n\nChange it now?") == QMessageBox.Yes
 
 
+DSD_TIP = ("The card plays DSD64 (2.8224 MHz) natively, straight to the DAC.\n"
+           "• DSD64 only: DSD128 and up play as PCM\n"
+           "• Direct Mode only; Direct Mode off stops a DSD stream\n"
+           "• On the RCA out and the head unit's headphones (not Rear, C/Sub or optical)\n"
+           "• For players that open the card directly (MPD with dop \"no\", device hw:AE9,0)\n"
+           "• PipeWire must let go of the card first: pactl suspend-sink <AE-9 sink> 1\n"
+           "See the driver's docs/USING.md, \"Native DSD64\".")
 PHANTOM_TIP = ("48 V phantom power for the head unit's XLR/TRS jack, for condenser mics "
                "that need it. The head unit's own button switches it too.")
 PHANTOM_ARM_MS = 3000      # two-click mode: how long the first click stays armed
@@ -3454,6 +3492,21 @@ class SettingsPage(Page):
         self.phantom_box.setVisible(False)
         self.lay.addWidget(self.phantom_box)
 
+        # native DSD64 (driver 0.12.14+'s pcm_dsd option)
+        self.dsd_box = QWidget()
+        dl = QVBoxLayout(self.dsd_box)
+        dl.setContentsMargins(0, 0, 0, 0)
+        dl.addWidget(label("Native DSD", "sectionTitle"))
+        self.dsd = QCheckBox("Native DSD64 (experimental)")
+        self.dsd.setToolTip(DSD_TIP)
+        self.dsd.toggled.connect(self._dsd_toggled)
+        dl.addWidget(self.dsd)
+        dl.addWidget(label("For players that open the card directly (MPD with dop \"no\"); "
+                           "PipeWire plays DSD files as PCM. Asks for your password, and stays "
+                           "set after a reboot.", "hint", wrap=True))
+        self.dsd_box.setVisible(False)
+        self.lay.addWidget(self.dsd_box)
+
         self.lay.addWidget(label("Reset to defaults", "sectionTitle"))
         self.lay.addWidget(label("Puts SBX and the EQ back to the driver's defaults. Your saved "
                                  "profiles and EQ presets stay.", "hint", wrap=True))
@@ -3526,6 +3579,10 @@ class SettingsPage(Page):
     def _pick_palette(self, key):
         if key != T.CURRENT:
             self.ctx.palette_requested.emit(key)
+
+    def _dsd_toggled(self, on):
+        C.set_native_dsd(on)
+        self.refresh()          # shows what the driver has now (unchanged if cancelled)
 
     def _enable_rates(self):
         path = f"{C.MODULE_PARAMS}/pcm_rates"
@@ -3604,6 +3661,10 @@ class SettingsPage(Page):
         self.info.setText("<br>".join(lines))
         self.rates_banner.setVisible(rates == "0")
         self.phantom_box.setVisible(self.card.has(C.HU_PHANTOM) and self.card.writable(C.HU_PHANTOM))
+        self.dsd_box.setVisible(C.has_native_dsd())
+        self.dsd.blockSignals(True)
+        self.dsd.setChecked(C.native_dsd_on())
+        self.dsd.blockSignals(False)
         ctrls = self.card.all_controls()
         if self.table.rowCount() != len(ctrls):
             self.table.setRowCount(len(ctrls))

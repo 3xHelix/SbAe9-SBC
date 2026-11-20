@@ -5,7 +5,22 @@ driver ([SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv)).
 
 ## Unreleased
 
+### Added
+- Native DSD64 (driver 0.12.14+, experimental). Settings → Device has a
+  "Native DSD64 (experimental)" switch for the driver's `pcm_dsd` option: it
+  asks for your password and sets it now and for the next boot
+  (`/etc/modprobe.d/ae9-dsd.conf`; off removes that file). It shows only on
+  drivers that have the option.
+- While a player such as MPD (`dop "no"`, device `hw:AE9,0`) plays native
+  DSD, Playback shows "Running now: DSD64 (native) · 2.8224 MHz · stereo · via
+  mpd" instead of an 88.2 kHz PCM stream. The DSD stream's "88200" no longer
+  counts as a PCM rate anywhere (rate checks, DSP mode, optical).
+- Turning Direct Mode off while native DSD plays asks first: it stops the
+  DSD stream. Optical out lists "native DSD" as why it's silent.
+
 ### Changed
+- A new bit depth waits while another app (an MPD playing DSD) holds the
+  card, instead of reopening the PipeWire sink, which can't open it then.
 - Settings → Device lists only the driver options that are still settings
   (`pcm_rates`, `pcm_bits`, `surround`). Driver 0.12.14 removes the old
   feature options (`surround_96k`, `surround_192k`, `dsp_96k`, `wuh_96k`,

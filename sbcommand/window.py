@@ -203,8 +203,10 @@ class Context(QObject):
 
         def run():
             self.card.set(C.BIT_DEPTH, k)
-            # the depth is taken when the card opens: reopen it now
-            self.depth_pending = not pipewire.reopen_sink(self.pw.nodes)
+            # the depth is taken when the card opens: reopen it now, unless an
+            # app (an MPD playing native DSD) holds it: PipeWire can't reopen it
+            self.depth_pending = (bool(pipewire.card_held_by_other())
+                                  or not pipewire.reopen_sink(self.pw.nodes))
 
         self.applier.submit(Change("depth", f"Bit depth: {name}", run, card_pace(4000), self._sink_ok,
                                    lambda: self.card.get(C.BIT_DEPTH) != k))

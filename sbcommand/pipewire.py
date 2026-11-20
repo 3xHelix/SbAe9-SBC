@@ -542,9 +542,89 @@ def reopen_source(nodes):
             and _run("pactl", "suspend-source", name, "0") is not None)
 
 
+def _proc_pcm(card_id, name, pcm="pcm0p"):
+    try:
+        with open(f"/proc/asound/{card_id}/{pcm}/sub0/{name}") as f:
+            return f.read()
+    except OSError:
+        return ""
+
+
+def pcm_format(text):
+    """The sample format in a /proc hw_params text ("S32_LE", "DSD_U32_BE"), or ""."""
+    m = re.search(r"^format:\s*(\S+)", text or "", re.M)
+    return m.group(1) if m else ""
+
+
+# DSD over ALSA: each frame carries this many 1-bit samples per channel, so
+# the DSD bit clock is the ALSA "rate" times this (driver 0.12.14's pcm_dsd:
+# DSD_U32_BE at 88200 = DSD64, 2.8224 MHz)
+DSD_BITS = {"DSD_U8": 8, "DSD_U16_LE": 16, "DSD_U16_BE": 16, "DSD_U32_LE": 32, "DSD_U32_BE": 32}
+DSD64_HZ = 2822400
+
+
+def parse_dsd(hw_params, status=""):
+    """A native DSD stream from pcm0p's hw_params (and status) texts, as
+    {"format", "rate", "channels", "bit_clock", "name", "pid"}, or None when
+    it's closed or plays PCM."""
+    fmt = pcm_format(hw_params)
+    rc = ae9.parse_hw_params(hw_params)
+    if fmt not in DSD_BITS or not rc:
+        return None
+    clock = rc[0] * DSD_BITS[fmt]
+    m = re.search(r"^owner_pid\s*:\s*(\d+)", status or "", re.M)
+    return {"format": fmt, "rate": rc[0], "channels": rc[1], "bit_clock": clock,
+            "name": f"DSD{clock // 44100}" if clock % 44100 == 0 else "DSD",
+            "pid": int(m.group(1)) if m else None}
+
+
+def process_name(pid):
+    """The short name of the process `pid` belongs to (/proc/<pid>/comm), or "".
+    The PCM's owner_pid is the thread that opened it (MPD's "output:..."), so
+    go to its process (Tgid) first."""
+    try:
+        pid = int(pid)
+        with open(f"/proc/{pid}/status") as f:
+            m = re.search(r"^Tgid:\s*(\d+)", f.read(), re.M)
+        with open(f"/proc/{int(m.group(1)) if m else pid}/comm") as f:
+            return f.read().strip()
+    except (OSError, TypeError, ValueError):
+        return ""
+
+
+def card_dsd(card_id="AE9"):
+    """The native DSD stream playing on the card (parse_dsd, plus "app": the
+    player's process name), or None. No root needed."""
+    d = parse_dsd(_proc_pcm(card_id, "hw_params"), _proc_pcm(card_id, "status"))
+    if d:
+        d["app"] = process_name(d["pid"]) if d["pid"] else ""
+    return d
+
+
+def card_owner(card_id="AE9"):
+    """The process name holding the card's playback PCM, "" when it's closed
+    or unknown. PipeWire's is "pipewire" (or "wireplumber")."""
+    m = re.search(r"^owner_pid\s*:\s*(\d+)", _proc_pcm(card_id, "status"), re.M)
+    return process_name(m.group(1)) if m else ""
+
+
+PIPEWIRE_PROCS = ("pipewire", "wireplumber", "pipewire-pulse")
+
+
+def card_held_by_other(card_id="AE9"):
+    """The name of an app other than PipeWire holding the card's playback
+    PCM directly (an MPD with device "hw:AE9,0"), or ""."""
+    owner = card_owner(card_id)
+    return owner if owner and owner not in PIPEWIRE_PROCS else ""
+
+
 def card_stream(card_id="AE9"):
-    """(rate, channels) the card's playback PCM is open at, or None when closed."""
-    return ae9.pcm_open_at("pcm0p", card_id)
+    """(rate, channels) the card's PCM playback is open at, or None when it's
+    closed or plays native DSD (see card_dsd: its "88200" isn't a PCM rate)."""
+    text = _proc_pcm(card_id, "hw_params")
+    if pcm_format(text) in DSD_BITS:
+        return None
+    return ae9.parse_hw_params(text)
 
 
 def optical_out_stream(card_id="AE9"):

@@ -77,6 +77,8 @@ class FakePipeWire:
         self.stream = None       # (rate, channels) in /proc hw_params, None = closed
         self.optical_stream = None   # (rate, channels, format) on hw:AE9,4 (driver 0.12.0)
         self.capture = None      # same, for the mic / line-in capture
+        self.dsd = None          # pipewire.card_dsd(): a native DSD stream on pcm0p
+        self.owner = ""          # an app other than PipeWire holding pcm0p ("mpd")
 
     # object lookup
     def _obj(self, cls):
@@ -221,7 +223,10 @@ alsa.find_card = lambda *hints: 0
 alsa.card_longname = lambda idx: "Creative Labs Sound Blaster AE-9 (fake)"
 alsa.Mixer = FakeMixer
 pipewire._run = lambda *a, **k: PW.run(*a, **k)
+REAL_CARD_STREAM = pipewire.card_stream
 pipewire.card_stream = lambda card_id="AE9": PW.stream
+pipewire.card_dsd = lambda card_id="AE9": dict(PW.dsd) if PW.dsd else None
+pipewire.card_held_by_other = lambda card_id="AE9": PW.owner
 pipewire.capture_stream = lambda card_id="AE9": PW.capture
 pipewire.RATES_CONF = os.path.join(_TMP, "pipewire", "90-sbae9-sbc-rates.conf")
 pipewire.MIC_CONF = os.path.join(_TMP, "wireplumber", "91-sbae9-sbc-mic.conf")

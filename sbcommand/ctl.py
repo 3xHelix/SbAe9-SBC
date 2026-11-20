@@ -213,7 +213,7 @@ def change(card, settings, cmd, arg, extra=()):
         if not 0 <= n < len(items):
             return False, "depth: this driver sets the bit depth with its pcm_bits option"
         err = card.write(C.BIT_DEPTH, n)
-        if not err:
+        if not err and not pipewire.card_held_by_other():
             pipewire.reopen_sink(pipewire.Nodes())    # taken when the card opens
     elif cmd == "preset":
         # rate and quantum at once (the widget's quick preset): "preset <Hz> <frames>"
