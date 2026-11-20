@@ -520,6 +520,40 @@ class VersionGatesTest(S.AppTestCase):
         for p in self.REMOVED_0_12_14:
             self.assertNotIn(p, text)
 
+    # modinfo of driver 0.12.15-rc1 (a release build): 21 options
+    OPTIONS_0_12_15 = (
+        "acm_heartbeat_ms bus_reset cap_bits dac_start_skip debug dma_pad hp_custom "
+        "hu_auto_switch mic_boost_30 mmio_log optical_mirror pcm_bits pcm_dsd pcm_periods "
+        "pcm_rates posted_flush ring_order spdif_out surround surround_ports verb_log").split()
+    REMOVED_0_12_15 = ("hu_master", "eq_headroom", "fx_spk_cfg", "dma_trace", "rirb_inject",
+                       "rirb_inject_us", "hung_inject", "dsp_fail_inject", "scp_full_inject")
+
+    def test_driver_0_12_15_option_set(self):
+        self.assertEqual(len(self.OPTIONS_0_12_15), 21)
+        self.assertFalse(set(self.REMOVED_0_12_15) & set(self.OPTIONS_0_12_15))
+        S.PARAMS.clear()
+        S.PARAMS.update({p: "0" for p in self.OPTIONS_0_12_15})
+        S.PARAMS.update({"version": "0.12.15", "pcm_rates": "2", "pcm_bits": "24",
+                         "surround": "1", "hp_custom": "", "pcm_dsd": "N"})
+        for gate in (C.surround_96k_stable, C.dsp_96k, C.plays_176k4, C.plays_cd_rates,
+                     C.restarts_stream_on_direct, C.hp_live_upload, C.wuh_96k):
+            self.assertTrue(gate(), gate.__name__)
+        self.assertEqual(C.surround_max(), 192000)
+        self.assertTrue(C.has_native_dsd())
+        pg = self.page(pages.SettingsPage)
+        pg.refresh()
+        text = pg.info.text()
+        self.assertIn("Driver options: pcm_rates=2 · pcm_bits=24 · surround=1", text)
+        for p in self.REMOVED_0_12_15 + self.REMOVED_0_12_14:
+            self.assertNotIn(p, text)
+        self.assertFalse(pg.dsd_box.isHidden())
+        self.assertFalse(pg.dsd.isChecked())
+        S.PARAMS["pcm_dsd"] = "Y"           # may become the default before 0.12.15 ships
+        pg.refresh()
+        self.assertTrue(pg.dsd.isChecked())
+        # the whole app comes up on this option set
+        self.window()
+
     def test_driver_0_12_13_option_set_still_works(self):
         """0.12.13 still has the feature options (all on): same result."""
         S.PARAMS.clear()
