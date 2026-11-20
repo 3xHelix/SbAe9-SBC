@@ -170,7 +170,7 @@ app open for everyday switching:
 AE-9**. Right-click it → *Configure* to choose which rates and quantum values
 it lists, and to add a quick preset button.
 
-**GNOME 45 to 50:** log out and back in, then turn on **Sound Blaster AE-9**
+**GNOME 45 to 51:** log out and back in, then turn on **Sound Blaster AE-9**
 in the Extensions app, or run:
 
 ```sh
@@ -218,7 +218,7 @@ For everything, use the latest
 | Headphone profiles load while audio plays | [0.12.10](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.10) |
 | DSP mode at the same level as Direct Mode | [0.12.11](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.11) |
 | `ae9-reload` with the app open | [0.12.13](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.13) |
-| Native DSD64 (experimental, for players that open the card directly) | [0.12.14](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.14) |
+| Native DSD64 for players that open the card directly (on by default from [0.12.15](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.15)) | [0.12.14](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.14) |
 
 </details>
 

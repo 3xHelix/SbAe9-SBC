@@ -88,10 +88,15 @@ class ScriptTest(unittest.TestCase):
         self.assertIn("options snd-hda-codec-creative-ae9 pcm_dsd=1", s)
         self.assertIn("> /etc/modprobe.d/ae9-dsd.conf", s)
 
-    def test_off_removes_conf(self):
+    def test_off_writes_conf_with_0(self):
+        """Off must survive a reboot on 0.12.15, whose default is on: write
+        pcm_dsd=0 rather than removing the file."""
         s = C.native_dsd_script(False)
-        self.assertIn("echo 0 > ", s)
-        self.assertIn("rm -f /etc/modprobe.d/ae9-dsd.conf", s)
+        self.assertIn("echo 0 > /sys/module/snd_hda_codec_creative_ae9/parameters/pcm_dsd", s)
+        self.assertIn("options snd-hda-codec-creative-ae9 pcm_dsd=0", s)
+        self.assertIn("> /etc/modprobe.d/ae9-dsd.conf", s)
+        self.assertNotIn("rm ", s)
+
 
 
 class DsdUiTest(S.AppTestCase):

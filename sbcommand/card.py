@@ -668,14 +668,19 @@ def module_param(name):
     return ae9.module_param(name)
 
 
-# Native DSD64 (driver 0.12.14+, its pcm_dsd option, off by default): the
-# card also offers DSD_U32_BE at "88200" to players that open hw:AE9,0
-# directly. Set live through /sys, and kept for the next boot in DSD_CONF
-# (the file the driver's docs/USING.md names).
+# Native DSD64 (driver 0.12.14+, its pcm_dsd option; off by default on
+# 0.12.14, on by default from 0.12.15): the card also offers DSD_U32_BE at
+# "88200" to players that open hw:AE9,0 directly. Set live through /sys, and
+# kept for the next boot in DSD_CONF (the file the driver's docs/USING.md
+# names) as an explicit pcm_dsd=1 or 0: removing the file would bring back
+# the driver's default, which is on from 0.12.15.
 PCM_DSD = "pcm_dsd"
 DSD_CONF = "/etc/modprobe.d/ae9-dsd.conf"
-DSD_CONF_TEXT = ("# Written by Sound Blaster Command: native DSD64 on the AE-9 (driver 0.12.14+)\n"
-                 "options snd-hda-codec-creative-ae9 pcm_dsd=1\n")
+
+
+def dsd_conf_text(on):
+    return ("# Written by Sound Blaster Command: native DSD64 on the AE-9 (driver 0.12.14+)\n"
+            f"options snd-hda-codec-creative-ae9 pcm_dsd={1 if on else 0}\n")
 
 
 def has_native_dsd():
@@ -691,9 +696,8 @@ def native_dsd_script(on):
     """The root shell script that turns native DSD on or off now and for the
     next boot (run through pkexec)."""
     path = os.path.join(MODULE_PARAMS, PCM_DSD)
-    if on:
-        return f"echo 1 > {path} && printf %s {shlex.quote(DSD_CONF_TEXT)} > {DSD_CONF}"
-    return f"echo 0 > {path} && rm -f {DSD_CONF}"
+    v = 1 if on else 0
+    return f"echo {v} > {path} && printf %s {shlex.quote(dsd_conf_text(on))} > {DSD_CONF}"
 
 
 def set_native_dsd(on):

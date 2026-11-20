@@ -3,6 +3,19 @@
 Sound Blaster Command for Linux: the UI for the Creative Sound Blaster AE-9
 driver ([SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv)).
 
+## Unreleased
+
+### Fixed
+- Native DSD switched off now stays off after a reboot on driver 0.12.15,
+  which turns it on by default: the switch writes `pcm_dsd=0` to
+  `/etc/modprobe.d/ae9-dsd.conf` instead of removing the file.
+
+### Changed
+- The Native DSD64 switch drops "(experimental)" and says it's on by default
+  from driver 0.12.15 (off on 0.12.14).
+- The GNOME panel extension supports GNOME 51.
+- Tests cover driver 0.12.15's 21 module options.
+
 ## 0.22.0 (2026-11-20)
 
 Native DSD64 for players that open the card directly, and Settings → Device

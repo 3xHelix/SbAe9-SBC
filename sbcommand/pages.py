@@ -1692,6 +1692,7 @@ DSD_TIP = ("The card plays DSD64 (2.8224 MHz) natively, straight to the DAC.\n"
            "• On the RCA out and the head unit's headphones (not Rear, C/Sub or optical)\n"
            "• For players that open the card directly (MPD with dop \"no\", device hw:AE9,0)\n"
            "• PipeWire must let go of the card first: pactl suspend-sink <AE-9 sink> 1\n"
+           "• On by default from driver 0.12.15 (off by default on 0.12.14)\n"
            "See the driver's docs/USING.md, \"Native DSD64\".")
 PHANTOM_TIP = ("48 V phantom power for the head unit's XLR/TRS jack, for condenser mics "
                "that need it. The head unit's own button switches it too.")
@@ -3497,13 +3498,14 @@ class SettingsPage(Page):
         dl = QVBoxLayout(self.dsd_box)
         dl.setContentsMargins(0, 0, 0, 0)
         dl.addWidget(label("Native DSD", "sectionTitle"))
-        self.dsd = QCheckBox("Native DSD64 (experimental)")
+        self.dsd = QCheckBox("Native DSD64")
         self.dsd.setToolTip(DSD_TIP)
         self.dsd.toggled.connect(self._dsd_toggled)
         dl.addWidget(self.dsd)
         dl.addWidget(label("For players that open the card directly (MPD with dop \"no\"); "
-                           "PipeWire plays DSD files as PCM. Asks for your password, and stays "
-                           "set after a reboot.", "hint", wrap=True))
+                           "PipeWire plays DSD files as PCM. On by default from driver 0.12.15 (off on "
+                           "0.12.14). Asks for your password, and stays set after a reboot.",
+                           "hint", wrap=True))
         self.dsd_box.setVisible(False)
         self.lay.addWidget(self.dsd_box)
 

@@ -534,7 +534,7 @@ class VersionGatesTest(S.AppTestCase):
         S.PARAMS.clear()
         S.PARAMS.update({p: "0" for p in self.OPTIONS_0_12_15})
         S.PARAMS.update({"version": "0.12.15", "pcm_rates": "2", "pcm_bits": "24",
-                         "surround": "1", "hp_custom": "", "pcm_dsd": "N"})
+                         "surround": "1", "hp_custom": "", "pcm_dsd": "Y"})
         for gate in (C.surround_96k_stable, C.dsp_96k, C.plays_176k4, C.plays_cd_rates,
                      C.restarts_stream_on_direct, C.hp_live_upload, C.wuh_96k):
             self.assertTrue(gate(), gate.__name__)
@@ -547,10 +547,10 @@ class VersionGatesTest(S.AppTestCase):
         for p in self.REMOVED_0_12_15 + self.REMOVED_0_12_14:
             self.assertNotIn(p, text)
         self.assertFalse(pg.dsd_box.isHidden())
-        self.assertFalse(pg.dsd.isChecked())
-        S.PARAMS["pcm_dsd"] = "Y"           # may become the default before 0.12.15 ships
+        self.assertTrue(pg.dsd.isChecked())     # on by default from 0.12.15
+        S.PARAMS["pcm_dsd"] = "N"
         pg.refresh()
-        self.assertTrue(pg.dsd.isChecked())
+        self.assertFalse(pg.dsd.isChecked())
         # the whole app comes up on this option set
         self.window()
 
