@@ -483,7 +483,7 @@ def no_card_reason(card):
         return RELOADING_BAR
     if not card.answering:
         return NOT_ANSWERING_BAR
-    return NO_CARD if C.driver_loaded() else NO_DRIVER
+    return NO_CARD if C.driver_loaded() else C.for_card(NO_DRIVER)
 
 
 class NoCardPage(QWidget):
@@ -494,7 +494,7 @@ class NoCardPage(QWidget):
         self.setObjectName("content")
         lay = QVBoxLayout(self)
         lay.addStretch()
-        self.title = label(NO_CARD_TITLE, "noCardTitle", wrap=True)
+        self.title = label(C.for_card(NO_CARD_TITLE), "noCardTitle", wrap=True)
         self.title.setMinimumWidth(1)
         self.title.setAlignment(Qt.AlignCenter)
         lay.addWidget(self.title)
@@ -530,13 +530,14 @@ class NoCardPage(QWidget):
 
     def show_state(self, answering, reloading=False):
         if reloading:
-            self.title.setText(RELOADING_TITLE)
+            self.title.setText(C.for_card(RELOADING_TITLE))
             self.sub.setText(RELOADING_SUB)
             self.steps_box.hide()
             return
-        self.title.setText(NO_CARD_TITLE if answering else NOT_ANSWERING_TITLE)
+        self.title.setText(C.for_card(NO_CARD_TITLE if answering else NOT_ANSWERING_TITLE))
         tool = None if answering else C.reload_tool()
-        self.sub.setText(NO_CARD_SUB if answering else RELOAD_TOOL_SUB if tool else NOT_ANSWERING_SUB)
+        self.sub.setText(C.for_card(NO_CARD_SUB if answering else RELOAD_TOOL_SUB if tool
+                                    else NOT_ANSWERING_SUB))
         # ae9-reload (driver 0.12.9+) when it's there; the commands by hand before it
         self.steps.setText(C.RELOAD_TOOL if tool else C.RELOAD_STEPS)
         self.copy_btn.setText("Copy command" if tool else "Copy commands")
@@ -548,7 +549,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.ctx = ctx
         self.card = ctx.card
-        self.setWindowTitle("Sound Blaster Command — AE-9")
+        self.setWindowTitle(C.for_card("Sound Blaster Command — AE-9"))
         self.setWindowIcon(app_icon())
         self.resize(1180, 760)
         self.setMinimumSize(1000, 660)
@@ -568,7 +569,8 @@ class MainWindow(QMainWindow):
         tl = QVBoxLayout()
         tl.setSpacing(0)
         tl.addWidget(label("Sound Blaster Command", "appTitle"))
-        tl.addWidget(label("AE-9", "deviceName"))
+        self.device_name = label(C.card_short(), "deviceName")
+        tl.addWidget(self.device_name)
         th.addLayout(tl)
         th.addStretch()
         self.win_buttons = []
@@ -794,6 +796,8 @@ class MainWindow(QMainWindow):
             pipewire.set_mute(n.source["id"], muted)
 
     def _on_card(self, *_):
+        self.device_name.setText(C.card_short())
+        self.setWindowTitle(C.for_card("Sound Blaster Command — AE-9"))
         self.refresh()
 
     def _refresh_dsp_wait(self, *_):

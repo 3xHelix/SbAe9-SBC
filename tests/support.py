@@ -62,6 +62,20 @@ def fixture(name):
 # --- fake ALSA mixer ---------------------------------------------------------------
 # The shared one, from sbae9kit.testing (starts from the real card's controls).
 from sbae9kit.testing.mixer import FakeMixer  # noqa: E402
+from sbae9kit import testing as kit_testing  # noqa: E402
+
+# Fake /sys/class/sound and /proc/asound for the board detection (never the
+# real machine's): an HDMI card, a webcam and the AE-9, as on the dev box.
+SOUND_ROOT = os.path.join(_TMP, "sound")
+SOUND_CARDS = (kit_testing.HDMI_CARD, kit_testing.USB_CARD, kit_testing.AE9_CARD)
+
+
+def sound_cards(*cards):
+    """Point the board detection at these fake cards (default: SOUND_CARDS)."""
+    kit_testing.fake_sound_tree(SOUND_ROOT, cards or SOUND_CARDS)
+
+
+sound_cards()
 
 
 # --- fake PipeWire ---------------------------------------------------------------------
@@ -299,6 +313,7 @@ def reset():
     """Fresh fake PipeWire, driver options and settings for a new test."""
     global PW
     PW.__init__()
+    sound_cards()
     PARAMS.clear()
     DSP_PATH["ready"] = True
     DRIVER.update({"loaded": True, "listed": True, "reload_tool": False})

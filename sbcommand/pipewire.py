@@ -20,6 +20,7 @@ from PySide6.QtCore import QObject, QProcess, QTimer, Signal
 from sbae9kit import ae9
 
 from . import config
+from . import card as C
 
 ALL_RATES = [44100, 48000, 88200, 96000, 176400, 192000, 384000]   # every rate the AE-9 driver can play
 RATES = [48000, 96000, 192000, 384000]   # without 44.1/88.2 (pcm_rates=1, drivers before 0.9.4)
@@ -544,7 +545,7 @@ def reopen_source(nodes):
 
 def _proc_pcm(card_id, name, pcm="pcm0p"):
     try:
-        with open(f"/proc/asound/{card_id}/{pcm}/sub0/{name}") as f:
+        with open(f"/proc/asound/{card_id or ae9.card_id()}/{pcm}/sub0/{name}") as f:
             return f.read()
     except OSError:
         return ""
@@ -592,7 +593,7 @@ def process_name(pid):
         return ""
 
 
-def card_dsd(card_id="AE9"):
+def card_dsd(card_id=None):
     """The native DSD stream playing on the card (parse_dsd, plus "app": the
     player's process name), or None. No root needed."""
     d = parse_dsd(_proc_pcm(card_id, "hw_params"), _proc_pcm(card_id, "status"))
@@ -601,7 +602,7 @@ def card_dsd(card_id="AE9"):
     return d
 
 
-def card_owner(card_id="AE9"):
+def card_owner(card_id=None):
     """The process name holding the card's playback PCM, "" when it's closed
     or unknown. PipeWire's is "pipewire" (or "wireplumber")."""
     m = re.search(r"^owner_pid\s*:\s*(\d+)", _proc_pcm(card_id, "status"), re.M)
@@ -611,14 +612,14 @@ def card_owner(card_id="AE9"):
 PIPEWIRE_PROCS = ("pipewire", "wireplumber", "pipewire-pulse")
 
 
-def card_held_by_other(card_id="AE9"):
+def card_held_by_other(card_id=None):
     """The name of an app other than PipeWire holding the card's playback
     PCM directly (an MPD with device "hw:AE9,0"), or ""."""
     owner = card_owner(card_id)
     return owner if owner and owner not in PIPEWIRE_PROCS else ""
 
 
-def card_stream(card_id="AE9"):
+def card_stream(card_id=None):
     """(rate, channels) the card's PCM playback is open at, or None when it's
     closed or plays native DSD (see card_dsd: its "88200" isn't a PCM rate)."""
     text = _proc_pcm(card_id, "hw_params")
@@ -627,11 +628,11 @@ def card_stream(card_id="AE9"):
     return ae9.parse_hw_params(text)
 
 
-def optical_out_stream(card_id="AE9"):
+def optical_out_stream(card_id=None):
     """(rate, channels, format) driver 0.12.0's separate optical output is open
     at (hw:AE9,4), or None: then optical mirrors the main output."""
     try:
-        with open(f"/proc/asound/{card_id}/pcm4p/sub0/hw_params") as f:
+        with open(f"/proc/asound/{card_id or ae9.card_id()}/pcm4p/sub0/hw_params") as f:
             text = f.read()
     except OSError:
         return None
@@ -642,7 +643,7 @@ def optical_out_stream(card_id="AE9"):
     return rc[0], rc[1], m.group(1) if m else ""
 
 
-def capture_stream(card_id="AE9"):
+def capture_stream(card_id=None):
     """(rate, channels) the head unit mic capture is open at, or None."""
     return ae9.pcm_open_at("pcm0c", card_id)
 
@@ -680,7 +681,7 @@ def _lua_rule(path, verb, name, rate, title):
         return
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w") as f:
-        f.write(f"-- Written by Sound Blaster Command (sbae9-sbc): the AE-9 {title}\n"
+        f.write(C.for_card(f"-- Written by Sound Blaster Command (sbae9-sbc): the AE-9 {title}\n") +
                 "-- sample rate, for WirePlumber 0.4. Pick Automatic in the app to undo.\n"
                 "table.insert(alsa_monitor.rules, {\n"
                 f'  matches = {{ {{ {{ "node.name", "{verb}", "{name}" }} }} }},\n'
@@ -721,9 +722,9 @@ def set_mic_rate(source_name, rate):
 _RATE_LINE = re.compile(r"^(\s*audio\.rate\s*=\s*)(\d+)", re.M)
 
 
-def input_conf(device, card_id="AE9"):
+def input_conf(device, card_id=None):
     """The user's PipeWire config that defines hw:<card>,<device>, or None."""
-    pat = re.compile(r'api\.alsa\.path\s*=\s*"hw:%s,%d"' % (re.escape(card_id), device))
+    pat = re.compile(r'api\.alsa\.path\s*=\s*"hw:%s,%d"' % (re.escape(card_id or ae9.card_id()), device))
     try:
         names = sorted(os.listdir(PW_CONF_DIR))
     except OSError:
@@ -770,7 +771,7 @@ def set_input_rule_rate(key, rate):
     if rate:
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, "w") as f:
-            f.write(f"# Written by Sound Blaster Command (sbae9-sbc): the AE-9 {title}\n"
+            f.write(C.for_card(f"# Written by Sound Blaster Command (sbae9-sbc): the AE-9 {title}\n") +
                     "# sample rate. Pick Automatic in the app, or delete this file, to undo.\n"
                     "monitor.alsa.rules = [\n"
                     "  {\n"
@@ -926,8 +927,8 @@ class MicMonitor(QObject):
         self._proc.start("pw-loopback", [
             "-n", "sbae9-mic-monitor", "-l", "20",
             "-C", source_name,
-            "--capture-props", '{ node.description="AE-9 mic monitor" node.dont-reconnect=true }',
-            "--playback-props", '{ media.role=Communication node.description="AE-9 mic monitor" }',
+            "--capture-props", C.for_card('{ node.description="AE-9 mic monitor" node.dont-reconnect=true }'),
+            "--playback-props", C.for_card('{ media.role=Communication node.description="AE-9 mic monitor" }'),
         ])
         self.state.emit(True)
 
@@ -963,7 +964,7 @@ class LevelMeter(QObject):
         self._proc.readyReadStandardOutput.connect(self._read)
         self._proc.start("pw-record", raw_flag() + ["--target", source_name, "--rate", "48000",
                                        "--channels", "2", "--format", "s16",
-                                       "-P", '{ node.description="AE-9 level meter" node.dont-reconnect=true }',
+                                       "-P", C.for_card('{ node.description="AE-9 level meter" node.dont-reconnect=true }'),
                                        "-"])
         self._timer.start()
 

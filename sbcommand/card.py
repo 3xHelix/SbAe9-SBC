@@ -392,7 +392,8 @@ class AE9(QObject):
                 return
             if not here:
                 return
-        idx = alsa.find_card("AE9", "Sound Blaster AE-9", "AE-9")
+        redetect()          # the card (or which one) may have changed since
+        idx = alsa.find_card(*card_hints())
         if idx < 0:
             self._retry.start()
             return
@@ -654,9 +655,52 @@ def dsp_waiting_rate(card, live):
     return rate
 
 
-def card_listed(card_id="AE9"):
+# --- which card (sbae9kit's board detection) ------------------------------------
+# The AE-9 now, the AE-7 later: the ALSA id, names and wording come from the
+# detected card. With none found they fall back to the AE-9's, so an AE-9
+# machine looks exactly as before. What a card can do is still decided by its
+# controls and PCMs (AE9.has(), has_playback_pcm()), never by its model.
+AE9_SHORT = "AE-9"
+
+
+def board():
+    """The detected card (sbae9kit Card: .id, .short, .name, .key, .hw(n)), or None."""
+    return ae9.current()
+
+
+def card_id():
+    """The detected card's ALSA id ("AE9", "AE7"); "AE9" when none is found."""
+    return ae9.card_id()
+
+
+def card_short():
+    """ "AE-9" / "AE-7": the title bar and labels."""
+    b = board()
+    return b.short if b else AE9_SHORT
+
+
+def card_hints():
+    """What alsa.find_card looks for: the ALSA id, the full name, the short name."""
+    b = board()
+    return (card_id(), b.name, b.short) if b else ("AE9", "Sound Blaster AE-9", AE9_SHORT)
+
+
+def for_card(text):
+    """`text` written for the AE-9, worded for the detected card ("AE-9" ->
+    "AE-7"); unchanged on an AE-9. Module and command names (ae9-reload,
+    snd-hda-codec-creative-ae9) are lower case and stay."""
+    short = card_short()
+    return text if short == AE9_SHORT else text.replace(AE9_SHORT, short)
+
+
+def redetect():
+    """Look for the card again (after a driver reload)."""
+    return ae9.refresh()
+
+
+def card_listed(card_id=None):
     """The card is in /proc/asound (looked up without opening a device)."""
-    return os.path.exists(f"/proc/asound/{card_id}")
+    return os.path.exists(f"/proc/asound/{card_id or ae9.card_id()}")
 
 
 def driver_loaded():
@@ -711,12 +755,12 @@ def set_native_dsd(on):
     return native_dsd_on() == on
 
 
-def has_playback_pcm(device, card_id="AE9"):
+def has_playback_pcm(device, card_id=None):
     """The driver offers playback device `device` (4 = the separate optical out)."""
-    return os.path.exists(f"/proc/asound/{card_id}/pcm{device}p")
+    return os.path.exists(f"/proc/asound/{card_id or ae9.card_id()}/pcm{device}p")
 
 
-def has_capture_pcm(device, card_id="AE9"):
+def has_capture_pcm(device, card_id=None):
     """The driver offers capture device `device` (1 = optical in, 2 = What U Hear,
     3 = head unit rear RCA)."""
     return ae9.has_capture_pcm(device, card_id)

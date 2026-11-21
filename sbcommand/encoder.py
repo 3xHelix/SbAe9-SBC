@@ -42,7 +42,9 @@ RATE = 48000
 FX = "fx"
 MODES = (FX,) + tuple(ENCODERS)
 FX_NAME = "ae9-optical-fx"
-OPTICAL_PCM = f"hw:{ae9.CARD_ID},{C.OPTICAL_OUT_PCM}"
+def optical_pcm():
+    """The separate optical output's ALSA device on the detected card ("hw:AE9,4")."""
+    return f"hw:{C.card_id()},{C.OPTICAL_OUT_PCM}"
 
 
 def _run(*args, timeout=5):
@@ -79,7 +81,7 @@ def missing(mode, nodes=None):
                 return f"Needs {tool}."
         nodes = nodes if nodes is not None else pipewire.Nodes()
         if not nodes.optical_out:
-            return "Needs AE-9 Optical Out in PipeWire (driver 0.12.0 and its card profile)."
+            return C.for_card("Needs AE-9 Optical Out in PipeWire (driver 0.12.0 and its card profile).")
         if not nodes.what_u_hear:
             return "Needs the What U Hear input in PipeWire (Recording > Other Input)."
         if not os.path.exists(UNIT_PATH):
@@ -210,7 +212,7 @@ def commands(mode, source, channels):
     layout = "5.1" if channels == 6 else "stereo"
     rec = ["pw-record"] + pipewire.raw_flag() + [
            "--target", source, "--rate", str(RATE), "--channels", str(channels),
-           "--format", "s32", "-P", '{ node.description="AE-9 encoder" node.dont-reconnect=true }']
+           "--format", "s32", "-P", C.for_card('{ node.description="AE-9 encoder" node.dont-reconnect=true }')]
     if channels == 6:
         # the source's order (front-left, front-right, front-center, lfe,
         # rear-left, rear-right) is ffmpeg's 5.1 and AC-3's input order
@@ -222,13 +224,13 @@ def commands(mode, source, channels):
             # Sun AU header); 1.0-1.2 have no --raw and write raw samples anyway
             "-f", "s32le", "-ar", str(RATE), "-ch_layout", layout, "-i", "-"]
            + ENCODERS[mode][2] + ["-flush_packets", "1", "-f", "spdif", "-"])
-    out = ["aplay", "-q", "-D", OPTICAL_PCM, "-f", "S16_LE", "-r", str(RATE), "-c", "2",
+    out = ["aplay", "-q", "-D", optical_pcm(), "-f", "S16_LE", "-r", str(RATE), "-c", "2",
            "-t", "raw", "--buffer-time=100000", "-"]
     return rec, enc, out
 
 
 def _mixer():
-    idx = alsa.find_card("AE9", "Sound Blaster AE-9", "AE-9")
+    idx = alsa.find_card(*C.card_hints())
     return alsa.Mixer(idx) if idx >= 0 else None
 
 
@@ -321,7 +323,7 @@ def run():
         out = subprocess.Popen(out_cmd, stdin=enc.stdout)
         procs.append(out)
         enc.stdout.close()
-        print(f"{ENCODERS[mode][0]} encoder: {src['name']} ({channels} ch) -> {OPTICAL_PCM}",
+        print(f"{ENCODERS[mode][0]} encoder: {src['name']} ({channels} ch) -> {optical_pcm()}",
               flush=True)
         ticks = 0
         while not stopping and all(p.poll() is None for p in procs):
@@ -363,12 +365,12 @@ def fx_command(source, channels, sink):
     switch). WirePlumber 0.4 ignores node.dont-fallback, so there they also
     get node.dont-reconnect; the service ends the loop once a target is gone.
     The 6-channel What U Hear is downmixed to stereo by PipeWire."""
-    cap = {"node.description": "AE-9 Effects to Optical (What U Hear)",
+    cap = {"node.description": C.for_card("AE-9 Effects to Optical (What U Hear)"),
            "target.object": source, "node.dont-fallback": True, "node.linger": True,
            "audio.position": ["FL", "FR"]}
     if channels == 2:
         cap["stream.dont-remix"] = True
-    play = {"node.description": "AE-9 Effects to Optical",
+    play = {"node.description": C.for_card("AE-9 Effects to Optical"),
             "target.object": sink, "node.dont-fallback": True, "node.linger": True,
             "stream.dont-remix": True, "audio.position": ["FL", "FR"]}
     if pipewire.wireplumber_04():

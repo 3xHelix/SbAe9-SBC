@@ -3,6 +3,16 @@
 Sound Blaster Command for Linux: the UI for the Creative Sound Blaster AE-9
 driver ([SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv)).
 
+## Unreleased
+
+### Changed
+- Groundwork for more cards (the AE-7 later): the app finds its card through
+  the shared kit's board detection (kit 0.3.10) instead of assuming the ALSA id
+  `AE9`. Only cards on the AE driver count, so an AE-5/AE-7 on the in-tree
+  driver is left alone. The title, the no-card texts, notifications and the
+  app's own PipeWire streams take the detected card's name. Nothing changes
+  on an AE-9, or when no card is found.
+
 ## 0.22.1 (2026-11-20)
 
 Native DSD switched off stays off after a reboot on driver 0.12.15, which

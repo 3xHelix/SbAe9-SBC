@@ -47,7 +47,7 @@ class Card:
 
     def __init__(self):
         self.mixer = None
-        idx = alsa.find_card("AE9", "Sound Blaster AE-9", "AE-9")
+        idx = alsa.find_card(*C.card_hints())
         if idx >= 0:
             try:
                 self.mixer = alsa.Mixer(idx)
@@ -124,7 +124,7 @@ def apply_rate(settings, card, nodes, direct=None):
 
 
 def _pcm_open(pcm):
-    return ae9.pcm_open_at(pcm, ae9.CARD_ID) is not None
+    return ae9.pcm_open_at(pcm, C.card_id()) is not None
 
 
 def status(card, settings):
@@ -180,7 +180,7 @@ def status(card, settings):
 def change(card, settings, cmd, arg, extra=()):
     """Run one change; (ok, error message)."""
     if not card.present:
-        return False, "The AE-9 isn't there."
+        return False, C.for_card("The AE-9 isn't there.")
     try:
         n = int(arg) if cmd not in ("output",) else None
     except (TypeError, ValueError):
@@ -201,7 +201,7 @@ def change(card, settings, cmd, arg, extra=()):
         err = card.write(C.OUTPUT, 1 if arg == "headphones" else 0)
     elif cmd == "rate":
         if n and n not in pipewire.ALL_RATES:
-            return False, f"rate: the AE-9 doesn't play {n} Hz"
+            return False, C.for_card(f"rate: the AE-9 doesn't play {n} Hz")
         settings["rate_mode"] = n
         nodes = pipewire.Nodes()
         eff = pipewire.effective_rate(n, rate_set(card, nodes)) if n else 0
@@ -270,10 +270,11 @@ def notify(text, error=False):
     if not shutil.which("notify-send"):
         return
     try:
-        subprocess.run(["notify-send", "-a", "Sound Blaster AE-9", "-i", "audio-card",
+        name = C.for_card("Sound Blaster AE-9")
+        subprocess.run(["notify-send", "-a", name, "-i", "audio-card",
                         "-u", "normal" if error else "low", "-t", "4000" if error else "1500",
                         "-e", "-h", "string:x-canonical-private-synchronous:sbae9-sbc",
-                        "Sound Blaster AE-9", text], timeout=3, check=False)
+                        name, text], timeout=3, check=False)
     except (OSError, subprocess.TimeoutExpired):
         pass
 
