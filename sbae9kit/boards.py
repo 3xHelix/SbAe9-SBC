@@ -67,28 +67,48 @@ class Model:
 # Wording-level features (controls and PCMs decide; these only word it):
 #   head_unit        the AE-9's external head unit (XLR / 3.5 mm, knob)
 #   optical_in       an optical input
-#   direct_51        Direct Mode in 5.1 (the AE-7's is stereo only)
+#   direct_51        Direct Mode in 5.1 (the AE-7's is stereo only: Windows
+#                    switches 5.1 speakers to Direct Stereo)
 #   dsd              DSD64
-#   hp_gain          "switch" (on the head unit) or "software" (Headphone Load)
+#   hp_gain          "switch" (on the head unit) or "software" (a Headphone Gain control)
+#   hp_gain_names    the software Headphone Gain's levels, as Windows words them
 #   dsp_51_analog    analog 5.1 in DSP mode
 #   optical_out_max  the optical output's top rate, Hz (None: not known yet)
 #   dac_filters      DAC filter choices (ES9038Q2M: 7; ES9018K2M: 3)
-#   lighting         a Lighting page
+#   dac_filter_names the DAC filters as Windows words them, for a card whose
+#                    driver has no DAC Filter control yet (the control's own
+#                    item names always win: the AE-9's order differs)
+#   lighting         a Lighting page (only the AE-5 / AE-5 Plus: RGB + LED header)
+#   encoder          an Encoder page (Dolby Digital Live / DTS Connect); the
+#                    plain AE-5 has none, the AE-5 Plus has one
+#   aux_in           an Aux (line) input (the AE-9's)
+#   line_in          a Line-In input
+#   input_select     a Microphone / Line-In combo jack ("Multipurpose Input Select")
+#   front_mic        a Front Microphone (front-panel audio header)
+# Sources: the driver for the AE-9; Creative's Sound Blaster Command support
+# notes (AE-9 200213, AE-7 200221, AE-5 / AE-5 Plus 200282) for the others.
+_SW_GAIN = ("Low (16 - 31 ohm)", "Normal (32 - 149 ohm)", "High (150 - 600 ohm)")
 MODELS = {
     "ae9": Model("ae9", "AE-9", "Sound Blaster AE-9", "AE9", "ae9", (0x0071,), True, features={
         "head_unit": True, "optical_in": True, "direct_51": True, "dsd": True,
         "hp_gain": "switch", "dsp_51_analog": True, "optical_out_max": 192000,
-        "dac_filters": 7, "lighting": True}),
+        "dac_filters": 7, "lighting": False, "encoder": True,
+        "aux_in": True, "line_in": False, "input_select": False, "front_mic": False}),
     "ae7": Model("ae7", "AE-7", "Sound Blaster AE-7", "AE7", "ae7", (0x0081,), True,
                  provisional=True, features={
         "head_unit": False, "optical_in": False, "direct_51": False, "dsd": True,
-        "hp_gain": "software", "dsp_51_analog": True, "optical_out_max": 96000,
-        "dac_filters": 3, "lighting": False}),
+        "hp_gain": "software", "hp_gain_names": _SW_GAIN, "dsp_51_analog": True,
+        "optical_out_max": 96000, "dac_filters": 3,
+        "dac_filter_names": ("Fast Roll Off", "Slow Roll Off", "Minimum Phase"),
+        "lighting": False, "encoder": True,
+        "aux_in": False, "line_in": True, "input_select": True, "front_mic": False}),
     "ae5": Model("ae5", "AE-5", "Sound Blaster AE-5", "AE5", "ae5", (0x0051, 0x0191), False,
                  provisional=True, pci_devices=(0x0012,), features={
         "head_unit": False, "optical_in": False, "direct_51": False, "dsd": False,
-        "hp_gain": "software", "dsp_51_analog": True, "optical_out_max": None,
-        "dac_filters": 3, "lighting": True}),     # AE-5 / AE-5 Plus: RGB + LED header
+        "hp_gain": "software", "hp_gain_names": _SW_GAIN, "dsp_51_analog": True,
+        "optical_out_max": 96000, "dac_filters": 3, "lighting": True,
+        "encoder": False,     # the AE-5 Plus has one: told apart once the AE-5 is supported
+        "aux_in": False, "line_in": True, "input_select": True, "front_mic": True}),
 }
 
 
