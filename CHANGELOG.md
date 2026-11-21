@@ -3,7 +3,16 @@
 Sound Blaster Command for Linux: the UI for the Creative Sound Blaster AE-9
 driver ([SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv)).
 
-## Unreleased
+## 0.23.0 (2026-11-21)
+
+Room for more than one card: with two cards on the driver in the machine
+(two AE-9s today; the AE-7 once the driver supports it), the card name at
+the top left gets a drop-down to pick the one to manage, and pages now ask
+the card's profile instead of assuming an AE-9. With one AE-9 nothing looks
+different. Pairs with
+[SbAe9-Drv v0.12.16](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.16),
+which needs no app changes (it checks its DAC commands and safely refuses
+cards other than the AE-9).
 
 ### Added
 - Two Creative cards in one machine: the card name at the top left gets a
