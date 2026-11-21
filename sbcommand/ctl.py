@@ -286,6 +286,7 @@ def main(argv):
         print(__doc__.strip())
         return 0
     settings = config.Settings()
+    C.select(settings["card"])    # the card picked in the window (two in the machine)
     card = Card()
     try:
         if argv[0] == "status":

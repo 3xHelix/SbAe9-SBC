@@ -62,6 +62,7 @@ class CardPathsTest(S.AppTestCase):
 
     def test_proc_paths(self):
         S.sound_cards(kt.AE7_CARD)
+        C.cards()                  # detect before open() is faked
         seen = []
         real = S.REAL_CARD_STREAM
 

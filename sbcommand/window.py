@@ -6,8 +6,8 @@ import time
 
 from PySide6.QtCore import QEvent, QObject, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QIcon, QPainter
-from PySide6.QtWidgets import (QApplication, QFrame, QHBoxLayout, QLabel, QMainWindow, QPushButton, QStackedWidget,
-                               QToolButton, QVBoxLayout, QWidget)
+from PySide6.QtWidgets import (QApplication, QFrame, QHBoxLayout, QLabel, QMainWindow, QMenu, QPushButton, QStackedWidget,
+                               QAbstractButton, QToolButton, QVBoxLayout, QWidget)
 
 from sbae9kit import desktop, frame, glass
 
@@ -40,6 +40,7 @@ class Context(QObject):
     def __init__(self):
         super().__init__()
         self.settings = config.Settings()
+        C.select(self.settings["card"])     # two cards in the machine: the one picked last
         self.card = C.AE9(self)
         self.pw = pipewire.Watcher(self)
         self.tone = pipewire.TestTone(self)
@@ -56,6 +57,7 @@ class Context(QObject):
         self._dragons = False       # user picked experimental 96 kHz on 5.1
         self.card.changed.connect(self._on_card_rate)
         self.card.connection_changed.connect(self._on_card_rate)
+        self.card.connection_changed.connect(lambda *_: self.pw.refresh())   # another card's nodes
         self.pw.updated.connect(self._on_pw_rate)
         # a card profile switch removes the AE-9's output and adds another:
         # PipeWire may then pick another card as default (HDMI, say)
@@ -288,6 +290,13 @@ class Context(QObject):
     def _on_pw_rate(self, *_):
         self.apply_rate()
 
+    def switch_to_card(self, card_id):
+        """Manage another of the machine's cards (the title bar's card menu)."""
+        if card_id == C.card_id() and self.card.present:
+            return
+        self.settings["card"] = card_id
+        self.card.switch_to(card_id)
+
     def switch_card_profile(self, nodes, name):
         """Switch the AE-9's card profile, pausing the optical encoder around
         it: the profile is built while nothing holds the optical output."""
@@ -330,10 +339,17 @@ NAV = [
     ("Playback", "playback", pages.PlaybackPage),
     ("Recording", "recording", pages.RecordingPage),
     ("Scout Mode", "scout", pages.ScoutPage),
-    ("Encoder", "encoder", pages.EncoderPage),
+    ("Encoder", "encoder", pages.EncoderPage, "encoder"),
     ("Mixer", "mixer", pages.MixerPage),
 ]
 NAV_BOTTOM = [("Settings", "settings", pages.SettingsPage)]
+# A fourth item names the card-profile feature a page needs (C.feature): the
+# AE-5 has no encoder (the AE-5 Plus does). Features the kit doesn't list yet
+# count as there, so the AE-9 shows every page as before.
+
+
+def page_offered(entry):
+    return len(entry) < 4 or bool(C.feature(entry[3], True))
 
 def nav_qss():
     return f"""
@@ -386,13 +402,17 @@ class PillSwitch(QWidget):
         icons.paint(p, self.icons[1], self.rect().adjusted(35, 7, -7, -7), T.ACCENT_TEXT if right else T.MUTED)
 
 
+def output_tip():
+    """The headphones / speakers switch's tooltip, for the managed card."""
+    speakers = "the card's RCA out" if C.has_head_unit() else "the card's speaker outputs"
+    return f"Switch between speakers ({speakers}) and headphones ({C.phones_jacks()})"
+
+
 class OutputSwitch(PillSwitch):
     """Headphones / speakers (Head Unit Output)."""
 
     def __init__(self, card, parent=None):
-        super().__init__(card, C.OUTPUT, "headphones", "speaker",
-                         "Switch between speakers (the card's RCA out) and headphones "
-                         "(the head unit's headphone jacks)", parent)
+        super().__init__(card, C.OUTPUT, "headphones", "speaker", output_tip(), parent)
 
     def right(self):
         return self.card.get(C.OUTPUT) != 1
@@ -544,6 +564,72 @@ class NoCardPage(QWidget):
         self.steps_box.setVisible(not answering)
 
 
+class CardName(QWidget):
+    """The title bar's card name ("AE-9"). With two of our cards in the machine
+    it gets a drop-down arrow: a menu of the cards, to pick the one to manage."""
+    picked = Signal(str)       # the ALSA id of the card picked in the menu
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        h = QHBoxLayout(self)
+        h.setContentsMargins(0, 0, 0, 0)
+        h.setSpacing(2)
+        self.name = label(C.card_short(), "deviceName")
+        h.addWidget(self.name)
+        self.arrow = QToolButton()
+        self.arrow.setObjectName("cardMenu")
+        self.arrow.setIcon(icons.icon("chevron-down", T.ACCENT, active=T.ACCENT_HI, size=16))
+        self.arrow.setIconSize(QSize(16, 16))
+        self.arrow.setFixedSize(24, 24)
+        self.arrow.setAutoRaise(True)
+        self.arrow.setCursor(Qt.PointingHandCursor)
+        self.arrow.setFocusPolicy(Qt.NoFocus)
+        self.arrow.setToolTip("Pick the card to manage")
+        self.arrow.setStyleSheet("QToolButton { border: none; background: transparent; }")
+        self.arrow.clicked.connect(self.show_menu)
+        h.addWidget(self.arrow)
+        h.addStretch()
+        self.menu = QMenu(self)
+        self.update_cards()
+
+    def many(self):
+        return len(C.cards()) > 1
+
+    def update_cards(self):
+        """The name of the managed card, and the arrow only with two or more."""
+        self.name.setText(C.card_short())
+        many = self.many()
+        self.arrow.setVisible(many)
+        self.name.setCursor(Qt.PointingHandCursor if many else Qt.ArrowCursor)
+        b = C.board()
+        self.name.setToolTip((b.longname or b.name) if b and many else "")
+
+    def build_menu(self):
+        """One checkable entry per card; the managed one checked."""
+        self.menu.clear()
+        found, now = C.cards(), C.board()
+        for c in found:
+            a = self.menu.addAction(C.card_label(c, found))
+            a.setCheckable(True)
+            a.setChecked(bool(now) and c.id == now.id)
+            a.setToolTip(c.longname or c.name)
+            a.triggered.connect(lambda _=False, cid=c.id: self.picked.emit(cid))
+        self.menu.setToolTipsVisible(True)
+        return self.menu
+
+    def show_menu(self):
+        if not self.many():
+            return
+        self.build_menu().popup(self.mapToGlobal(self.name.geometry().bottomLeft()))
+
+    def mousePressEvent(self, e):
+        if self.many() and e.button() == Qt.LeftButton:
+            self.show_menu()
+            e.accept()
+        else:
+            super().mousePressEvent(e)
+
+
 class MainWindow(QMainWindow):
     def __init__(self, ctx):
         super().__init__()
@@ -569,8 +655,10 @@ class MainWindow(QMainWindow):
         tl = QVBoxLayout()
         tl.setSpacing(0)
         tl.addWidget(label("Sound Blaster Command", "appTitle"))
-        self.device_name = label(C.card_short(), "deviceName")
-        tl.addWidget(self.device_name)
+        self.card_name = CardName()
+        self.card_name.picked.connect(ctx.switch_to_card)
+        self.device_name = self.card_name.name
+        tl.addWidget(self.card_name)
         th.addLayout(tl)
         th.addStretch()
         self.win_buttons = []
@@ -622,8 +710,11 @@ class MainWindow(QMainWindow):
         self.devices_btn.clicked.connect(self._show_no_card)
         sl.addWidget(self.devices_btn)
 
+        self.nav_entries = []
+
         def add(entry):
-            name, ic, cls = entry
+            name, ic, cls = entry[:3]
+            self.nav_entries.append(entry)
             page = cls(ctx)
             idx = self.stack.addWidget(page)
             b = QPushButton(name)
@@ -687,7 +778,7 @@ class MainWindow(QMainWindow):
         vsep.setStyleSheet(f"background:{T.TEXT};")
         bl.addWidget(vsep)
         self.vol = VolumeRow(width=190, show_value=False)
-        self.vol.setToolTip("Volume (same as the head unit knob)")
+        self.vol.setToolTip(C.volume_tip())
         self.vol.valueChanged.connect(Throttle(
             lambda val: self.card.set(C.MASTER, C.master_pct_to_raw(val)), 30))
         self.vol.muteToggled.connect(lambda m: self.card.set(C.MASTER_SW, not m))
@@ -709,6 +800,8 @@ class MainWindow(QMainWindow):
 
         start = ctx.settings["page"]
         self.go(start if isinstance(start, int) and 0 <= start < self.stack.count() else 0)
+        self._shown_short = C.AE9_SHORT      # every text is written for the AE-9
+        self._retext()
         self.refresh()
 
         # "Applying changes…" while a stream change settles
@@ -779,14 +872,19 @@ class MainWindow(QMainWindow):
         if present == getattr(self, "_shown_present", None):
             return
         self._shown_present = present
-        for w in self.buttons[:self.n_card_pages] + self.nav_seps + [self.side_caption]:
+        for w in self.nav_seps + [self.side_caption]:
             w.setVisible(present)
+        for b, entry in zip(self.buttons[:self.n_card_pages], self.nav_entries):
+            b.setVisible(present and page_offered(entry))
         self.devices_btn.setVisible(not present)
         self.bottom_bar.setVisible(present)
         self.no_card_bar.setVisible(not present)
         if present:
             start = self.ctx.settings["page"]
-            self.go(start if isinstance(start, int) and 0 <= start < self.stack.count() else 0)
+            ok = isinstance(start, int) and 0 <= start < self.stack.count()
+            if ok and start < self.n_card_pages and not page_offered(self.nav_entries[start]):
+                ok = False             # a page this card doesn't have (Encoder on an AE-5)
+            self.go(start if ok else 0)
         else:
             self._show_no_card()
 
@@ -796,9 +894,40 @@ class MainWindow(QMainWindow):
             pipewire.set_mute(n.source["id"], muted)
 
     def _on_card(self, *_):
-        self.device_name.setText(C.card_short())
+        self.card_name.update_cards()
+        self.output_switch.setToolTip(output_tip())
+        self._retext()
         self.setWindowTitle(C.for_card("Sound Blaster Command — AE-9"))
         self.refresh()
+
+    def _retext(self):
+        """Word every label, button and tooltip for the managed card: they're
+        written for the AE-9 ("AE-9 Optical Out"), so on an AE-7, or after
+        picking the other card in the title bar, swap the name. Texts that
+        refresh themselves already go through C.for_card."""
+        old, new = self._shown_short, C.card_short()
+        if old == new:
+            return
+        self._shown_short = new
+        for w in self.findChildren(QWidget):
+            tip = w.toolTip()
+            if old in tip:
+                w.setToolTip(tip.replace(old, new))
+            if isinstance(w, (QLabel, QAbstractButton)):
+                t = w.text()
+                if old in t:
+                    w.setText(t.replace(old, new))
+        # pages that word texts by the card's profile (head unit or not)
+        for i in range(self.stack.count()):
+            page = self.stack.widget(i)
+            if hasattr(page, "card_switched"):
+                page.card_switched()
+        self._show_card_force()
+
+    def _show_card_force(self):
+        """Re-run the page list (a card switch can offer other pages)."""
+        self._shown_present = None
+        self._show_card(self.card.present and self.card.answering)
 
     def _refresh_dsp_wait(self, *_):
         rate = self.card.answering and C.dsp_waiting_rate(self.card, pipewire.card_stream())
@@ -850,7 +979,7 @@ class MainWindow(QMainWindow):
             self.profile_lbl.setText("Off")
         raw = self.card.get(C.MASTER, 0)
         self.vol.set_state(C.master_raw_to_pct(raw), not self.card.get(C.MASTER_SW, True))
-        self.vol.setToolTip(f"Volume {C.master_raw_to_db(raw):.1f} dB (same as the head unit knob)")
+        self.vol.setToolTip(C.volume_tip(C.master_raw_to_db(raw)))
         self.mic.set_state(self.card.get(C.MIC, 0) / 99, self.mic.btn.isChecked())
 
     def closeEvent(self, e):

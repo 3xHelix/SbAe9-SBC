@@ -117,7 +117,9 @@ def dump():
 
 
 def _is_ae9(props):
-    return ae9.is_ae9(props)
+    """A node of the managed card. With one card that's any of ours (as
+    before); with two, only the picked one's (sbae9kit's is_our_card)."""
+    return ae9.is_our_card(props, C.board() if len(C.cards()) > 1 else None)
 
 
 # The AE-9's extra capture devices (optical in, What U Hear): each its own
@@ -545,7 +547,7 @@ def reopen_source(nodes):
 
 def _proc_pcm(card_id, name, pcm="pcm0p"):
     try:
-        with open(f"/proc/asound/{card_id or ae9.card_id()}/{pcm}/sub0/{name}") as f:
+        with open(f"/proc/asound/{card_id or C.card_id()}/{pcm}/sub0/{name}") as f:
             return f.read()
     except OSError:
         return ""
@@ -632,7 +634,7 @@ def optical_out_stream(card_id=None):
     """(rate, channels, format) driver 0.12.0's separate optical output is open
     at (hw:AE9,4), or None: then optical mirrors the main output."""
     try:
-        with open(f"/proc/asound/{card_id or ae9.card_id()}/pcm4p/sub0/hw_params") as f:
+        with open(f"/proc/asound/{card_id or C.card_id()}/pcm4p/sub0/hw_params") as f:
             text = f.read()
     except OSError:
         return None
@@ -645,7 +647,7 @@ def optical_out_stream(card_id=None):
 
 def capture_stream(card_id=None):
     """(rate, channels) the head unit mic capture is open at, or None."""
-    return ae9.pcm_open_at("pcm0c", card_id)
+    return ae9.pcm_open_at("pcm0c", card_id or C.card_id())
 
 
 def mic_rates(nodes):
@@ -724,7 +726,7 @@ _RATE_LINE = re.compile(r"^(\s*audio\.rate\s*=\s*)(\d+)", re.M)
 
 def input_conf(device, card_id=None):
     """The user's PipeWire config that defines hw:<card>,<device>, or None."""
-    pat = re.compile(r'api\.alsa\.path\s*=\s*"hw:%s,%d"' % (re.escape(card_id or ae9.card_id()), device))
+    pat = re.compile(r'api\.alsa\.path\s*=\s*"hw:%s,%d"' % (re.escape(card_id or C.card_id()), device))
     try:
         names = sorted(os.listdir(PW_CONF_DIR))
     except OSError:

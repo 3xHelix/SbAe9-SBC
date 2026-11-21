@@ -5,6 +5,18 @@ driver ([SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv)).
 
 ## Unreleased
 
+### Added
+- Two Creative cards in one machine: the card name at the top left gets a
+  drop-down arrow, and its menu picks the card to manage. The pick is
+  remembered (by ALSA id, which stays put across boots), the panel widget's
+  `sbae9-sbc ctl` follows it, and PipeWire's nodes are matched to that card
+  only. With one card there's no arrow and nothing changes.
+- A card-profile layer: pages ask the card's profile instead of assuming an
+  AE-9. On a card without the AE-9's head unit, the volume, Headphones and
+  mic texts drop the head unit wording; optical texts give the card's own
+  top rate (96 kHz on the AE-7); a page can need a profile feature (Encoder:
+  the plain AE-5 has none). On an AE-9 every text reads as before.
+
 ### Changed
 - Groundwork for more cards (the AE-7 later): the app finds its card through
   the shared kit's board detection (kit 0.3.10) instead of assuming the ALSA id

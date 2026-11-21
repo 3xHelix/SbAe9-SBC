@@ -73,6 +73,8 @@ SOUND_CARDS = (kit_testing.HDMI_CARD, kit_testing.USB_CARD, kit_testing.AE9_CARD
 def sound_cards(*cards):
     """Point the board detection at these fake cards (default: SOUND_CARDS)."""
     kit_testing.fake_sound_tree(SOUND_ROOT, cards or SOUND_CARDS)
+    from sbcommand import card as _card
+    _card._found.clear()       # the app's own list of cards (C.cards())
 
 
 sound_cards()
@@ -313,6 +315,7 @@ def reset():
     """Fresh fake PipeWire, driver options and settings for a new test."""
     global PW
     PW.__init__()
+    C.select(None)
     sound_cards()
     PARAMS.clear()
     DSP_PATH["ready"] = True

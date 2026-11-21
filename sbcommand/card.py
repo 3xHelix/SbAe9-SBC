@@ -447,6 +447,24 @@ class AE9(QObject):
         self._set_answering(False)
         self._lost()
 
+    def switch_to(self, card_id):
+        """Manage another card (two cards in the machine): let go of this one
+        and open that one. Returns False while the driver reloads."""
+        if self.reloading:
+            return False
+        select(card_id)
+        had = self.mixer is not None
+        self._close()
+        self._retry.stop()
+        self.card_index = -1
+        self.longname = ""
+        self._reload_seen = True
+        self._set_answering(True)
+        if had:
+            self.connection_changed.emit(False)
+        self._try_open()
+        return True
+
     def retry(self):
         """The user's "Try again": open the card now, reloaded or not."""
         if self.reloading:
@@ -657,20 +675,65 @@ def dsp_waiting_rate(card, live):
 
 # --- which card (sbae9kit's board detection) ------------------------------------
 # The AE-9 now, the AE-7 later: the ALSA id, names and wording come from the
-# detected card. With none found they fall back to the AE-9's, so an AE-9
+# picked card. With none found they fall back to the AE-9's, so an AE-9
 # machine looks exactly as before. What a card can do is still decided by its
-# controls and PCMs (AE9.has(), has_playback_pcm()), never by its model.
+# controls and PCMs (AE9.has(), has_playback_pcm()); the card's profile (its
+# model's features) only says what controls can't: wording, which head-unit
+# texts make sense, the DAC filter count.
+#
+# With two cards in the machine the user picks one (the title bar's menu,
+# settings["card"]): select() takes its ALSA id, which stays put across boots
+# (card numbers don't).
 AE9_SHORT = "AE-9"
+_found = []        # [cards] once looked (find_cards()), until redetect()
+_pick = [None]     # the picked card's ALSA id; None: the first
+
+
+def cards():
+    """Every card on our driver (sbae9kit Cards, by ALSA card number)."""
+    if not _found:
+        _found.append(ae9.find_cards())
+    return _found[0]
+
+
+def select(card_id):
+    """Manage this card (its ALSA id, "AE9" / "AE7"); None: the first one."""
+    _pick[0] = card_id or None
+
+
+def picked():
+    """The ALSA id select() was given (None: the first card)."""
+    return _pick[0]
 
 
 def board():
-    """The detected card (sbae9kit Card: .id, .short, .name, .key, .hw(n)), or None."""
-    return ae9.current()
+    """The card to manage (sbae9kit Card: .id, .short, .name, .key, .hw(n)):
+    the picked one if it's here, else the first. None if there's none."""
+    found = cards()
+    pick = (_pick[0] or "").lower()
+    for c in found:
+        if pick and pick in (c.id.lower(), c.key):
+            return c
+    return found[0] if found else None
+
+
+def card_label(c, among=None):
+    """A card's name in the card menu: "AE-9"; "AE-9 (card 2)" when another
+    card has the same name."""
+    among = cards() if among is None else among
+    twin = sum(1 for o in among if o.short == c.short) > 1
+    return f"{c.short} (card {c.index})" if twin else c.short
 
 
 def card_id():
-    """The detected card's ALSA id ("AE9", "AE7"); "AE9" when none is found."""
-    return ae9.card_id()
+    """The managed card's ALSA id ("AE9", "AE7"); "AE9" when none is found."""
+    b = board()
+    return b.id if b else "AE9"
+
+
+def _this_id():
+    """card_id() for functions whose `card_id` argument hides it."""
+    return card_id()
 
 
 def card_short():
@@ -682,11 +745,11 @@ def card_short():
 def card_hints():
     """What alsa.find_card looks for: the ALSA id, the full name, the short name."""
     b = board()
-    return (card_id(), b.name, b.short) if b else ("AE9", "Sound Blaster AE-9", AE9_SHORT)
+    return (b.id, b.name, b.short) if b else ("AE9", "Sound Blaster AE-9", AE9_SHORT)
 
 
 def for_card(text):
-    """`text` written for the AE-9, worded for the detected card ("AE-9" ->
+    """`text` written for the AE-9, worded for the managed card ("AE-9" ->
     "AE-7"); unchanged on an AE-9. Module and command names (ae9-reload,
     snd-hda-codec-creative-ae9) are lower case and stay."""
     short = card_short()
@@ -694,13 +757,50 @@ def for_card(text):
 
 
 def redetect():
-    """Look for the card again (after a driver reload)."""
-    return ae9.refresh()
+    """Look for the cards again (after a driver reload). Returns board()."""
+    _found.clear()
+    ae9.refresh()
+    return board()
+
+
+# --- the card's profile ------------------------------------------------------------
+def model():
+    """The managed card's model (sbae9kit Model); the AE-9's with no card, so
+    an AE-9 machine words everything as before."""
+    b = board()
+    return b.model if b else ae9.MODELS["ae9"]
+
+
+def feature(name, default=None):
+    """A profile feature of the managed card (see sbae9kit.boards: head_unit,
+    optical_in, direct_51, dsd, hp_gain, optical_out_max, dac_filters, lighting)."""
+    return model().features.get(name, default)
+
+
+def has_head_unit():
+    """The card has the AE-9's external head unit (jacks, knob, phantom button)."""
+    return bool(feature("head_unit"))
+
+
+def phones_jacks():
+    """Where headphones plug in, for sentences: "the head unit's headphone jacks"."""
+    return "the head unit's headphone jacks" if has_head_unit() else "the card's headphone jack"
+
+
+def volume_tip(db=None):
+    """The volume slider's tooltip."""
+    head = "Volume" if db is None else f"Volume {db:.1f} dB"
+    return head + (" (same as the head unit knob)" if has_head_unit() else "")
+
+
+def optical_out_max():
+    """The optical output's top rate (Hz), from the profile; None: not known."""
+    return feature("optical_out_max")
 
 
 def card_listed(card_id=None):
     """The card is in /proc/asound (looked up without opening a device)."""
-    return os.path.exists(f"/proc/asound/{card_id or ae9.card_id()}")
+    return os.path.exists(f"/proc/asound/{card_id or _this_id()}")
 
 
 def driver_loaded():
@@ -757,13 +857,13 @@ def set_native_dsd(on):
 
 def has_playback_pcm(device, card_id=None):
     """The driver offers playback device `device` (4 = the separate optical out)."""
-    return os.path.exists(f"/proc/asound/{card_id or ae9.card_id()}/pcm{device}p")
+    return os.path.exists(f"/proc/asound/{card_id or _this_id()}/pcm{device}p")
 
 
 def has_capture_pcm(device, card_id=None):
     """The driver offers capture device `device` (1 = optical in, 2 = What U Hear,
     3 = head unit rear RCA)."""
-    return ae9.has_capture_pcm(device, card_id)
+    return ae9.has_capture_pcm(device, card_id or _this_id())
 
 
 def module_version():

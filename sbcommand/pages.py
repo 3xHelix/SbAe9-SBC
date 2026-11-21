@@ -35,8 +35,12 @@ def tool(icon_name, tip, size=24):
 
 
 def info_button(text, tip=None):
-    b = tool("info", tip or text, 18)
-    b.clicked.connect(lambda: QMessageBox.information(b.window(), "About this setting", text))
+    """An (i) button: `text` in a popup. `text` can be a function, for texts
+    worded by the managed card's profile when clicked."""
+    def body():
+        return C.for_card(text() if callable(text) else text)
+    b = tool("info", tip or body(), 18)
+    b.clicked.connect(lambda: QMessageBox.information(b.window(), "About this setting", body()))
     return b
 
 
@@ -684,8 +688,8 @@ class PlaybackPage(Page):
         vr.addWidget(self.virt_note, 2, 0, 1, 4)
         g.addWidget(self.virt_row, 4, 2, 1, 3)
         self.virt_row.setVisible(False)
-        self.hp_sub.setText("Head unit")
-        self.hp_sub.setToolTip(HEADPHONES_TIP)
+        self.hp_sub.setText(hp_where())
+        self.hp_sub.setToolTip(headphones_tip())
         left.addWidget(w)
 
         left.addSpacing(6)
@@ -1018,7 +1022,7 @@ class PlaybackPage(Page):
 
     def refresh(self):
         n = self.ctx.pw.nodes
-        self.dev_name.setText(output_name(n.sink) if n.sink else "AE-9 not found in PipeWire")
+        self.dev_name.setText(output_name(n.sink) if n.sink else C.for_card("AE-9 not found in PipeWire"))
         self.set_default.setEnabled(bool(n.sink) and not n.sink_is_default)
         self.set_default.setText("Default device" if n.sink_is_default else "Set Default")
         self.default_ok.setPixmap(icons.pixmap("check", T.ACCENT_HI if n.sink_is_default else T.DIM, 22))
@@ -1047,7 +1051,8 @@ class PlaybackPage(Page):
             self.hp_sub.setToolTip("Only the head unit's 3.5 mm headphone jack reports plugs, "
                                    "not the 1/4\" jack")
         else:
-            self.hp_sub.setText("Head unit")
+            self.hp_sub.setText(hp_where())
+            self.hp_sub.setToolTip(headphones_tip())
         if not plugged:
             self._hp_hint_off = False
         self.hp_hint.setVisible(plugged and out == 0 and not self._hp_hint_off)
@@ -1252,12 +1257,12 @@ class PlaybackPage(Page):
         if not has:
             return None
         node = n.optical_out
-        self.oo_name.setText((node.get("description") or "AE-9 Optical Out") if node
+        self.oo_name.setText((node.get("description") or C.for_card("AE-9 Optical Out")) if node
                              else "Not set up in PipeWire")
         self.oo_default.setVisible(bool(node))
         self.oo_ok.setVisible(bool(node))
         self._refresh_plays(n)
-        about = ("Apps can play to optical on its own, as a second output: 44.1–192 kHz, "
+        about = (f"Apps can play to optical on its own, as a second output: 44.1–{optical_top_khz()} kHz, "
                  "16 or 24-bit stereo, with the main output carrying on as before. "
                  + ("While nothing plays to it, optical mirrors the main output. "
                     if self._mirroring() else
@@ -1321,12 +1326,12 @@ class PlaybackPage(Page):
                 self.plays.addItem(t, k)
         self.plays.setCurrentIndex(max(0, self.plays.findData(cur)))
         if cur == "own":
-            note = ("Optical plays only what apps send to AE-9 Optical Out." if has_mirror else
-                    "Optical plays what apps send to AE-9 Optical Out, and copies the main "
-                    "output while nothing does (driver 0.12.1 makes that a choice).")
+            note = C.for_card("Optical plays only what apps send to AE-9 Optical Out." if has_mirror else
+                              "Optical plays what apps send to AE-9 Optical Out, and copies the main "
+                              "output while nothing does (driver 0.12.1 makes that a choice).")
         elif cur == "mirror":
-            note = ("While nothing plays to AE-9 Optical Out, optical copies the main output "
-                    "as sent: before SBX and EQ, bit for bit.")
+            note = C.for_card("While nothing plays to AE-9 Optical Out, optical copies the main output "
+                              "as sent: before SBX and EQ, bit for bit.")
         elif cur == encoder.FX:
             playing = encoder.active() and pipewire.optical_out_stream() is not None
             note = ("Optical plays the card's mix with SBX and EQ (What U Hear), "
@@ -1386,10 +1391,10 @@ class PlaybackPage(Page):
                 "the jack bit for bit, without the DSP. Set the level on your receiver.")
         elif not self._mirroring():
             self.optical_quality.setText("Nothing playing")
-            self.optical_quality_note.setText(
+            self.optical_quality_note.setText(C.for_card(
                 "Optical plays only what apps send to AE-9 Optical Out (mirroring is off): "
-                "44.1–192 kHz, 16 or 24-bit stereo, bit for bit, without the DSP. Set the "
-                "level on your receiver.")
+                f"44.1–{optical_top_khz()} kHz, 16 or 24-bit stereo, bit for bit, without the DSP. Set the "
+                "level on your receiver."))
         else:
             if live:
                 ch = {1: "mono", 2: "stereo", 6: "5.1"}.get(live[1], f"{live[1]} ch")
@@ -1398,7 +1403,7 @@ class PlaybackPage(Page):
                 self.optical_quality.setText("Nothing playing")
             self.optical_quality_note.setText(
                 "Optical plays the same audio as the main output, so its quality is set on the "
-                "Speakers/Headphones tab: stereo, 24-bit, 48–192 kHz reaches the card's Optical out "
+                f"Speakers/Headphones tab: stereo, 24-bit, 48–{optical_top_khz()} kHz reaches the card's Optical out "
                 "bit for bit. It's taken before the DSP, so SBX and the EQ aren't on it, and the "
                 "volume knob doesn't change it: set the level on your receiver.")
         on = bool(self.card.get(C.OPTICAL_OUT))
@@ -1406,26 +1411,26 @@ class PlaybackPage(Page):
         if on and sep:
             self.optical_lbl.setText("On — playing its own stream")
             self.optical_note.setText(
-                "An app plays to AE-9 Optical Out. When it stops, optical "
+                C.for_card("An app plays to AE-9 Optical Out. When it stops, optical ")
                 + ("goes back to mirroring the main output." if self._mirroring()
                    else "goes quiet (mirroring is off)."))
             self.optical_note.setStyleSheet("")
             return
         if on and not self._mirroring():
-            self.optical_lbl.setText("On — waiting for AE-9 Optical Out")
-            self.optical_note.setText("Plays only what apps send to AE-9 Optical Out. To hear the "
-                                      "main output here too, switch mirroring on below.")
+            self.optical_lbl.setText(C.for_card("On — waiting for AE-9 Optical Out"))
+            self.optical_note.setText(C.for_card("Plays only what apps send to AE-9 Optical Out. To hear the "
+                                                 "main output here too, switch mirroring on below."))
             self.optical_note.setStyleSheet("")
             return
         why = self.optical_silent_because(layout) if on else []
         if why:
             self.optical_lbl.setText("On — silent right now")
             self.optical_note.setText(f"Silent with {', '.join(why)}: optical plays stereo, "
-                                      "24-bit, up to 192 kHz.")
+                                      f"24-bit, up to {optical_top_khz()} kHz.")
             self.optical_note.setStyleSheet(f"color:{T.DANGER};")
         else:
             self.optical_lbl.setText("On — same as the main output" if on else "Off")
-            self.optical_note.setText("Plays stereo, 24-bit, up to 192 kHz. No SBX or EQ; "
+            self.optical_note.setText(f"Plays stereo, 24-bit, up to {optical_top_khz()} kHz. No SBX or EQ; "
                                       "your receiver sets the volume.")
             self.optical_note.setStyleSheet("")
 
@@ -1470,7 +1475,7 @@ def short_name(node, fallback):
     default ("CA0132 Sound Core3D [...] Analog Stereo"). Only for showing:
     nodes are told apart by node.name."""
     desc = (node or {}).get("description") or ""
-    return desc if desc.startswith("AE-9") and len(desc) <= 40 else fallback
+    return desc if desc.startswith(C.card_short()) and len(desc) <= 40 else C.for_card(fallback)
 
 
 class HpProfileDialog(QDialog):
@@ -1611,13 +1616,13 @@ def key_file(key):
 
 def mic_name(node):
     """The mic's name: "AE-9 Head Unit Mic / Aux" with the naming config."""
-    return short_name(node, MIC_NAME)
+    return short_name(node, MIC_NAME if C.has_head_unit() else f"{C.card_short()} Mic In")
 
 
 def output_name(node):
     """The main output's name: "AE-9 Analog Out" with the naming config
     (driver 0.12.1), next to "AE-9 Optical Out"."""
-    return short_name(node, "Sound Blaster AE-9")
+    return short_name(node, C.for_card("Sound Blaster AE-9"))
 
 
 # driver options shown read-only on Settings → Device: the user settings that
@@ -1822,6 +1827,37 @@ HP_TOOL_MISSING = (
 HEADPHONES_TIP = ("The head unit's headphone jacks, 3.5 mm and 1/4\". "
                   "Only the 3.5 mm jack reports plugs; the 1/4\" doesn't. Nothing in the headphones? "
                   "Check that Output is on Headphones (or hold the head unit's knob).")
+
+
+def mic_jacks_tip():
+    """Which jacks the Microphone input is."""
+    if C.has_head_unit():
+        return "The head unit's XLR/TRS jack and 3.5 mm mic jack (they share this input)"
+    return "The card's mic jack"
+
+
+def mic_boost_where():
+    return ("the head unit's XLR/TRS jack and 3.5 mm mic jack (they share one input)"
+            if C.has_head_unit() else "the card's mic jack")
+
+
+def optical_top_khz():
+    """The optical output's top rate in kHz, for sentences: "192" on the AE-9."""
+    top = C.optical_out_max() or 192000
+    return f"{top / 1000:g}"
+
+
+def hp_where():
+    """Under "Headphones" on Playback: where they plug in."""
+    return "Head unit" if C.has_head_unit() else "Headphone jack"
+
+
+def headphones_tip():
+    """The Headphones row's tooltip, for the managed card."""
+    if C.has_head_unit():
+        return HEADPHONES_TIP
+    return ("The card's headphone jack. Nothing in the headphones? "
+            "Check that Output is on Headphones.")
 STREAM_TIP = ("Channels PipeWire sends to the card (its card profile). Picking 4.0, 4.1 or 5.1 "
               "speakers switches to the 5.1 stream, 2.0 or 2.1 back to stereo. The sound "
               "pauses for a moment while the stream reopens.")
@@ -2271,14 +2307,14 @@ class VoiceClarity(QWidget):
     def _test(self):
         n = self.ctx.pw.nodes
         if not n.source:
-            self.test_note.setText("The AE-9's mic input isn't in PipeWire.")
+            self.test_note.setText(C.for_card("The AE-9's mic input isn't in PipeWire."))
             return
         if self._rec:
             return
         self._rec = QProcess(self)
         self._rec.start("pw-record", ["--target", n.source["name"], "--rate", "48000",
                                       "--channels", "2", "-P",
-                                      '{ node.description="AE-9 voice test" node.dont-reconnect=true }',
+                                      C.for_card('{ node.description="AE-9 voice test" node.dont-reconnect=true }'),
                                       self._wav])
         self.test.setEnabled(False)
         self.test_note.setText("Recording 5 s: say something…")
@@ -2522,8 +2558,8 @@ class RecordingPage(Page):
         g = QGridLayout()
         g.setHorizontalSpacing(18)
         g.setVerticalSpacing(14)
-        mic_title = label("Microphone", "subTitle")
-        mic_title.setToolTip("The head unit's XLR/TRS jack and 3.5 mm mic jack (they share this input)")
+        mic_title = self.mic_title = label("Microphone", "subTitle")
+        mic_title.setToolTip(mic_jacks_tip())
         g.addWidget(mic_title, 0, 0, 1, 3)
         g.addWidget(label("Level"), 1, 0)
         self.mic = VolumeRow("mic", "mic-off")
@@ -2546,8 +2582,7 @@ class RecordingPage(Page):
         self.xlr.selected.connect(lambda v: self.card.set(C.MIC_GAIN, int(v)))
         xr = QHBoxLayout()
         xr.addWidget(self.xlr)
-        xr.addWidget(info_button("Mic preamp boost for the head unit's XLR/TRS jack and 3.5 mm mic "
-                                 "jack (they share one input). Use +20 dB for quiet "
+        xr.addWidget(info_button(lambda: f"Mic preamp boost for {mic_boost_where()}. Use +20 dB for quiet "
                                  "dynamic mics, 0 dB for loud sources or condensers.\n\n"
                                  "+30 dB shows only with the driver's mic_boost_30 option "
                                  "(0.12.7+): for very quiet mics; normal speech can clip."))
@@ -2577,7 +2612,7 @@ class RecordingPage(Page):
         self.mic_depth.setMinimumWidth(110)
         qr.addWidget(self.mic_depth)
         qr.addWidget(info_button(
-            "The sample rate the card records the head unit's mic input at.\n\n"
+            "The sample rate the card records the mic input at.\n\n"
             "Automatic lets PipeWire pick (it follows the playback side, usually 48 kHz). "
             "A fixed rate makes the input open at that rate whatever else plays.\n\n"
             "96 kHz needs driver 0.9.1 or newer. Changing the rate restarts WirePlumber, so "
@@ -2665,6 +2700,10 @@ class RecordingPage(Page):
         self._warm = None
         ctx.pw.updated.connect(self._on_pw)
 
+    def card_switched(self):
+        """Another card picked in the title bar: re-word the jack texts."""
+        self.mic_title.setToolTip(mic_jacks_tip())
+
     def _make_default(self):
         n = self.ctx.pw.nodes
         if n.source:
@@ -2686,7 +2725,8 @@ class RecordingPage(Page):
         else:
             self.phantom.setText(("On" if on else "Off") + " — switched by the head unit's button")
         self._phantom_style(on)
-        jacks = "The head unit's XLR/TRS and 3.5 mm mic jacks share this input."
+        jacks = ("The head unit's XLR/TRS and 3.5 mm mic jacks share this input." if C.has_head_unit()
+                 else "The card's mic jack.")
         self.mic_hint.setText(jacks if writable else
                               "Phantom power (48V) is the button on the head unit. " + jacks)
 
@@ -2861,7 +2901,7 @@ class RecordingPage(Page):
                 w.writeframes(b"\0" * 48000 * 4 * 4)
         self._warm = QProcess(self)
         self._warm.start("pw-play", ["--target", n.sink["name"], "-P",
-                                     '{ node.description="AE-9 monitor setup (silence)" }', path])
+                                     C.for_card('{ node.description="AE-9 monitor setup (silence)" }'), path])
 
     def _refresh_listen(self):
         card_mon = self._card_monitor()
@@ -2932,7 +2972,7 @@ class RecordingPage(Page):
 
     def refresh(self):
         n = self.ctx.pw.nodes
-        self.dev_name.setText(mic_name(n.source) if n.source else "AE-9 input not found in PipeWire")
+        self.dev_name.setText(mic_name(n.source) if n.source else C.for_card("AE-9 input not found in PipeWire"))
         self.set_default.setEnabled(bool(n.source) and not n.source_is_default)
         self.set_default.setText("Default device" if n.source_is_default else "Set Default")
         self.default_ok.setPixmap(icons.pixmap("check", T.ACCENT_HI if n.source_is_default else T.DIM, 22))
@@ -3644,7 +3684,7 @@ class SettingsPage(Page):
         bits = C.module_param("pcm_bits")
         n = self.ctx.pw.nodes
         lines = [
-            f"<b>{self.card.longname or 'Sound Blaster AE-9 not found'}</b>",
+            f"<b>{self.card.longname or C.for_card('Sound Blaster AE-9 not found')}</b>",
             f"ALSA card {self.card.card_index} · driver snd-hda-codec-creative-ae9 {mod}",
             "Playback rates: " + ("/".join(f"{r / 1000:g}" for r in pipewire.card_rates(
                 rates, C.plays_176k4())) + " kHz" if rates in ("0", "1", "2") else "?") +
