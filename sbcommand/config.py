@@ -74,6 +74,23 @@ DEFAULTS = {
     "dsp_louder_seen": False,  # driver 0.12.11's "DSP mode is 6 dB louder" warning was shown
     "card": None,            # the card managed with two in the machine: its ALSA id ("AE9"); None = the first
 }
+# (and "cards", written only once another card has a setting: per-card
+# settings of cards other than the AE-9, by ALSA id: {"AE7": {"rate_mode": ...}})
+
+# Kept per card: a rate or encoder picked for one card means nothing on another
+# (the AE-7 plays no 176.4 kHz and has no optical out). The AE-9 ("AE9", the
+# card every settings file before this was written for) keeps them where they
+# always were, at the top level, so its file and behaviour don't change; any
+# other card (an AE-7, a second AE-9 "AE9_1") gets its own entry in "cards",
+# starting from the defaults.
+PER_CARD = ("rate_mode", "quantum", "encoder", "encoder_last")
+TOP_LEVEL_CARD = "AE9"
+
+
+def _card_key():
+    """The managed card's ALSA id (imported late: card.py pulls in Qt)."""
+    from . import card
+    return card.card_id()
 
 
 class Settings:
@@ -106,13 +123,41 @@ class Settings:
         except (OSError, json.JSONDecodeError):
             pass
 
+    def _card_slot(self, key, make=False):
+        """The managed card's own settings dict for a per-card key; None:
+        the top level (the AE-9, or a key that isn't per card). An empty
+        dict for a card with nothing stored yet (made with `make`)."""
+        if key not in PER_CARD:
+            return None
+        cid = _card_key()
+        if not cid or cid == TOP_LEVEL_CARD:
+            return None
+        cards = self.data.get("cards")
+        if not isinstance(cards, dict):
+            if not make:
+                return {}
+            cards = self.data["cards"] = {}
+        slot = cards.get(cid)
+        if not isinstance(slot, dict):
+            if not make:
+                return {}
+            slot = cards[cid] = {}
+        return slot
+
     def __getitem__(self, key):
         self._load()
+        slot = self._card_slot(key)
+        if slot is not None:
+            return slot.get(key, DEFAULTS.get(key))
         return self.data.get(key, DEFAULTS.get(key))
 
     def __setitem__(self, key, value):
         self._load()
-        self.data[key] = value
+        slot = self._card_slot(key, make=True)
+        if slot is not None:
+            slot[key] = value
+        else:
+            self.data[key] = value
         self.save()
 
     def save(self):

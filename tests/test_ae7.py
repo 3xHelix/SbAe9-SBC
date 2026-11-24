@@ -14,7 +14,7 @@ from unittest import mock
 
 import support as S
 from sbae9kit import testing as kt
-from sbcommand import card as C, ctl, pages, pipewire, window
+from sbcommand import card as C, config, ctl, pages, pipewire, window
 
 
 class AE7Case(S.AppTestCase):
@@ -245,6 +245,50 @@ class PlugTest(AE7Case):
             del self.mixer.controls[n]
         pg = self.page(pages.PlaybackPage)
         self.assertEqual(pg.hp_sub.text(), pages.hp_where())
+
+
+class PerCardSettingsTest(S.AppTestCase):
+    """Rate, quantum and encoder picks are kept per card; the AE-9's stay at
+    the settings file's top level, as before."""
+
+    def test_ae9_at_the_top_level(self):
+        self.ctx.settings["rate_mode"] = 96000
+        with open(self.ctx.settings.path) as f:
+            data = json.load(f)
+        self.assertEqual(data["rate_mode"], 96000)
+        self.assertNotIn("cards", data)
+
+    def test_each_card_its_own(self):
+        two = (kt.HDMI_CARD, kt.AE7_CARD, kt.AE9_CARD)
+        S.sound_cards(*two)
+        st = self.ctx.settings
+        C.select("AE9")
+        st["rate_mode"] = 176400
+        st["quantum"] = 1024
+        C.select("AE7")
+        self.assertIsNone(st["rate_mode"])           # the AE-7 starts from the defaults
+        self.assertEqual(st["quantum"], 0)
+        st["rate_mode"] = 44100
+        self.assertEqual(st["rate_mode"], 44100)
+        C.select("AE9")
+        self.assertEqual((st["rate_mode"], st["quantum"]), (176400, 1024))
+        with open(st.path) as f:
+            data = json.load(f)
+        self.assertEqual(data["rate_mode"], 176400)
+        self.assertEqual(data["cards"], {"AE7": {"rate_mode": 44100}})
+
+    def test_other_settings_shared(self):
+        S.sound_cards(kt.AE7_CARD)
+        self.ctx.settings["palette"] = "x"
+        with open(self.ctx.settings.path) as f:
+            self.assertEqual(json.load(f)["palette"], "x")
+
+    def test_old_file_kept(self):
+        """A settings file from before: the AE-9 reads it unchanged."""
+        with open(self.ctx.settings.path, "w") as f:
+            json.dump({"rate_mode": 48000, "encoder": "ac3"}, f)
+        st = config.Settings()
+        self.assertEqual((st["rate_mode"], st["encoder"]), (48000, "ac3"))
 
 
 class AE9UnchangedTest(S.AppTestCase):
