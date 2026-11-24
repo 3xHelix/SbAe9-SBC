@@ -133,6 +133,16 @@ class HiddenTest(AE7Case):
         S.PARAMS["version"] = "0.13.0"
         self.assertFalse(C.dsp_full_level())
 
+    def test_crystalvoice_without_mic_monitor(self):
+        """Kit 11 / 0.13.0: the AE-9's CrystalVoice controls, no mic monitor."""
+        card = self.ctx.card
+        self.assertTrue(card.has(C.VC))
+        self.assertEqual(len(card.items(C.VC_MORPH)), 18)
+        self.assertEqual(len(card.items(C.VC_MICEQ)), 12)
+        self.assertFalse(card.has(C.MIC_MONITOR))
+        self.assertEqual(card.control(C.MIC_GAIN).max, 2)     # 0 / +10 / +20 dB
+        self.assertEqual(card.items(C.SPEAKER_CFG), ["2.0", "2.1", "4.0", "4.1", "5.1"])
+
     def test_dac_filter_text(self):
         self.assertNotIn("ES9038", pages.dac_filter_tip())
         self.assertIn("Minimum Phase", pages.dac_filter_tip())

@@ -392,6 +392,98 @@
   "value": false
  },
  {
+  "name": "Voice Clarity Capture Switch",
+  "type": 1,
+  "count": 1,
+  "min": 0,
+  "max": 1,
+  "items": [],
+  "writable": true,
+  "value": false
+ },
+ {
+  "name": "Acoustic Echo Cancellation Capture Switch",
+  "type": 1,
+  "count": 1,
+  "min": 0,
+  "max": 1,
+  "items": [],
+  "writable": true,
+  "value": false
+ },
+ {
+  "name": "Noise Reduction Capture Switch",
+  "type": 1,
+  "count": 1,
+  "min": 0,
+  "max": 1,
+  "items": [],
+  "writable": true,
+  "value": false
+ },
+ {
+  "name": "Mic Smart Volume Capture Switch",
+  "type": 1,
+  "count": 1,
+  "min": 0,
+  "max": 1,
+  "items": [],
+  "writable": true,
+  "value": false
+ },
+ {
+  "name": "Mic EQ Capture Enum",
+  "type": 3,
+  "count": 1,
+  "min": 0,
+  "max": 11,
+  "items": [
+   "Off",
+   "Preset 1 - Reduce Bass, harshness, improve clarity",
+   "Preset 2 - Reduce Bass, improve vocal and clarity",
+   "Preset 3 - Reduce harshness, improve vocal",
+   "Preset 4 - Reduce Bass, improve vocal",
+   "Preset 5 - Improve vocal, reduce harshness",
+   "Preset 6 - Reduce Bass, improve clarity",
+   "Preset 7 - Reduce vocal, improve bass/clarity",
+   "Preset 8 - Reduce harshness, improve vocal/clarity",
+   "Preset 9 - Reduce harshness, improve clarity",
+   "Preset 10 - Improve clarity",
+   "Preset DM-1 - Improve vocal and clarity"
+  ],
+  "writable": true,
+  "value": 0
+ },
+ {
+  "name": "Voice Morphing Capture Enum",
+  "type": 3,
+  "count": 1,
+  "min": 0,
+  "max": 17,
+  "items": [
+   "Neutral",
+   "Male",
+   "Female",
+   "Kid",
+   "Elderly",
+   "Deep Voice",
+   "From Up North",
+   "Unstable",
+   "Emo",
+   "Elf",
+   "Dwarf",
+   "Demon",
+   "Infiltrator",
+   "Brute",
+   "Orc",
+   "Marine",
+   "Chipmunk",
+   "Robot"
+  ],
+  "writable": true,
+  "value": 0
+ },
+ {
   "name": "Card Answering",
   "type": 1,
   "count": 1,
