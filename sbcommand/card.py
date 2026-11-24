@@ -923,6 +923,16 @@ def hp_gain_labels(items):
     return list(items)
 
 
+# Controls a card has that nobody has tried on it yet: shown, marked untested.
+# The AE-7 (driver 0.13.0): its headphone profiles come with the shared code.
+UNTESTED = {"ae7": (HP_PROFILE,)}
+
+
+def untested(name):
+    """The control is there on the managed card but untested on it."""
+    return name in UNTESTED.get(model().key, ())
+
+
 def has_head_unit():
     """The card has the AE-9's external head unit (jacks, knob, phantom button)."""
     return bool(feature("head_unit"))

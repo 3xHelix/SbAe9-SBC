@@ -1194,6 +1194,9 @@ class PlaybackPage(Page):
         if not files[k][1] and k:
             note = (note + "\n" if note else "") + (
                 f"{items[k]}: its file is missing, so the profile stays off.")
+        if C.untested(C.HP_PROFILE):
+            note = (note + "\n" if note else "") + C.for_card(
+                "Experimental: headphone profiles haven't been tested on the AE-9 yet.")
         self.hp_prof_note.setText(note)
         self.hp_prof_note.setVisible(bool(note))
 
