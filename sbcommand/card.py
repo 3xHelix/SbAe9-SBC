@@ -928,6 +928,16 @@ def hp_gain_labels(items):
 UNTESTED = {"ae7": (HP_PROFILE,)}
 
 
+# Switches a card keeps on: an off write snaps back (the driver's choice, as
+# Windows does it). The AE-7 (0.13.0-rc2+): virtualization always on with headphones.
+LOCKED_ON = {"ae7": (HP_VIRT,)}
+
+
+def locked_on(name):
+    """The managed card keeps this switch on (shown on, greyed out)."""
+    return name in LOCKED_ON.get(model().key, ())
+
+
 def untested(name):
     """The control is there on the managed card but untested on it."""
     return name in UNTESTED.get(model().key, ())

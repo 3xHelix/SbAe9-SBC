@@ -1246,6 +1246,13 @@ class PlaybackPage(Page):
         self.hp_virt.setCheckedSilently(hp_virt)
         self.line_virt.setCheckedSilently(line)
         self.hp_virt.setEnabled(self.card.has(C.HP_VIRT) and not direct)
+        locked = C.locked_on(C.HP_VIRT)
+        if locked:
+            self.hp_virt.setCheckedSilently(True)
+            self.hp_virt.setEnabled(False)
+        # (after a switch to another card: no tooltip, as before)
+        self.hp_virt.setToolTip(C.for_card("Always on with headphones on the AE-9, as in Windows")
+                                if locked else "")
         self.line_virt.setEnabled(self.card.has(C.LINE_VIRT) and not direct)
         if not C.is_ae9():
             # a card without it (the AE-7): left out, not greyed
@@ -1260,6 +1267,9 @@ class PlaybackPage(Page):
                     "the headphone jack is muted.")
         else:
             note = ""
+        if locked and not direct:
+            note = (note + " " if note else "") + C.for_card(
+                "Headphone virtualization is always on with headphones on the AE-9, as in Windows.")
         self.virt_note.setText(note)
         self.virt_note.setVisible(bool(note))
         if out == 1 and line and not direct:

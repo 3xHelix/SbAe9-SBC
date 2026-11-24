@@ -158,6 +158,16 @@ class HiddenTest(AE7Case):
         self.assertFalse(pg.virt_row.isHidden())
         self.assertTrue(pg.line_virt.isHidden())
 
+    def test_virtualization_locked_on(self):
+        """0.13.0-rc2: the AE-7 keeps Headphone Virtualization on (as Windows)."""
+        self.mixer.external(C.HP_VIRT, False)      # an off write that snapped back, say
+        S.process()
+        pg = self.page(pages.PlaybackPage)
+        self.assertTrue(C.locked_on(C.HP_VIRT))
+        self.assertTrue(pg.hp_virt.isChecked())
+        self.assertFalse(pg.hp_virt.isEnabled())
+        self.assertIn("always on with headphones on the AE-7", pg.virt_note.text())
+
     def test_dac_filter_text(self):
         self.assertNotIn("ES9038", pages.dac_filter_tip())
         self.assertIn("Minimum Phase", pages.dac_filter_tip())
@@ -415,6 +425,7 @@ class AE9UnchangedTest(S.AppTestCase):
 
     def test_texts(self):
         self.assertFalse(C.untested(C.HP_PROFILE))
+        self.assertFalse(C.locked_on(C.HP_VIRT))
         self.assertIn("ES9038", pages.dac_filter_tip())
         self.assertEqual(C.fixed_bits(), "24-bit")
         self.assertTrue(C.feature("speaker_setup", True))
