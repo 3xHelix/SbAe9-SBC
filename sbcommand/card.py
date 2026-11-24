@@ -928,8 +928,9 @@ def hp_gain_labels(items):
 UNTESTED = {"ae7": (HP_PROFILE,)}
 
 
-# Switches a card keeps on: an off write snaps back (the driver's choice, as
-# Windows does it). The AE-7 (0.13.0-rc2+): virtualization always on with headphones.
+# Switches a card keeps on: an off write snaps back (the driver's choice). The
+# AE-7 (0.13.0): Headphone Virtualization stays on; Creative's software turns
+# it off there with SBX Surround off or Direct Mode.
 LOCKED_ON = {"ae7": (HP_VIRT,)}
 
 

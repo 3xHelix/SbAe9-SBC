@@ -166,7 +166,8 @@ class HiddenTest(AE7Case):
         self.assertTrue(C.locked_on(C.HP_VIRT))
         self.assertTrue(pg.hp_virt.isChecked())
         self.assertFalse(pg.hp_virt.isEnabled())
-        self.assertIn("always on with headphones on the AE-7", pg.virt_note.text())
+        self.assertIn("On the AE-7 this stays on.", pg.virt_note.text())
+        self.assertIn("turn SBX Surround off or use Direct Mode", pg.hp_virt.toolTip())
 
     def test_dac_filter_text(self):
         self.assertNotIn("ES9038", pages.dac_filter_tip())

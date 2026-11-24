@@ -1251,8 +1251,7 @@ class PlaybackPage(Page):
             self.hp_virt.setCheckedSilently(True)
             self.hp_virt.setEnabled(False)
         # (after a switch to another card: no tooltip, as before)
-        self.hp_virt.setToolTip(C.for_card("Always on with headphones on the AE-9, as in Windows")
-                                if locked else "")
+        self.hp_virt.setToolTip(C.for_card(HP_VIRT_LOCKED) if locked else "")
         self.line_virt.setEnabled(self.card.has(C.LINE_VIRT) and not direct)
         if not C.is_ae9():
             # a card without it (the AE-7): left out, not greyed
@@ -1268,8 +1267,7 @@ class PlaybackPage(Page):
         else:
             note = ""
         if locked and not direct:
-            note = (note + " " if note else "") + C.for_card(
-                "Headphone virtualization is always on with headphones on the AE-9, as in Windows.")
+            note = (note + " " if note else "") + C.for_card(HP_VIRT_LOCKED)
         self.virt_note.setText(note)
         self.virt_note.setVisible(bool(note))
         if out == 1 and line and not direct:
@@ -1863,6 +1861,10 @@ DAC_FILTER_TIP = (
     "ringing, useful for testing.\n\n"
     "Fast/slow and phase differences are subtle: pick by ear."
 )
+# The AE-7 keeps Headphone Virtualization on (driver 0.13.0); Creative's
+# software turns it off there with SBX Surround off or Direct Mode.
+HP_VIRT_LOCKED = ("On the AE-9 this stays on. For headphones without virtualization, turn SBX "
+                  "Surround off or use Direct Mode, as in Creative's software.")
 DAC_FILTER_TIP_AE7 = (
     "The DAC's digital interpolation filter. It runs in the DAC, so it "
     "applies in Direct Mode too; it is not an SBX effect. The names are the "
