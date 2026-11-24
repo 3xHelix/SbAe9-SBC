@@ -11,7 +11,9 @@ through PipeWire as usual. The effects run on the card's own DSP, and this app
 switches and tunes them.
 
 This release pairs with
-[SbAe9-Drv v0.12.16](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.16).
+[SbAe9-Drv v0.13.0](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.13.0).
+It also runs the **Sound Blaster AE-7** with the driver's experimental AE-7
+support (see [below](#sound-blaster-ae-7-experimental)).
 
 ---
 
@@ -31,6 +33,43 @@ This release pairs with
   the desktop volume slider show up in the app immediately.
 - **Panel widget** for KDE Plasma and a **top bar extension** for GNOME.
 - Four colour palettes, a frosted **Glass** look, and UI scaling.
+
+---
+
+## Sound Blaster AE-7 (experimental)
+
+Driver 0.13.0 can run the AE-7 as an experimental, opt-in card. Turn it on
+with the driver's tool, then reboot:
+
+```sh
+sudo ae9-ae7-enable
+ae9-ae7-enable --status    # what's set up (no root needed)
+```
+
+Until it's on, the app finds the AE-7 and says so, with the command. Once
+it's on, the app manages it like the AE-9 and leaves out what the AE-7
+doesn't have:
+
+- **There:** SBX, the EQ, Scout Mode, Direct Mode (stereo, 44.1 to 384 kHz),
+  DSP mode (48 kHz, stereo and 5.1), Headphone Gain (Low / Normal / High
+  load), the DAC filter (three filters), headphone and mic plug indicators,
+  Virtual 7.1 (it stays on: for headphones without it, turn SBX Surround off
+  or use Direct Mode, as in Creative's software), the mic and What U Hear,
+  CrystalVoice.
+- **Not there:** the head unit, optical in and out (so no Encoder page),
+  native DSD, Speaker Setup (bass redirect, levels, distances), 176.4 kHz,
+  a 24-bit playback choice (the AE-7 plays 32-bit), the mic monitor.
+- **Not tested yet:** headphone profiles, and the rear and center/sub outputs
+  in 5.1 (only the front pair has been heard so far).
+
+The AE-7's controls and rates follow the driver's experimental support and
+may change in later driver releases. Thanks to
+[s3boun3t](https://github.com/s3boun3t) for testing the AE-7 support on a real
+card.
+
+With an AE-9 and an AE-7 in the same machine, the card name at the top left
+picks the card to manage. Sample rate, quantum and encoder picks are kept
+per card.
 
 ---
 
@@ -219,6 +258,7 @@ For everything, use the latest
 | DSP mode at the same level as Direct Mode | [0.12.11](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.11) |
 | `ae9-reload` with the app open | [0.12.13](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.13) |
 | Native DSD64 for players that open the card directly (on by default from [0.12.15](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.15)) | [0.12.14](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.14) |
+| The Sound Blaster AE-7 (experimental), the card's model read from the driver | [0.13.0](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.13.0) |
 
 </details>
 
@@ -279,8 +319,8 @@ tools/          README screenshot scripts
 ### The shared kit
 
 Sound Blaster Command and SbAe9-AudioMon (the AE-9's level meters) share one
-base, **SbAe9-Kit**: palettes, Glass, UI scale, the frameless window, AE-9
-detection, the ALSA binding and the icon tool. `sbae9kit/` is a copy written
+base, [**SbAe9-Kit**](https://github.com/3xHelix/SbAe9-Kit): palettes, Glass,
+UI scale, the frameless window, card detection, the ALSA binding and the icon tool. `sbae9kit/` is a copy written
 by SbAe9-Kit's `tools/sync_kit.py`. A test fails if it's edited here
 instead.
 

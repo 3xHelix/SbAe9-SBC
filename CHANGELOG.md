@@ -3,6 +3,47 @@
 Sound Blaster Command for Linux: the UI for the Creative Sound Blaster AE-9
 driver ([SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv)).
 
+## 0.24.0 (2026-11-24)
+
+The Sound Blaster AE-7, experimental: with driver 0.13.0's opt-in AE-7
+support the app manages an AE-7 too, and leaves out what it doesn't have.
+On an AE-9 nothing changes. Pairs with
+[SbAe9-Drv v0.13.0](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.13.0)
+(0.23.0 also works with
+[v0.12.17](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.17)).
+Thanks to [s3boun3t](https://github.com/s3boun3t) for testing on a real AE-7.
+
+### Added
+- The AE-7 (experimental), as driver 0.13.0 runs it:
+  - its own rates: Direct Mode in stereo at 44.1 to 384 kHz (no 176.4),
+    DSP mode at 48 kHz in stereo and 5.1, the mic at 44.1 / 48 / 96 kHz and
+    What U Hear at 44.1 / 48 kHz; playback is 32-bit only;
+  - a Headphone Gain picker (Low / Normal / High, with the headphone
+    impedance ranges Windows gives);
+  - plug indicators for its headphone and Line-in / Mic-in jacks;
+  - Virtual 7.1 shown on and greyed: the AE-7 keeps it on; for headphones
+    without it, turn SBX Surround off or use Direct Mode, as in Creative's
+    software;
+  - headphone profiles marked as not tested on the AE-7 yet;
+  - left out: native DSD, the Encoder page, Line Out Virtualization,
+    Speaker Setup (the page says the card has none), the AE-9's DAC filter
+    notes and its "6 dB louder" warning.
+- An AE-7 the driver doesn't run yet (experimental support off, or enabling
+  not finished): the no-card screen says so and gives the command
+  (`sudo ae9-ae7-enable`, or `ae9-ae7-enable --status`).
+- Sample rate, quantum and encoder picks are kept per card. The AE-9's stay
+  where they always were, so an existing settings file needs no change.
+- `sbae9-sbc ctl status` gives the card's name and whether it has Direct
+  Mode; the panel widget and the GNOME extension show the card's name and
+  hide Direct / DSP on a card without it.
+
+### Changed
+- Cards are identified by the driver's "Card Model" control (0.13.0+), with
+  the ALSA id, card names and PCI ids as the fallback for older drivers.
+- The volume's dB scale comes from the card's own range (the AE-7's is
+  -90 to 0 dB).
+- Shared kit 0.3.12: the AE-7's profile and rates.
+
 ## 0.23.0 (2026-11-21)
 
 Room for more than one card: with two cards on the driver in the machine
