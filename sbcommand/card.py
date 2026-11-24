@@ -810,28 +810,12 @@ def model():
     return b.model if b else ae9.MODELS["ae9"]
 
 
-# The AE-7 as driver kit 11 runs it (ae7-k11 c42d2df), ahead of the kit's
-# profile: no DSD, no encoder or optical out, no Speaker Setup, its own rates.
-# PROVISIONAL until driver 0.13.0; the kit's profile wins once it has these.
-AE7_K11 = {
-    "dsd": False, "encoder": False, "optical_out_max": None, "speaker_setup": False,
-    "dsp_rates": (48000,),
-    "direct_rates": (44100, 48000, 88200, 96000, 192000, 384000),
-    "direct_channels": 2,
-    "mic_rates": (44100, 48000, 96000),
-    "whu_rates": (44100, 48000),
-    "formats": ("S32_LE",),
-}
-KIT_HAS_AE7_RATES = "direct_rates" in ae9.MODELS["ae7"].features
-
-
 def feature(name, default=None):
     """A profile feature of the managed card (see sbae9kit.boards: head_unit,
-    optical_in, direct_51, dsd, hp_gain, optical_out_max, dac_filters, lighting)."""
-    m = model()
-    if m.key == "ae7" and not KIT_HAS_AE7_RATES and name in AE7_K11:
-        return AE7_K11[name]
-    return m.features.get(name, default)
+    optical_in, direct_51, dsd, hp_gain, optical_out_max, dac_filters, lighting,
+    speaker_setup, and the rate model: direct_rates, dsp_rates, mic_rates,
+    whu_rates, formats; the AE-7's are driver kit 11's, provisional until 0.13.0)."""
+    return model().features.get(name, default)
 
 
 def is_ae9():
