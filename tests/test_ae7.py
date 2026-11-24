@@ -8,6 +8,7 @@ AE-7's differences.
 """
 import io
 import json
+import os
 import unittest
 from contextlib import redirect_stdout
 from unittest import mock
@@ -299,6 +300,95 @@ class PerCardSettingsTest(S.AppTestCase):
             json.dump({"rate_mode": 48000, "encoder": "ac3"}, f)
         st = config.Settings()
         self.assertEqual((st["rate_mode"], st["encoder"]), (48000, "ac3"))
+
+
+class CardModelTest(S.AppTestCase):
+    """Driver 0.13.0's "Card Model" control names the card; the ALSA id,
+    names and PCI subsystem stay the fallback."""
+
+    def test_names_the_card(self):
+        # a card whose id and names don't say (a renamed id): the control does
+        odd = ("Mine", "Creative card", "Creative card at 0xfc004000 irq 45",
+               (0x1102, 0x9999), "snd-hda-codec-creative-ae9", ("0p", "0c"))
+        S.sound_cards(kt.HDMI_CARD, odd)
+        self.assertEqual(C.cards(), [])
+        S.sound_cards(kt.HDMI_CARD, odd)
+        S.CARD_MODELS[1] = "Sound Blaster AE-7"
+        self.assertEqual([(c.id, c.short, c.source) for c in C.cards()], [("Mine", "AE-7", "card_model")])
+
+    def test_wins_over_the_id(self):
+        S.CARD_MODELS[2] = "Sound Blaster AE-9"
+        C._found.clear()
+        self.assertEqual(C.cards()[0].source, "card_model")
+        self.assertEqual(C.card_short(), "AE-9")
+
+    def test_without_it_as_before(self):
+        self.assertEqual(C.cards()[0].source, "card_id")
+
+    def test_read(self):
+        m = S.FakeMixer()
+        m.add_enum(C.CARD_MODEL, ["Sound Blaster AE-7"])
+        with mock.patch.object(C.alsa, "Mixer", lambda idx: m):
+            self.assertEqual(S.REAL_READ_CARD_MODEL(2), "Sound Blaster AE-7")
+        m2 = S.FakeMixer()
+        with mock.patch.object(C.alsa, "Mixer", lambda idx: m2):
+            self.assertIsNone(S.REAL_READ_CARD_MODEL(2))
+
+        def gone(idx):
+            raise OSError(19, "no card")
+        with mock.patch.object(C.alsa, "Mixer", gone):
+            self.assertIsNone(S.REAL_READ_CARD_MODEL(2))
+
+
+def fake_pci(name, ids, driver=None):
+    d = os.path.join(C.PCI_DEVICES, name)
+    os.makedirs(d, exist_ok=True)
+    for f, v in zip(("vendor", "device", "subsystem_vendor", "subsystem_device"), ids):
+        with open(os.path.join(d, f), "w") as fh:
+            fh.write(f"0x{v:04x}\n")
+    if driver:
+        target = os.path.join(C.PCI_DEVICES, "..", "drivers", driver)
+        os.makedirs(target, exist_ok=True)
+        os.symlink(target, os.path.join(d, "driver"))
+
+
+class AE7OffTest(S.AppTestCase):
+    """An AE-7 the driver doesn't run (0.13.0: opt-in with ae9-ae7-enable)."""
+
+    def setup_card(self):
+        S.sound_cards(kt.HDMI_CARD)
+        fake_pci("0000:0a:00.0", (0x1002, 0xab28, 0x1002, 0xab28), "snd_hda_intel")
+
+    def test_none(self):
+        self.assertIsNone(C.ae7_waiting())
+
+    def test_on_the_kernel_driver(self):
+        fake_pci("0000:05:00.0", C.AE7_PCI, "snd_hda_intel")
+        self.assertEqual(C.ae7_waiting(), "kernel")
+        w = self.window()
+        w.no_card.show_state(True)
+        self.assertIn("AE-7 found", w.no_card.title.text())
+        self.assertEqual(w.no_card.steps.text(), "sudo ae9-ae7-enable")
+        self.assertFalse(w.no_card.steps_box.isHidden())
+        self.assertIn("ae9-ae7-enable", window.no_card_reason(self.ctx.card))
+
+    def test_refused(self):
+        fake_pci("0000:05:00.0", C.AE7_PCI)
+        self.assertEqual(C.ae7_waiting(), "unbound")
+        w = self.window()
+        w.no_card.show_state(True)
+        self.assertEqual(w.no_card.steps.text(), "ae9-ae7-enable --status")
+        self.assertIn("isn't finished", w.no_card.sub.text())
+
+    def test_ours(self):
+        fake_pci("0000:05:00.0", C.AE7_PCI, "snd-hda-codec-creative-ae9")
+        self.assertIsNone(C.ae7_waiting())
+
+    def test_ae9_screen_unchanged(self):
+        w = self.window()
+        w.no_card.show_state(True)
+        self.assertEqual(w.no_card.title.text(), window.NO_CARD_TITLE)
+        self.assertTrue(w.no_card.steps_box.isHidden())
 
 
 class AE9UnchangedTest(S.AppTestCase):

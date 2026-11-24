@@ -728,11 +728,90 @@ _found = []        # [cards] once looked (find_cards()), until redetect()
 _pick = [None]     # the picked card's ALSA id; None: the first
 
 
+CARD_MODEL = "Card Model"    # driver 0.13.0+: iface CARD, one item, "Sound Blaster AE-9" / "... AE-7"
+
+
+def read_card_model(index):
+    """The driver's "Card Model" of ALSA card `index` (its one item), or None
+    (drivers before 0.13.0, or the card can't be opened)."""
+    try:
+        m = alsa.Mixer(index)
+    except OSError:
+        return None
+    try:
+        c = m.controls.get(CARD_MODEL)
+        return c.items[0] if c and c.items else None
+    finally:
+        m.close()
+
+
 def cards():
-    """Every card on our driver (sbae9kit Cards, by ALSA card number)."""
+    """Every card on our driver (sbae9kit Cards, by ALSA card number). The
+    driver's "Card Model" names each card when it has one (0.13.0+); the
+    ALSA id, names and PCI subsystem are the fallback."""
     if not _found:
-        _found.append(ae9.find_cards())
+        models = {i: read_card_model(i) for i in _our_card_numbers()}
+        _found.append(ae9.find_cards(card_model={k: v for k, v in models.items() if v}))
     return _found[0]
+
+
+def _our_card_numbers():
+    """The ALSA card numbers bound to our driver, recognised or not (a card
+    only its "Card Model" names: a renamed id, a new subsystem id)."""
+    sys_sound = os.path.join(ae9.boards.ROOT, "sys", "class", "sound")
+    try:
+        entries = os.listdir(sys_sound)
+    except OSError:
+        return []
+    out = []
+    for e in entries:
+        m = re.fullmatch(r"card(\d+)", e)
+        if not m:
+            continue
+        try:
+            drv = os.readlink(os.path.join(sys_sound, e, "device", "driver"))
+        except OSError:
+            continue
+        if os.path.basename(drv).replace("-", "_") == ae9.boards.DRIVER:
+            out.append(int(m.group(1)))
+    return sorted(out)
+
+
+# An AE-7 our driver doesn't run (0.13.0: experimental, opt-in with
+# ae9-ae7-enable): still on the kernel's own driver (snd_hda_intel), or
+# refused by ours and left on none. Found by its PCI ids.
+PCI_DEVICES = "/sys/bus/pci/devices"
+AE7_PCI = (0x1102, 0x0010, 0x1102, 0x0081)   # vendor, device, subsystem vendor, subsystem device
+AE7_ENABLE = "sudo ae9-ae7-enable"
+AE7_STATUS = "ae9-ae7-enable --status"
+
+
+def ae7_waiting():
+    """An AE-7 the driver doesn't run: "kernel" (on another driver, e.g. the
+    kernel's snd_hda_intel), "unbound" (on none: enabling isn't finished),
+    or None (none, or ours runs it)."""
+    try:
+        entries = sorted(os.listdir(PCI_DEVICES))
+    except OSError:
+        return None
+    for e in entries:
+        d = os.path.join(PCI_DEVICES, e)
+        ids = []
+        for f in ("vendor", "device", "subsystem_vendor", "subsystem_device"):
+            try:
+                with open(os.path.join(d, f)) as fh:
+                    ids.append(int(fh.read().strip(), 16))
+            except (OSError, ValueError):
+                ids.append(None)
+        if tuple(ids) != AE7_PCI:
+            continue
+        try:
+            drv = os.path.basename(os.readlink(os.path.join(d, "driver"))).replace("-", "_")
+        except OSError:
+            return "unbound"
+        if drv != ae9.boards.DRIVER:
+            return "kernel"
+    return None
 
 
 def select(card_id):

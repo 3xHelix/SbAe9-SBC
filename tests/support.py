@@ -275,6 +275,12 @@ pipewire.has_option = lambda tool, opt: TOOLS["raw"] if opt == "--raw" else True
 pipewire.wireplumber_version = lambda: TOOLS["wp"]
 C.HP_DIRS = (os.path.join(_TMP, "firmware"),)   # headphone curves; tests add them
 C.module_param = lambda name: PARAMS.get(name)
+# the driver's "Card Model" per ALSA card number (0.13.0+); empty: an older driver
+CARD_MODELS = {}
+REAL_READ_CARD_MODEL = C.read_card_model
+C.read_card_model = lambda index: CARD_MODELS.get(index)
+# PCI devices (an AE-7 the driver doesn't run): a temp tree, never the machine's
+C.PCI_DEVICES = os.path.join(_TMP, "pci-devices")
 C.module_version = lambda: PARAMS.get("version")
 DSP_PATH = {"ready": True}      # the kernel log: a playback ran in DSP mode since boot
 C.dsp_path_ready = lambda: DSP_PATH["ready"]
@@ -335,6 +341,8 @@ def reset():
     C.select(None)
     sound_cards()
     PARAMS.clear()
+    CARD_MODELS.clear()
+    shutil.rmtree(C.PCI_DEVICES, ignore_errors=True)
     DSP_PATH["ready"] = True
     DRIVER.update({"loaded": True, "listed": True, "reload_tool": False})
     if os.path.exists(RELOAD_NOTICE):

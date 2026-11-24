@@ -492,6 +492,13 @@ RELOADING_TITLE = "Reloading the AE-9 driver…"
 RELOADING_SUB = ("ae9-reload is reloading the driver. Sound Blaster Command has let go of the "
                  "card and fills the window in again once it's back.")
 RELOADING_BAR = "Reloading the driver…"
+# An AE-7 the driver doesn't run yet (0.13.0: experimental, opt-in)
+AE7_OFF_TITLE = "Sound Blaster AE-7 found: its experimental support is off."
+AE7_OFF_SUB = ("The AE-7 is still on the kernel's own driver. Run this in a terminal and reboot "
+               "to try the experimental support (see the driver's docs/AE7.md):")
+AE7_UNBOUND_SUB = ("Enabling the AE-7's experimental support isn't finished: the driver "
+                   "left it alone. This command says what's missing:")
+AE7_OFF_BAR = "Sound Blaster AE-7 found: experimental support is off (sudo ae9-ae7-enable)."
 NO_DRIVER = ("The AE-9 driver (snd-hda-codec-creative-ae9) isn't loaded. "
              "Install or load it, and the card shows up here.")
 
@@ -502,6 +509,8 @@ def no_card_reason(card):
         return RELOADING_BAR
     if not card.answering:
         return NOT_ANSWERING_BAR
+    if C.ae7_waiting():
+        return AE7_OFF_BAR
     return NO_CARD if C.driver_loaded() else C.for_card(NO_DRIVER)
 
 
@@ -552,6 +561,14 @@ class NoCardPage(QWidget):
             self.title.setText(C.for_card(RELOADING_TITLE))
             self.sub.setText(RELOADING_SUB)
             self.steps_box.hide()
+            return
+        ae7 = C.ae7_waiting() if answering else None
+        if ae7:
+            self.title.setText(AE7_OFF_TITLE)
+            self.sub.setText(AE7_OFF_SUB if ae7 == "kernel" else AE7_UNBOUND_SUB)
+            self.steps.setText(C.AE7_ENABLE if ae7 == "kernel" else C.AE7_STATUS)
+            self.copy_btn.setText("Copy command")
+            self.steps_box.setVisible(True)
             return
         self.title.setText(C.for_card(NO_CARD_TITLE if answering else NOT_ANSWERING_TITLE))
         tool = None if answering else C.reload_tool()
