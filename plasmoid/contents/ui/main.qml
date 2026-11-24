@@ -19,9 +19,14 @@ PlasmoidItem {
     property int pending: 0          // changes still running
     readonly property string bin: '"$HOME/.local/bin/sbae9-sbc"'
     readonly property bool ready: st.present === true
+    // the managed card, from `ctl status` (older apps don't say: the AE-9)
+    readonly property string cardName: st.card_name || "Sound Blaster AE-9"
+    readonly property string cardShort: st.card || "AE-9"
+    // no Direct Mode Switch (the AE-7 without ae7=4): DSP only, no toggle
+    readonly property bool hasDirect: st.has_direct !== false
 
     Plasmoid.icon: "audio-card"
-    toolTipMainText: "Sound Blaster AE-9"
+    toolTipMainText: cardName
     toolTipSubText: summary()
 
     function khz(r) { return (r / 1000).toString() + " kHz" }
@@ -32,7 +37,7 @@ PlasmoidItem {
 
     function summary() {
         if (st.present === undefined) return "…"
-        if (!ready) return "AE-9 not found"
+        if (!ready) return cardShort + " not found"
         var parts = [st.direct ? "Direct Mode" : (st.sbx ? "DSP · SBX on" : "DSP · SBX off")]
         parts.push(st.live ? khz(st.live.rate) + (st.live.channels === 6 ? " · 5.1" : "") : "Idle")
         if (st.recording) parts.push("Recording")
@@ -194,7 +199,7 @@ PlasmoidItem {
 
         RowLayout {
             Layout.fillWidth: true
-            Kirigami.Heading { text: "Sound Blaster AE-9"; level: 3; Layout.fillWidth: true }
+            Kirigami.Heading { text: root.cardName; level: 3; Layout.fillWidth: true }
             PC.BusyIndicator {
                 running: root.pending > 0
                 visible: running
@@ -211,7 +216,7 @@ PlasmoidItem {
         PC.Label {
             visible: !root.ready
             text: root.st.missing ? "Sound Blaster Command (sbae9-sbc) isn't installed: run its install.sh."
-                                  : root.st.present === false ? "The AE-9 isn't there (driver not loaded?)." : "…"
+                                  : root.st.present === false ? "The " + root.cardShort + " isn't there (driver not loaded?)." : "…"
             wrapMode: Text.WordWrap
             Layout.fillWidth: true
         }
@@ -224,8 +229,9 @@ PlasmoidItem {
             Layout.fillWidth: true
 
             // DSP / Direct
-            PC.Label { text: "Mode" }
+            PC.Label { text: "Mode"; visible: root.hasDirect }
             RowLayout {
+                visible: root.hasDirect
                 spacing: 0
                 PC.Button {
                     text: "Direct"

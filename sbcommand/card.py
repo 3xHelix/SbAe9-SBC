@@ -250,22 +250,26 @@ MODULE_PARAMS = ae9.MODULE_PARAMS
 # --- volume curves ------------------------------------------------------------
 # The desktop (PipeWire) maps its slider cubically: amplitude = pct^3. Using the
 # same curve keeps our slider at the same spot as the KDE/GNOME one.
-def master_raw_to_pct(raw):
+MASTER_MAX = 254   # the AE-9's Master: 0..254 = -127..0 dB (the AE-7's: 0..180, -90..0 dB)
+
+
+def master_raw_to_pct(raw, top=MASTER_MAX):
     if raw <= 0:
         return 0.0
-    db = (raw - 254) / 2.0
+    db = (raw - top) / 2.0
     return min(1.0, 10 ** (db / 60.0))
 
 
-def master_pct_to_raw(pct):
+def master_pct_to_raw(pct, top=MASTER_MAX):
     if pct <= 0.0005:
         return 0
     db = 60.0 * math.log10(pct)
-    return max(0, min(254, int(round(254 + db * 2))))
+    return max(0, min(top, int(round(top + db * 2))))
 
 
-def master_raw_to_db(raw):
-    return (raw - 254) / 2.0
+def master_raw_to_db(raw, top=MASTER_MAX):
+    """Master's 0.5 dB steps, 0 dB at the control's own maximum."""
+    return (raw - top) / 2.0
 
 
 def mic_raw_to_db(raw):
@@ -619,10 +623,22 @@ class AE9(QObject):
         return list(self.mixer.controls.values()) if self.mixer else []
 
     # --- feature helpers --------------------------------------------------------
+    def master_max(self):
+        """Master's top raw value, 0 dB: 254 on the AE-9, 180 on the AE-7."""
+        c = self.control(MASTER)
+        return c.max if c and c.max > 0 else MASTER_MAX
+
+    def has_direct(self):
+        """The card has a Direct Mode Switch (the AE-7 only with ae7=4+)."""
+        return self.has(DIRECT)
+
+    def is_direct(self, default=True):
+        return direct_on(self, default)
+
     @property
     def dsp_active(self):
         """True when audio runs through the DSP with SBX on (effects audible)."""
-        return self.present and not self.get(DIRECT, True) and bool(self.get(SBX, False))
+        return self.present and not self.is_direct() and bool(self.get(SBX, False))
 
     def eq_db(self):
         """[pre-gain, 31Hz .. 16kHz] in dB."""
@@ -659,13 +675,32 @@ class AE9(QObject):
             self.set(EQ_ON, bool(profile.get("eq_on", True)))
 
 
+def direct_on(card, default=True):
+    """Direct Mode is on, for any card object with present / has / get. An
+    AE-7 without the switch plays through the DSP (no ae7=4): False. The
+    AE-9 reads a missing switch as Direct Mode, as it always has. `default`
+    is for no card at all."""
+    if not card.present:
+        return default
+    if not card.has(DIRECT):
+        return is_ae9()
+    return bool(card.get(DIRECT, True))
+
+
+def no_direct(card):
+    """A card that plays through the DSP only: an AE-7 without the Direct
+    Mode Switch (no ae7=4). Never the AE-9: its old drivers' missing switch
+    reads as Direct Mode, as before."""
+    return card.present and not card.has(DIRECT) and not is_ae9()
+
+
 def dsp_waiting_rate(card, live):
     """Direct Mode is off but the stream still plays direct, at this rate (Hz):
     the driver puts only 48 kHz streams (and 96 kHz with dsp_96k) through
     the DSP, so DSP mode and the effects start with the next 48 kHz stream.
     None when DSP mode is on, Direct Mode is on, or nothing plays (the
     switch then happens at the next stream by itself)."""
-    if not live or not card.present or card.get(DIRECT, True):
+    if not live or not card.present or card.is_direct():
         return None
     rate = live[0]
     if rate == 48000 or (rate == 96000 and dsp_96k()):
@@ -771,10 +806,45 @@ def model():
     return b.model if b else ae9.MODELS["ae9"]
 
 
+# The AE-7 as driver kit 11 runs it (ae7-k11 c42d2df), ahead of the kit's
+# profile: no DSD, no encoder or optical out, no Speaker Setup, its own rates.
+# PROVISIONAL until driver 0.13.0; the kit's profile wins once it has these.
+AE7_K11 = {
+    "dsd": False, "encoder": False, "optical_out_max": None, "speaker_setup": False,
+    "dsp_rates": (48000,),
+    "direct_rates": (44100, 48000, 88200, 96000, 192000, 384000),
+    "direct_channels": 2,
+    "mic_rates": (44100, 48000, 96000),
+    "whu_rates": (44100, 48000),
+    "formats": ("S32_LE",),
+}
+KIT_HAS_AE7_RATES = "direct_rates" in ae9.MODELS["ae7"].features
+
+
 def feature(name, default=None):
     """A profile feature of the managed card (see sbae9kit.boards: head_unit,
     optical_in, direct_51, dsd, hp_gain, optical_out_max, dac_filters, lighting)."""
-    return model().features.get(name, default)
+    m = model()
+    if m.key == "ae7" and not KIT_HAS_AE7_RATES and name in AE7_K11:
+        return AE7_K11[name]
+    return m.features.get(name, default)
+
+
+def is_ae9():
+    """The managed card is an AE-9 (or none is found: worded as the AE-9).
+    For the AE-9's own texts and warnings, and to keep its behaviour as is."""
+    return model().key == "ae9"
+
+
+def fixed_bits():
+    """The bit depth when the driver has no PCM Bit Depth control: the card's
+    one format ("32-bit" on the AE-7), else the pcm_bits option (24 by default)."""
+    fmts = feature("formats")
+    if fmts:
+        m = re.search(r"\d+", fmts[0])
+        if m:
+            return f"{m.group()}-bit"
+    return f"{module_param('pcm_bits') or '24'}-bit"
 
 
 def has_head_unit():
@@ -828,8 +898,9 @@ def dsd_conf_text(on):
 
 
 def has_native_dsd():
-    """The driver can play native DSD64 (it has the pcm_dsd option)."""
-    return module_param(PCM_DSD) is not None
+    """The driver can play native DSD64 on this card (it has the pcm_dsd
+    option, and the card plays DSD: not the AE-7)."""
+    return bool(feature("dsd", True)) and module_param(PCM_DSD) is not None
 
 
 def native_dsd_on():
@@ -916,8 +987,8 @@ DSP_LOUDER = ("DSP mode is 6 dB louder than before (driver 0.12.11+), on the hea
 
 def dsp_full_level():
     """DSP mode plays at the same level as Direct Mode (driver 0.12.11+);
-    older drivers play it 6 dB low."""
-    return driver_at_least(0, 12, 11)
+    older drivers play it 6 dB low. The AE-9's change only (its warnings)."""
+    return is_ae9() and driver_at_least(0, 12, 11)
 
 
 def dsp_96k():

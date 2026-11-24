@@ -237,7 +237,23 @@ def _qprocess_start(self, program, args=(), *rest):
 
 alsa.find_card = lambda *hints: 0
 alsa.card_longname = lambda idx: "Creative Labs Sound Blaster AE-9 (fake)"
-alsa.Mixer = FakeMixer
+# The controls the fake card starts from: the AE-9's (the kit's fixture), or
+# another card's (use_controls(), e.g. the AE-7's): reset() goes back to the AE-9.
+MIXER_SPEC = [None]
+
+
+class CardMixer(FakeMixer):
+    def __init__(self, idx=0, spec=None):
+        super().__init__(idx, spec if spec is not None else MIXER_SPEC[0])
+
+
+def use_controls(name):
+    """The next opened card has these controls (tests/fixtures/<name>)."""
+    with open(os.path.join(HERE, "fixtures", name)) as f:
+        MIXER_SPEC[0] = json.load(f)
+
+
+alsa.Mixer = CardMixer
 pipewire._run = lambda *a, **k: PW.run(*a, **k)
 REAL_CARD_STREAM = pipewire.card_stream
 pipewire.card_stream = lambda card_id="AE9": PW.stream
@@ -315,6 +331,7 @@ def reset():
     """Fresh fake PipeWire, driver options and settings for a new test."""
     global PW
     PW.__init__()
+    MIXER_SPEC[0] = None
     C.select(None)
     sound_cards()
     PARAMS.clear()
@@ -361,6 +378,7 @@ class AppTestCase(unittest.TestCase):
 
     def setUp(self):
         reset()
+        self.setup_card()
         from sbcommand.window import Context
         self.ctx = Context()
         self.mixer = FakeMixer.last
@@ -380,6 +398,9 @@ class AppTestCase(unittest.TestCase):
         process()
         # deleteLater only runs inside a real event loop; tests never enter one
         QCoreApplication.sendPostedEvents(None, QEvent.DeferredDelete)
+
+    def setup_card(self):
+        """Before the app opens the card: tests of another card set it up here."""
 
     # helpers
     def window(self):

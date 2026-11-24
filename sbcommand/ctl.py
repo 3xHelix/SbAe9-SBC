@@ -106,7 +106,7 @@ class Card:
 def rate_set(card, nodes, direct=None):
     """The rates the card plays now (as the app's Context.rate_set)."""
     if direct is None:
-        direct = bool(card.get(C.DIRECT, True)) if card.present else True
+        direct = C.direct_on(card)
     surround = nodes.stream_layout() == "surround"
     return pipewire.playable_rates(direct, surround, C.module_param("pcm_rates") or "1",
                                    C.surround_max(), C.dsp_96k(), C.plays_176k4())
@@ -129,7 +129,8 @@ def _pcm_open(pcm):
 
 def status(card, settings):
     nodes = pipewire.Nodes()
-    out = {"present": card.present, "pipewire": nodes.sink is not None}
+    out = {"present": card.present, "pipewire": nodes.sink is not None,
+           "card": C.card_short(), "card_name": C.model().name}
     if not card.present:
         return out
     clock = pipewire.clock_settings()
@@ -139,13 +140,14 @@ def status(card, settings):
             return int(clock.get(key, "0"))
         except ValueError:
             return 0
-    direct = bool(card.get(C.DIRECT, True))
+    direct = C.direct_on(card)
     live = pipewire.card_stream()
     own_streams_free = settings["encoder"] == "off"
     offered = pipewire.card_rates(C.module_param("pcm_rates") or "1", C.plays_176k4())
     depths = card.items(C.BIT_DEPTH)
     out.update({
         "direct": direct,
+        "has_direct": not C.no_direct(card),
         "sbx": bool(card.get(C.SBX, False)),
         "sbx_enabled": not direct and not card.inactive(C.SBX),
         "output": "headphones" if card.get(C.OUTPUT) == 1 else "speakers",
@@ -155,7 +157,7 @@ def status(card, settings):
         "playable": rate_set(card, nodes, direct),
         "depths": depths,
         "depth": card.get(C.BIT_DEPTH, 0) if depths else None,
-        "depth_fixed": None if depths else f"{C.module_param('pcm_bits') or '24'}-bit",
+        "depth_fixed": None if depths else C.fixed_bits(),
         "quantum_pick": settings["quantum"] or 0,
         "quantum_forced": num("clock.force-quantum"),
         "quantum_default": num("clock.quantum"),
@@ -186,13 +188,15 @@ def change(card, settings, cmd, arg, extra=()):
     except (TypeError, ValueError):
         return False, f"{cmd}: expected a number, got {arg!r}"
     if cmd == "direct":
+        if C.no_direct(card):
+            return False, C.for_card("The AE-9 has no Direct Mode Switch on this driver (DSP mode only).")
         on = bool(n)
         err = card.write(C.DIRECT, on)
         if not err:
             apply_rate(settings, card, pipewire.Nodes(), direct=on)
     elif cmd == "sbx":
         # two stages, as in the app: Direct Mode off (DSP) first, then SBX
-        if card.get(C.DIRECT, True) or card.inactive(C.SBX):
+        if C.direct_on(card) or card.inactive(C.SBX):
             return False, "SBX works with Direct Mode off: switch to DSP first."
         err = card.write(C.SBX, bool(n))
     elif cmd == "output":
@@ -248,7 +252,7 @@ TOGGLES = ("direct", "sbx", "output")
 def toggled_arg(card, cmd):
     """The argument that flips `cmd` from its state now."""
     if cmd == "direct":
-        return "0" if card.get(C.DIRECT, True) else "1"
+        return "0" if C.direct_on(card) else "1"
     if cmd == "sbx":
         return "0" if card.get(C.SBX, False) else "1"
     return "speakers" if card.get(C.OUTPUT) == 1 else "headphones"
@@ -257,7 +261,7 @@ def toggled_arg(card, cmd):
 def state_text(card, cmd):
     """How a toggle left things, for the notification."""
     if cmd == "direct":
-        return "Direct Mode on" if card.get(C.DIRECT, True) else "DSP on (Direct Mode off)"
+        return "Direct Mode on" if C.direct_on(card) else "DSP on (Direct Mode off)"
     if cmd == "sbx":
         return "SBX on" if card.get(C.SBX, False) else "SBX off"
     if cmd == "output":
@@ -315,7 +319,7 @@ def main(argv):
         print(json.dumps({"ok": ok, "error": msg}))
         if show:
             text = state_text(card, cmd) if ok else msg
-            if (ok and cmd == "direct" and not card.get(C.DIRECT, True)
+            if (ok and cmd == "direct" and not C.direct_on(card)
                     and C.dsp_full_level() and not settings["dsp_louder_seen"]):
                 # a shortcut can't ask first: say it once, as it switches
                 text += "\n" + C.DSP_LOUDER

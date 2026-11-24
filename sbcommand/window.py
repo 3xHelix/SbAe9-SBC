@@ -69,7 +69,7 @@ class Context(QObject):
 
     def rate_set(self):
         """The rates the card plays right now (Direct Mode, 5.1, driver options)."""
-        direct = bool(self.card.get(C.DIRECT, True)) if self.card.present else True
+        direct = C.direct_on(self.card)
         surround = self.pw.nodes.stream_layout() == "surround"
         return pipewire.playable_rates(direct, surround, C.module_param("pcm_rates") or "1",
                                        C.surround_max(), C.dsp_96k(), C.plays_176k4())
@@ -83,7 +83,7 @@ class Context(QObject):
         on). Offered for an explicit pick only: never clamped to, restored or
         chosen automatically. From 0.7.0 it's a normal rate (see rate_cap)."""
         return (not C.surround_96k_stable() and self.rate_cap() == 48000 and self.pw.nodes.stream_layout() == "surround"
-                and self.card.present and bool(self.card.get(C.DIRECT, True))
+                and self.card.present and C.direct_on(self.card)
                 and C.module_param("pcm_rates") != "0"
                 and C.module_param("surround_96k") == "1")
 
@@ -434,7 +434,7 @@ class DirectSwitch(PillSwitch):
     def right(self):
         # Direct on the left, DSP on the right: the order you switch things
         # on (DSP, then SBX), as in the panel widgets
-        return not self.card.get(C.DIRECT, True)
+        return not C.direct_on(self.card)
 
     def toggle(self):
         pages.set_direct_checked(self, self.ctx, self.right())
@@ -780,7 +780,7 @@ class MainWindow(QMainWindow):
         self.vol = VolumeRow(width=190, show_value=False)
         self.vol.setToolTip(C.volume_tip())
         self.vol.valueChanged.connect(Throttle(
-            lambda val: self.card.set(C.MASTER, C.master_pct_to_raw(val)), 30))
+            lambda val: self.card.set(C.MASTER, C.master_pct_to_raw(val, self.card.master_max())), 30))
         self.vol.muteToggled.connect(lambda m: self.card.set(C.MASTER_SW, not m))
         bl.addWidget(self.vol)
         v.addWidget(bottom)
@@ -959,7 +959,8 @@ class MainWindow(QMainWindow):
             self.dot.set_color(T.DIM)
             self.profile_lbl.setText("No device")
             return
-        direct = self.card.get(C.DIRECT, True)
+        direct = C.direct_on(self.card)
+        self.direct_switch.setVisible(not C.no_direct(self.card))
         sbx = self.card.get(C.SBX, False)
         if direct:
             self.dot.set_color(T.DOT_IDLE)
@@ -978,8 +979,9 @@ class MainWindow(QMainWindow):
             self.dot.setToolTip("DSP path, SBX off")
             self.profile_lbl.setText("Off")
         raw = self.card.get(C.MASTER, 0)
-        self.vol.set_state(C.master_raw_to_pct(raw), not self.card.get(C.MASTER_SW, True))
-        self.vol.setToolTip(C.volume_tip(C.master_raw_to_db(raw)))
+        top = self.card.master_max()
+        self.vol.set_state(C.master_raw_to_pct(raw, top), not self.card.get(C.MASTER_SW, True))
+        self.vol.setToolTip(C.volume_tip(C.master_raw_to_db(raw, top)))
         self.mic.set_state(self.card.get(C.MIC, 0) / 99, self.mic.btn.isChecked())
 
     def closeEvent(self, e):

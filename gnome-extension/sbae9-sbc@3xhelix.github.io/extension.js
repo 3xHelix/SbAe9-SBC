@@ -274,9 +274,13 @@ class Indicator extends PanelMenu.Button {
         const st = this._st;
         const ready = st.present === true;
         this._missing.visible = !ready;
+        // the managed card, from `ctl status` (older apps don't say: the AE-9)
+        const cardName = st.card_name || 'Sound Blaster AE-9';
+        this._title.label.text = cardName;
+        this.accessible_name = cardName;
         this._missing.label.text = st.missing
             ? 'Sound Blaster Command (sbae9-sbc) isn\'t installed: run its install.sh.'
-            : 'The AE-9 isn\'t there (driver not loaded?).';
+            : `The ${st.card || 'AE-9'} isn't there (driver not loaded?).`;
         this._card.actor.visible = ready;
         const phantomOn = !!(st.phantom && st.phantom.on);
         if (phantomOn)
@@ -288,6 +292,10 @@ class Indicator extends PanelMenu.Button {
         if (!ready)
             return;
 
+        // no Direct Mode Switch (the AE-7 without ae7=4): DSP only, no toggle
+        const hasDirect = st.has_direct !== false;
+        this._dsp.visible = hasDirect;
+        this._direct.visible = hasDirect;
         this._dsp.setOrnament(st.direct ? PopupMenu.Ornament.NONE : PopupMenu.Ornament.CHECK);
         this._direct.setOrnament(st.direct ? PopupMenu.Ornament.CHECK : PopupMenu.Ornament.NONE);
         this._quiet(() => this._sbx.setToggleState(!!st.sbx));

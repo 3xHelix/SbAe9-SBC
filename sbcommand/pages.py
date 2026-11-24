@@ -355,7 +355,7 @@ class SbxPage(Page):
         self.act_delete.setEnabled(user)
         self.act_save.setEnabled(user and dirty)
 
-        direct = self.card.get(C.DIRECT, True)
+        direct = C.direct_on(self.card)
         sbx = bool(self.card.get(C.SBX, False))
         self.sbx.setCheckedSilently(sbx)
         self.sbx.setEnabled(not direct)
@@ -527,7 +527,7 @@ class EqPage(Page):
         self.graph.setActive(audible)
         if self.card.get(C.SCOUT):
             msg = "Scout Mode is on and is using the EQ. Turn it off to get your EQ back."
-        elif self.card.get(C.DIRECT, True):
+        elif C.direct_on(self.card):
             msg = "Direct Mode is on, so the EQ is bypassed (Playback page)."
         elif not self.card.get(C.SBX):
             msg = "SBX is off, so the EQ is bypassed (SBX Profile page)."
@@ -681,8 +681,10 @@ class PlaybackPage(Page):
         self.line_virt = ToggleSwitch()
         self.line_virt.toggled.connect(self._line_virt)
         vr.addWidget(self.line_virt, 1, 0)
-        vr.addWidget(label("Apply headphone virtualization to Line Out", "muted"), 1, 1)
-        vr.addWidget(info_button(LINE_VIRT_TIP), 1, 2)
+        self.line_virt_parts = (self.line_virt, label("Apply headphone virtualization to Line Out", "muted"),
+                                info_button(LINE_VIRT_TIP))
+        vr.addWidget(self.line_virt_parts[1], 1, 1)
+        vr.addWidget(self.line_virt_parts[2], 1, 2)
         vr.setColumnStretch(3, 1)
         self.virt_note = label("", "hint", wrap=True)
         vr.addWidget(self.virt_note, 2, 0, 1, 4)
@@ -816,7 +818,7 @@ class PlaybackPage(Page):
         fh = QHBoxLayout()
         fh.addWidget(label("Filters", "sectionTitle"))
         fh.addStretch()
-        fh.addWidget(info_button(DAC_FILTER_TIP, "About the DAC filter"))
+        fh.addWidget(info_button(dac_filter_tip, "About the DAC filter"))
         fl.addLayout(fh)
         self.filter = QComboBox()
         self.filter.activated.connect(lambda i: self.card.set(C.DAC_FILTER, self.filter.itemData(i)))
@@ -964,7 +966,7 @@ class PlaybackPage(Page):
         i = self.quality.findData(eff)
         self.quality.setCurrentIndex(i if i >= 0 else 0)
 
-        direct = bool(self.card.get(C.DIRECT, True)) if self.card.present else True
+        direct = C.direct_on(self.card)
         note = ""
         if C.module_param("pcm_rates") == "0":
             note = "High rates are off in the driver (pcm_rates=0; see Settings → Device)."
@@ -1002,11 +1004,12 @@ class PlaybackPage(Page):
             self.depth.setToolTip("Bit depth the card plays; the app reopens the card to apply it")
             bits = items[self.card.get(C.BIT_DEPTH, 0) or 0]
         else:
-            bits = f"{C.module_param('pcm_bits') or '24'}-bit"
+            bits = C.fixed_bits()
             self.depth.clear()
             self.depth.addItem(bits, None)
             self.depth.setEnabled(False)
-            self.depth.setToolTip("Set by the driver's pcm_bits option; newer drivers let you "
+            self.depth.setToolTip(C.for_card("The AE-9 plays 32-bit only") if C.feature("formats")
+                                  else "Set by the driver's pcm_bits option; newer drivers let you "
                                   "change it here")
 
         live = pipewire.card_stream()
@@ -1067,7 +1070,7 @@ class PlaybackPage(Page):
             for k, it in enumerate(self.card.items(C.SPEAKER_CFG)):
                 self.spk_cfg.addItem(f"{it} Speakers", k)
         self.spk_cfg.setCurrentIndex(self.card.get(C.SPEAKER_CFG, 0) or 0)
-        direct = bool(self.card.get(C.DIRECT, True))
+        direct = C.direct_on(self.card)
         self.spk_cfg.setEnabled(not direct)
         # In Direct Mode the DSP (and Speaker Config) is bypassed: the stream's
         # channels go straight to the outputs.
@@ -1085,6 +1088,10 @@ class PlaybackPage(Page):
         self.test_hint.setText(hint)
         self.direct.setCheckedSilently(direct)
         self.direct_lbl.setText("On — DSP bypassed" if direct else "Off — SBX / EQ active")
+        dsp_only = C.no_direct(self.card)
+        self.direct.setEnabled(not dsp_only)
+        if dsp_only:
+            self.direct_lbl.setText("Off — DSP only (this card has no Direct Mode Switch yet)")
         self._refresh_optical(layout)
         self.setup.refresh()
         # The driver uses the Creative app's names (0.11.0; 0.10.x and
@@ -1136,7 +1143,7 @@ class PlaybackPage(Page):
                                 if shutil.which("ae9-hp-profile") else
                                 "The driver's ae9-hp-profile command isn't installed: click for how")
         curves = C.headphone_curves()
-        direct = bool(self.card.get(C.DIRECT, True)) or self.card.inactive(C.HP_PROFILE)
+        direct = C.direct_on(self.card) or self.card.inactive(C.HP_PROFILE)
         self.hp_prof.setEnabled(bool(curves) and not direct)
         live = pipewire.card_stream()
         if not curves:
@@ -1202,13 +1209,17 @@ class PlaybackPage(Page):
         self.virt_row.setVisible(has)
         if not has:
             return
-        direct = bool(self.card.get(C.DIRECT, True))
+        direct = C.direct_on(self.card)
         hp_virt = bool(self.card.get(C.HP_VIRT, True))
         line = bool(self.card.get(C.LINE_VIRT, False))
         self.hp_virt.setCheckedSilently(hp_virt)
         self.line_virt.setCheckedSilently(line)
         self.hp_virt.setEnabled(self.card.has(C.HP_VIRT) and not direct)
         self.line_virt.setEnabled(self.card.has(C.LINE_VIRT) and not direct)
+        if not C.is_ae9():
+            # a card without it (the AE-7): left out, not greyed
+            for x in self.line_virt_parts:
+                x.setVisible(self.card.has(C.LINE_VIRT))
         if direct:
             note = "Direct Mode off only: they're done in the DSP."
         elif out != 1:
@@ -1806,6 +1817,22 @@ DAC_FILTER_TIP = (
     "ringing, useful for testing.\n\n"
     "Fast/slow and phase differences are subtle: pick by ear."
 )
+DAC_FILTER_TIP_AE7 = (
+    "The DAC's digital interpolation filter. It runs in the DAC, so it "
+    "applies in Direct Mode too; it is not an SBX effect. The names are the "
+    "Creative app's.\n\n"
+    "• Fast Roll Off — linear phase, steep cutoff.\n"
+    "• Slow Roll Off — linear phase, gentler roll-off and less ringing.\n"
+    "• Minimum Phase — no pre-ringing.\n\n"
+    "The differences are subtle: pick by ear."
+)
+
+
+def dac_filter_tip():
+    """The AE-9's ES9038Q2M text, or the AE-7 DAC's three filters."""
+    return DAC_FILTER_TIP if C.is_ae9() else DAC_FILTER_TIP_AE7
+
+
 MIC_GAIN_LABELS = {"0": "0 dB", "1": "+10 dB", "2": "+20 dB", "3": "+30 dB"}
 
 
@@ -2081,13 +2108,16 @@ class SpeakerSetup(QWidget):
         has = self.available()
         self.box.setVisible(has)
         self.missing.setVisible(not has)
+        if not C.feature("speaker_setup", True):
+            self.missing.setText(C.for_card("The AE-9 has no speaker setup controls "
+                                            "(bass redirect, speaker levels and distances)."))
         if not has:
             self.direct_banner.setVisible(False)
             return
         card = self.card
         # the driver greys these out in Direct Mode; go by that, and by
         # Direct Mode itself for a driver that doesn't
-        live = not card.get(C.DIRECT, True) and not card.inactive(C.BASS_REDIRECT)
+        live = not C.direct_on(card) and not card.inactive(C.BASS_REDIRECT)
         self.direct_banner.setVisible(not live)
         self.box.setEnabled(live)
 
@@ -2865,7 +2895,7 @@ class RecordingPage(Page):
         """The driver's mic monitor (0.12.2), mixed in the DSP: Direct Mode off only.
         Not while Voice Clarity is in use (it breaks its recordings), nor while
         the software Listen runs; if it's on anyway, the switch turns it off."""
-        if not self.card.has(C.MIC_MONITOR) or bool(self.card.get(C.DIRECT, True)):
+        if not self.card.has(C.MIC_MONITOR) or C.direct_on(self.card):
             return False
         if self.card.get(C.MIC_MONITOR, False):
             return True
@@ -2916,7 +2946,7 @@ class RecordingPage(Page):
             why = ""
             if self.card.has(C.MIC_MONITOR):
                 why = (": through PipeWire in Direct Mode, with a short delay"
-                       if self.card.get(C.DIRECT, True) else
+                       if C.direct_on(self.card) else
                        ": through PipeWire while Voice Clarity is on, with a short delay"
                        if C.vc_needs_listen(self.card) else ": through PipeWire, with a short delay")
             self.listen_lbl.setText("Hear the mic live (use headphones to avoid feedback)" + why)
@@ -3218,7 +3248,7 @@ class MixerPage(Page):
         g.addWidget(self.out_name, r, 0)
         self.master = VolumeRow()
         self.master.valueChanged.connect(Throttle(
-            lambda v: self.card.set(C.MASTER, C.master_pct_to_raw(v)), 30))
+            lambda v: self.card.set(C.MASTER, C.master_pct_to_raw(v, self.card.master_max())), 30))
         self.master.muteToggled.connect(lambda m: self.card.set(C.MASTER_SW, not m))
         g.addWidget(self.master, r, 1)
         r += 1
@@ -3364,8 +3394,9 @@ class MixerPage(Page):
         self.out_name.setText("Headphones" if self.card.get(C.OUTPUT) == 1 else "Speakers")
         raw = self.card.get(C.MASTER, 0)
         muted = not self.card.get(C.MASTER_SW, True)
-        self.master.set_state(C.master_raw_to_pct(raw), muted,
-                              f"{C.master_raw_to_db(raw):.1f} dB" if raw else "−∞ dB")
+        top = self.card.master_max()
+        self.master.set_state(C.master_raw_to_pct(raw, top), muted,
+                              f"{C.master_raw_to_db(raw, top):.1f} dB" if raw else "−∞ dB")
         mraw = self.card.get(C.MIC, 0)
         mm = pipewire.get_volume(n.source["id"])[1] if n.source else False
         self.mic.set_state(mraw / 99, mm, "muted" if mraw == 0 else f"{C.mic_raw_to_db(mraw):+d} dB")

@@ -143,7 +143,7 @@ class ProfileTest(S.AppTestCase):
         self.assertNotIn("head unit", window.output_tip())
         self.assertEqual(pages.hp_where(), "Headphone jack")
         self.assertNotIn("head unit", pages.headphones_tip())
-        self.assertEqual(pages.optical_top_khz(), "96")
+        self.assertIsNone(C.optical_out_max())          # kit 11: no optical out
         self.assertEqual(pages.mic_name(None), "AE-7 Mic In")
         self.assertEqual(pages.output_name(None), "Sound Blaster AE-7")
 
