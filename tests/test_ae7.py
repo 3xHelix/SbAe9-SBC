@@ -14,7 +14,7 @@ from unittest import mock
 
 import support as S
 from sbae9kit import testing as kt
-from sbcommand import card as C, ctl, pages, window
+from sbcommand import card as C, ctl, pages, pipewire, window
 
 
 class AE7Case(S.AppTestCase):
@@ -144,6 +144,107 @@ class HiddenTest(AE7Case):
         self.assertFalse(pg.depth.isEnabled())
         code, st = self.ctl("status")
         self.assertEqual(st["depth_fixed"], "32-bit")
+
+
+class RatesTest(AE7Case):
+    """Kit 11: DSP mode 48 kHz only (stereo and 5.1); Direct Mode stereo at
+    44.1-384 kHz, no 176.4; mic 44.1 / 48 / 96; What U Hear 44.1 / 48."""
+
+    def test_offered(self):
+        self.assertEqual(pipewire.offered_rates(), [44100, 48000, 88200, 96000, 192000, 384000])
+        self.assertEqual(pipewire.allowed_now(), pipewire.offered_rates())
+        self.assertFalse(C.plays_176k4())
+
+    def test_dsp_mode(self):
+        self.assertEqual(self.ctx.rate_set(), [48000])
+        self.assertFalse(C.dsp_96k())
+        self.assertEqual(C.surround_max(), 48000)
+        self.assertEqual(pipewire.playable_now(False, True), [48000])
+
+    def test_direct_mode(self):
+        self.assertEqual(pipewire.playable_now(True, False), [44100, 48000, 88200, 96000, 192000, 384000])
+        self.assertEqual(pipewire.playable_now(True, True), [48000])     # 5.1: DSP mode only
+
+    def test_inputs(self):
+        self.assertEqual(pages.input_rates(), (44100, 48000))
+        self.assertFalse(C.wuh_96k())
+        self.assertEqual(C.board_rates("mic_rates"), (44100, 48000, 96000))
+
+    def test_ctl(self):
+        code, st = self.ctl("status")
+        self.assertEqual(st["rates"], [44100, 48000, 88200, 96000, 192000, 384000])
+        self.assertEqual(st["playable"], [48000])
+
+    def test_ae9_unchanged(self):
+        S.sound_cards(kt.AE9_CARD)
+        self.assertIsNone(C.board_rates("direct_rates"))
+        self.assertEqual(pipewire.offered_rates(), pipewire.RATES)
+
+
+class DirectRatesTest(AE7Case):
+    direct_switch = True
+
+    def test_rate_set_follows_the_switch(self):
+        self.assertEqual(self.ctx.rate_set(), [48000])
+        self.mixer.external(C.DIRECT, True)
+        S.process()
+        self.assertEqual(max(self.ctx.rate_set()), 384000)
+        self.assertNotIn(176400, self.ctx.rate_set())
+
+
+class HeadphoneGainTest(AE7Case):
+    def test_picker(self):
+        pg = self.page(pages.PlaybackPage)
+        self.assertFalse(pg.hp_gain.isHidden())
+        self.assertEqual([pg.hp_gain.itemText(k) for k in range(pg.hp_gain.count())],
+                         ["Low (16 - 31 ohm)", "Normal (32 - 149 ohm)", "High (150 - 600 ohm)"])
+        self.assertEqual(pg.hp_gain.currentIndex(), 1)
+        pg.hp_gain.activated.emit(2)
+        self.assertEqual(self.mixer.values[C.HP_GAIN], 2)
+
+    def test_labels_fall_back_to_the_items(self):
+        self.assertEqual(C.hp_gain_labels(["Low", "High"]), ["Low", "High"])
+
+    def test_hidden_without_the_control(self):
+        del self.mixer.controls[C.HP_GAIN]
+        pg = self.page(pages.PlaybackPage)
+        self.assertTrue(pg.hp_gain.isHidden())
+
+    def test_hidden_on_the_ae9(self):
+        S.sound_cards(kt.AE9_CARD)
+        S.MIXER_SPEC[0] = None
+        self.ctx.card.switch_to("AE9")
+        S.process()
+        pg = self.page(pages.PlaybackPage)
+        self.assertTrue(pg.hp_gain.isHidden())
+
+
+class PlugTest(AE7Case):
+    def test_headphone_jack(self):
+        pg = self.page(pages.PlaybackPage)
+        self.assertEqual(pg.hp_sub.text(), "Headphone jack: nothing plugged in")
+        self.assertTrue(pg.hp_hint.isHidden())
+        self.mixer.external(C.CARD_PHONES, True)
+        S.process()
+        pg.refresh()
+        self.assertEqual(pg.hp_sub.text(), "Headphone jack: plugged in")
+        self.assertFalse(pg.hp_hint.isHidden())
+        self.assertNotIn("head unit", pg.hp_hint.text.text())
+
+    def test_mic_jack(self):
+        pg = self.page(pages.RecordingPage)
+        pg.refresh()
+        self.assertEqual(pg.mic_jack.text(), "Line-in / Mic-in jack: nothing plugged in")
+        self.mixer.external(C.CARD_MIC, True)
+        S.process()
+        pg.refresh()
+        self.assertEqual(pg.mic_jack.text(), "Line-in / Mic-in jack: plugged in")
+
+    def test_without_plug_controls(self):
+        for n in (C.CARD_PHONES, C.CARD_MIC):
+            del self.mixer.controls[n]
+        pg = self.page(pages.PlaybackPage)
+        self.assertEqual(pg.hp_sub.text(), pages.hp_where())
 
 
 class AE9UnchangedTest(S.AppTestCase):

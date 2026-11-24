@@ -426,6 +426,43 @@ def playable_rates(direct, surround, pcm_rates="1", surround_max=48000, dsp_96k=
     return rates
 
 
+# --- the managed card's rates ---------------------------------------------------
+# The AE-9's follow the driver's version and options (card_rates, allowed_rates,
+# playable_rates above); a card with its own rate model (the AE-7, kit 11:
+# PROVISIONAL until driver 0.13.0) lists them: Direct Mode's (stereo) and DSP
+# mode's (also 5.1).
+def _board():
+    direct, dsp = C.board_rates("direct_rates"), C.board_rates("dsp_rates")
+    return (list(direct or ()), list(dsp or ())) if (direct or dsp) else None
+
+
+def offered_rates():
+    """Every rate the card plays (the app's list)."""
+    b = _board()
+    if b:
+        return sorted(set(b[0]) | set(b[1]))
+    return card_rates(C.module_param("pcm_rates") or "1", C.plays_176k4())
+
+
+def allowed_now():
+    """What PipeWire may open the card at (clock.allowed-rates)."""
+    b = _board()
+    if b:
+        return sorted(set(b[0]) | set(b[1]))
+    return allowed_rates(C.module_param("pcm_rates"), C.plays_176k4())
+
+
+def playable_now(direct, surround):
+    """The rates the card takes right now, given Direct Mode and 5.1."""
+    b = _board()
+    if b:
+        if direct and not surround and b[0]:
+            return b[0]
+        return b[1] or [48000]
+    return playable_rates(direct, surround, C.module_param("pcm_rates") or "1",
+                          C.surround_max(), C.dsp_96k(), C.plays_176k4())
+
+
 def effective_rate(mode, rates):
     """The rate applied for the user's choice (0 = automatic) given the
     `rates` the card takes now: the choice itself, else the next one up
@@ -652,14 +689,16 @@ def capture_stream(card_id=None):
 
 def mic_rates(nodes):
     """Rates the head unit mic can record at, from what the driver offers
-    (48 kHz only before driver 0.9.1, 48 and 96 kHz after)."""
+    (48 kHz only before driver 0.9.1, 48 and 96 kHz after; the AE-7's
+    44.1 / 48 / 96)."""
+    allowed = C.board_rates("mic_rates") or MIC_RATES
     src = nodes.source
     for f in ((src or {}).get("params") or {}).get("EnumFormat", []):
         r = f.get("rate")
         if isinstance(r, dict) and "max" in r:
-            return [x for x in MIC_RATES if r.get("min", 0) <= x <= r["max"]]
+            return [x for x in allowed if r.get("min", 0) <= x <= r["max"]]
         if isinstance(r, int):
-            return [x for x in MIC_RATES if x == r]
+            return [x for x in allowed if x == r]
     return [48000]
 
 

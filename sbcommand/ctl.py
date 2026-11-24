@@ -108,8 +108,7 @@ def rate_set(card, nodes, direct=None):
     if direct is None:
         direct = C.direct_on(card)
     surround = nodes.stream_layout() == "surround"
-    return pipewire.playable_rates(direct, surround, C.module_param("pcm_rates") or "1",
-                                   C.surround_max(), C.dsp_96k(), C.plays_176k4())
+    return pipewire.playable_now(direct, surround)
 
 
 def apply_rate(settings, card, nodes, direct=None):
@@ -119,7 +118,7 @@ def apply_rate(settings, card, nodes, direct=None):
     if not mode and not pipewire.current_force_rate():
         return
     eff = pipewire.effective_rate(mode, rate_set(card, nodes, direct))
-    pipewire.set_rate_mode(eff, pipewire.allowed_rates(C.module_param("pcm_rates"), C.plays_176k4()),
+    pipewire.set_rate_mode(eff, pipewire.allowed_now(),
                            settings["quantum"] or 0)
 
 
@@ -143,7 +142,7 @@ def status(card, settings):
     direct = C.direct_on(card)
     live = pipewire.card_stream()
     own_streams_free = settings["encoder"] == "off"
-    offered = pipewire.card_rates(C.module_param("pcm_rates") or "1", C.plays_176k4())
+    offered = pipewire.offered_rates()
     depths = card.items(C.BIT_DEPTH)
     out.update({
         "direct": direct,
@@ -209,7 +208,7 @@ def change(card, settings, cmd, arg, extra=()):
         settings["rate_mode"] = n
         nodes = pipewire.Nodes()
         eff = pipewire.effective_rate(n, rate_set(card, nodes)) if n else 0
-        pipewire.set_rate_mode(eff, pipewire.allowed_rates(C.module_param("pcm_rates"), C.plays_176k4()),
+        pipewire.set_rate_mode(eff, pipewire.allowed_now(),
                                settings["quantum"] or 0)
         return True, ""
     elif cmd == "depth":

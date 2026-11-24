@@ -627,6 +627,13 @@ class PlaybackPage(Page):
         self._stream_pending = None
         left.addWidget(w)
         w, g, self.hp_sub = out_row(self.r_hp, "headphones", "Headphones")
+        # Headphone Gain (the AE-7's; the AE-9's is the head unit's switch)
+        self.hp_gain = QComboBox()
+        self.hp_gain.setMinimumWidth(150)
+        self.hp_gain.setToolTip("Headphone gain: match it to your headphones' impedance")
+        self.hp_gain.activated.connect(lambda i: self.card.set(C.HP_GAIN, i))
+        g.addWidget(self.hp_gain, 0, 4)
+        self.hp_gain.setVisible(False)
         # auto switch on the head unit's 3.5 mm headphone jack (newer drivers)
         self.hp_auto_row = QWidget()
         ar = QHBoxLayout(self.hp_auto_row)
@@ -944,8 +951,8 @@ class PlaybackPage(Page):
         choice = ctx.settings["rate_mode"] or 0
         # show what PipeWire is forced to now, whoever set it (0 = Automatic)
         eff = pipewire.current_force_rate()
-        offered = pipewire.card_rates(C.module_param("pcm_rates") or "1", C.plays_176k4())
-        if C.module_param("pcm_rates") == "0":
+        offered = pipewire.offered_rates()
+        if C.module_param("pcm_rates") == "0" and C.is_ae9():
             offered = pipewire.RATES      # listed, greyed out: Settings can turn them on
         if [self.quality.itemData(k) for k in range(1, self.quality.count())] != offered:
             self.quality.clear()
@@ -968,7 +975,7 @@ class PlaybackPage(Page):
 
         direct = C.direct_on(self.card)
         note = ""
-        if C.module_param("pcm_rates") == "0":
+        if C.module_param("pcm_rates") == "0" and C.is_ae9():
             note = "High rates are off in the driver (pcm_rates=0; see Settings → Device)."
         elif not direct:
             note = "DSP mode runs at 48 or 96 kHz." if C.dsp_96k() else "DSP mode runs at 48 kHz."
@@ -1049,7 +1056,17 @@ class PlaybackPage(Page):
         out = self.card.get(C.OUTPUT, 0)
         (self.r_hp if out == 1 else self.r_spk).setChecked(True)
         plugged = self.card.has(C.HU_PHONES) and bool(self.card.get(C.HU_PHONES))
-        if self.card.has(C.HU_PHONES):
+        self._refresh_hp_gain()
+        card_jack = not self.card.has(C.HU_PHONES) and self.card.has(C.CARD_PHONES)
+        if card_jack:
+            # the AE-7's own headphone jack reports plugs
+            plugged = bool(self.card.get(C.CARD_PHONES))
+            self.hp_hint.text.setText("Headphones are plugged into the card, but it plays "
+                                      "on Speakers.")
+            self.hp_sub.setText("Headphone jack: plugged in" if plugged
+                                else "Headphone jack: nothing plugged in")
+            self.hp_sub.setToolTip(headphones_tip())
+        elif self.card.has(C.HU_PHONES):
             self.hp_sub.setText("3.5 mm jack: plugged in" if plugged else "3.5 mm jack: nothing plugged in")
             self.hp_sub.setToolTip("Only the head unit's 3.5 mm headphone jack reports plugs, "
                                    "not the 1/4\" jack")
@@ -1104,6 +1121,17 @@ class PlaybackPage(Page):
             for k, it in enumerate(self.card.items(C.DAC_FILTER)):
                 self.filter.addItem(names.get(it, it), k)
         self.filter.setCurrentIndex(self.card.get(C.DAC_FILTER, 0) or 0)
+
+    def _refresh_hp_gain(self):
+        has = self.card.has(C.HP_GAIN)
+        self.hp_gain.setVisible(has)
+        if not has:
+            return
+        labels = C.hp_gain_labels(self.card.items(C.HP_GAIN))
+        if [self.hp_gain.itemText(k) for k in range(self.hp_gain.count())] != labels:
+            self.hp_gain.clear()
+            self.hp_gain.addItems(labels)
+        self.hp_gain.setCurrentIndex(self.card.get(C.HP_GAIN, 0) or 0)
 
     def _hp_hint_later(self):
         self._hp_hint_off = True
@@ -1643,6 +1671,11 @@ def output_name(node):
 DEVICE_PARAMS = ("pcm_rates", "pcm_bits", "surround")
 
 INPUT_RATES = (48000, 96000)   # What U Hear: 48, or 96 kHz too (C.wuh_96k)
+
+
+def input_rates():
+    """What U Hear's rate choices: the AE-9's, or the card's own (the AE-7's 44.1 / 48)."""
+    return C.board_rates("whu_rates") or INPUT_RATES
 
 
 def confirm_dsp_louder(parent, ctx):
@@ -2456,9 +2489,9 @@ class InputSection(QWidget):
             self.rate.clear()
             if rule:
                 self.rate.addItem("Automatic", None)
-            for r in INPUT_RATES:
+            for r in input_rates():
                 self.rate.addItem(f"{r / 1000:g} kHz", r)
-        offered = INPUT_RATES if C.wuh_96k() else INPUT_RATES[:1]
+        offered = (C.board_rates("whu_rates") or (INPUT_RATES if C.wuh_96k() else INPUT_RATES[:1]))
         model = self.rate.model()
         for k in range(self.rate.count()):
             r = self.rate.itemData(k)
@@ -2845,7 +2878,7 @@ class RecordingPage(Page):
         rates = pipewire.mic_rates(n)
         if self.mic_rate.count() == 0:
             self.mic_rate.addItem("Automatic", None)
-            for r in pipewire.MIC_RATES:
+            for r in C.board_rates("mic_rates") or pipewire.MIC_RATES:
                 self.mic_rate.addItem(f"{r / 1000:g} kHz", r)
         model = self.mic_rate.model()
         for k in range(1, self.mic_rate.count()):
@@ -3017,10 +3050,14 @@ class RecordingPage(Page):
         self._refresh_phantom()
         self._refresh_listen()
         self.vc.refresh()
-        self.mic_jack.setVisible(self.card.has(C.HU_MIC))
+        self.mic_jack.setVisible(self.card.has(C.HU_MIC) or self.card.has(C.CARD_MIC))
         if self.card.has(C.HU_MIC):
             self.mic_jack.setText("3.5 mm mic: " + (
                 "plugged in" if self.card.get(C.HU_MIC) else "nothing plugged in"))
+        elif self.card.has(C.CARD_MIC):
+            # the AE-7: Creative's name for its jack
+            self.mic_jack.setText("Line-in / Mic-in jack: " + (
+                "plugged in" if self.card.get(C.CARD_MIC) else "nothing plugged in"))
         raw = self.card.get(C.MIC, 0)
         self.mic.set_state(raw / 99, muted, "muted" if raw == 0 else f"{C.mic_raw_to_db(raw):+d} dB")
         self.xlr.set_options(*mic_gain_steps(self.card))
@@ -3717,13 +3754,13 @@ class SettingsPage(Page):
         lines = [
             f"<b>{self.card.longname or C.for_card('Sound Blaster AE-9 not found')}</b>",
             f"ALSA card {self.card.card_index} · driver snd-hda-codec-creative-ae9 {mod}",
-            "Playback rates: " + ("/".join(f"{r / 1000:g}" for r in pipewire.card_rates(
-                rates, C.plays_176k4())) + " kHz" if rates in ("0", "1", "2") else "?") +
-            f" · sample bits: {bits or '?'}",
-            "5.1 rates: " + "/".join(f"{r / 1000:g}" for r in pipewire.playable_rates(
-                True, True, rates or "1", C.surround_max())) + " kHz"
-            " · DSP mode: " + "/".join(f"{r / 1000:g}" for r in pipewire.playable_rates(
-                False, False, rates or "1", dsp_96k=C.dsp_96k())) + " kHz",
+            ("Playback rates: " + "/".join(f"{r / 1000:g}" for r in pipewire.offered_rates()) + " kHz"
+             f" · sample bits: {C.fixed_bits()[:-4]}" if not C.is_ae9() else
+             "Playback rates: " + ("/".join(f"{r / 1000:g}" for r in pipewire.card_rates(
+                 rates, C.plays_176k4())) + " kHz" if rates in ("0", "1", "2") else "?") +
+             f" · sample bits: {bits or '?'}"),
+            "5.1 rates: " + "/".join(f"{r / 1000:g}" for r in pipewire.playable_now(True, True)) + " kHz"
+            " · DSP mode: " + "/".join(f"{r / 1000:g}" for r in pipewire.playable_now(False, False)) + " kHz",
             "Driver options: " + (" · ".join(
                 f"{p}={C.module_param(p)}" for p in DEVICE_PARAMS if C.module_param(p) is not None)
                 or "none"),

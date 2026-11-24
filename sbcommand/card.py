@@ -33,6 +33,10 @@ HU_AUTO = "Head Unit Auto Switch"              # newer drivers: the 3.5 mm headp
 HU_PHONES = "Head Unit 3.5mm Phones Plugged"   # read-only: head unit's 3.5 mm headphone jack
 HU_MIC = "Head Unit 3.5mm Mic Plugged"         # read-only: head unit's 3.5 mm mic jack
 HU_PHANTOM = "Head Unit Phantom Power"         # 48 V on the XLR/TRS jack; writable on newer drivers
+# The AE-7 (driver kit 11, PROVISIONAL until 0.13.0): its own controls
+HP_GAIN = "Headphone Gain"                       # Low / Normal / High (Windows' "Headphone Load")
+CARD_PHONES = "Card Headphone Headset-out Plugged"   # read-only: the card's headphone jack
+CARD_MIC = "Card Line-in Mic-in Plugged"             # read-only: the card's line-in / mic-in jack
 # Older names of renamed controls: released drivers' (kept for good) and some
 # test builds' (until every build in use has the new ones).
 ALIASES = {
@@ -847,6 +851,15 @@ def fixed_bits():
     return f"{module_param('pcm_bits') or '24'}-bit"
 
 
+def hp_gain_labels(items):
+    """Headphone Gain's choices as Windows words them ("Low (16 - 31 ohm)"),
+    when the profile's names match the control's items; else the items."""
+    names = feature("hp_gain_names") or ()
+    if len(names) == len(items) and all(n.startswith(i) for n, i in zip(names, items)):
+        return list(names)
+    return list(items)
+
+
 def has_head_unit():
     """The card has the AE-9's external head unit (jacks, knob, phantom button)."""
     return bool(feature("head_unit"))
@@ -946,6 +959,14 @@ def driver_at_least(*want):
     return ae9.driver_at_least(*want, version=module_version() or "")
 
 
+def board_rates(kind):
+    """The managed card's own rate list (the AE-7: "direct_rates",
+    "dsp_rates", "mic_rates", "whu_rates"), or None: the AE-9, whose rates
+    follow the driver's version and options (the functions below)."""
+    r = feature(kind)
+    return tuple(r) if r else None
+
+
 def all_rates_on():
     """Every rate feature is on in driver 0.12.11+ (5.1 at 96 and 192 kHz,
     DSP mode at 96 kHz, 176.4 kHz, 44.1 / 88.2 kHz, live headphone-profile
@@ -957,6 +978,8 @@ def all_rates_on():
 def surround_96k_stable():
     """Driver 0.7.0 fixed 5.1 at 96 kHz and turned it on by default
     (surround_96k=1). Before that the option was an unstable experiment."""
+    if board_rates("dsp_rates"):
+        return True
     if all_rates_on():
         return True
     return driver_at_least(0, 7, 0) and module_param("surround_96k") == "1"
@@ -965,6 +988,9 @@ def surround_96k_stable():
 def surround_max():
     """The highest rate 5.1 plays at: 192 kHz with the driver's surround_192k
     option on (0.9.4+), 96 kHz with a stable surround_96k (0.7.0+), else 48."""
+    dsp = board_rates("dsp_rates")
+    if dsp:
+        return max(dsp)       # the AE-7: 5.1 in DSP mode only
     if all_rates_on():
         return 192000
     if not surround_96k_stable():
@@ -994,6 +1020,9 @@ def dsp_full_level():
 def dsp_96k():
     """DSP mode (Direct Mode off) takes 96 kHz as well as 48 (driver 0.9.4+,
     its dsp_96k option, on by default)."""
+    dsp = board_rates("dsp_rates")
+    if dsp:
+        return 96000 in dsp
     return all_rates_on() or module_param("dsp_96k") in ("Y", "1")
 
 
@@ -1001,16 +1030,25 @@ def wuh_96k():
     """What U Hear can record at 96 kHz as well as 48 (driver 0.9.5+, its
     wuh_96k option, on by default; always on in 0.12.11+, and 0.12.14 drops
     the option)."""
+    whu = board_rates("whu_rates")
+    if whu:
+        return 96000 in whu
     return all_rates_on() or module_param("wuh_96k") in ("Y", "1")
 
 
 def plays_176k4():
     """The driver plays 176.4 kHz (0.9.7+, its pcm_176k4 option)."""
+    direct = board_rates("direct_rates")
+    if direct:
+        return 176400 in direct
     return all_rates_on() or module_param("pcm_176k4") in ("Y", "1")
 
 
 def plays_cd_rates():
     """The driver can play 44.1 and 88.2 kHz (0.9.4+, its dac_441 option)."""
+    direct = board_rates("direct_rates")
+    if direct:
+        return 44100 in direct
     return all_rates_on() or module_param("dac_441") is not None
 
 
