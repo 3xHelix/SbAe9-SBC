@@ -46,7 +46,9 @@ sudo ae9-ae7-enable
 ae9-ae7-enable --status    # what's set up (no root needed)
 ```
 
-Until it's on, the app finds the AE-7 and says so, with the command. Once
+Until it's on, the app finds the AE-7 and says so, with the command (also
+when the driver has parked it with no driver, as it does for an AE-7 behind
+an ASMedia bridge while the support is off). Once
 it's on, the app manages it like the AE-9 and leaves out what the AE-7
 doesn't have:
 
@@ -59,8 +61,9 @@ doesn't have:
 - **Not there:** the head unit, optical in and out (so no Encoder page),
   native DSD, Speaker Setup (bass redirect, levels, distances), 176.4 kHz,
   a 24-bit playback choice (the AE-7 plays 32-bit), the mic monitor.
-- **Not tested yet:** headphone profiles, and the rear and center/sub outputs
-  in 5.1 (only the front pair has been heard so far).
+- **Not tested yet:** headphone profiles, and in 5.1 the Rear jack and the
+  center channel (the front pair has been heard, and the subwoofer channel
+  on the C/Sub jack felt).
 
 The AE-7's controls and rates follow the driver's experimental support and
 may change in later driver releases. Thanks to

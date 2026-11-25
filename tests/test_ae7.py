@@ -366,13 +366,14 @@ class CardModelTest(S.AppTestCase):
 
 
 def fake_pci(name, ids, driver=None):
-    d = os.path.join(C.PCI_DEVICES, name)
+    devices = os.path.join(C.ae9.boards.ROOT, "sys", "bus", "pci", "devices")
+    d = os.path.join(devices, name)
     os.makedirs(d, exist_ok=True)
     for f, v in zip(("vendor", "device", "subsystem_vendor", "subsystem_device"), ids):
         with open(os.path.join(d, f), "w") as fh:
             fh.write(f"0x{v:04x}\n")
     if driver:
-        target = os.path.join(C.PCI_DEVICES, "..", "drivers", driver)
+        target = os.path.join(devices, "..", "drivers", driver)
         os.makedirs(target, exist_ok=True)
         os.symlink(target, os.path.join(d, "driver"))
 
@@ -385,11 +386,11 @@ class AE7OffTest(S.AppTestCase):
         fake_pci("0000:0a:00.0", (0x1002, 0xab28, 0x1002, 0xab28), "snd_hda_intel")
 
     def test_none(self):
-        self.assertIsNone(C.ae7_waiting())
+        self.assertIsNone(C.ae9.ae7_waiting())
 
     def test_on_the_kernel_driver(self):
-        fake_pci("0000:05:00.0", C.AE7_PCI, "snd_hda_intel")
-        self.assertEqual(C.ae7_waiting(), "kernel")
+        fake_pci("0000:05:00.0", C.ae9.boards.AE7_PCI, "snd_hda_intel")
+        self.assertEqual(C.ae9.ae7_waiting(), "kernel")
         w = self.window()
         w.no_card.show_state(True)
         self.assertIn("AE-7 found", w.no_card.title.text())
@@ -398,16 +399,44 @@ class AE7OffTest(S.AppTestCase):
         self.assertIn("ae9-ae7-enable", window.no_card_reason(self.ctx.card))
 
     def test_refused(self):
-        fake_pci("0000:05:00.0", C.AE7_PCI)
-        self.assertEqual(C.ae7_waiting(), "unbound")
+        fake_pci("0000:05:00.0", C.ae9.boards.AE7_PCI)
+        self.assertEqual(C.ae9.ae7_waiting(), "unbound")
         w = self.window()
         w.no_card.show_state(True)
         self.assertEqual(w.no_card.steps.text(), "ae9-ae7-enable --status")
         self.assertIn("isn't finished", w.no_card.sub.text())
+        self.assertNotIn("parked", window.no_card_reason(self.ctx.card))
+
+    def park(self, which):
+        path = os.path.join(C.ae9.boards.ROOT, C.ae9.AE7_PARK_FILES[which])
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        open(path, "w").close()
+
+    def test_parked(self):
+        fake_pci("0000:05:00.0", C.ae9.boards.AE7_PCI)
+        self.park(0)
+        self.assertEqual(C.ae9.ae7_waiting(), "parked")
+        w = self.window()
+        w.no_card.show_state(True)
+        self.assertEqual(w.no_card.title.text(), window.AE7_OFF_TITLE)
+        self.assertIn(C.ae9.AE7_WAITING["parked"][0], w.no_card.sub.text())
+        self.assertEqual(w.no_card.steps.text(), "sudo ae9-ae7-enable")
+        self.assertIn("parked", window.no_card_reason(self.ctx.card))
+
+    def test_parked_by_the_modprobe_file_alone(self):
+        fake_pci("0000:05:00.0", C.ae9.boards.AE7_PCI)
+        self.park(1)
+        self.assertEqual(C.ae9.ae7_waiting(), "parked")
+
+    def test_park_files_with_the_kernel_driver(self):
+        fake_pci("0000:05:00.0", C.ae9.boards.AE7_PCI, "snd_hda_intel")
+        self.park(0)
+        self.assertEqual(C.ae9.ae7_waiting(), "kernel")
+        self.assertNotIn("parked", window.no_card_reason(self.ctx.card))
 
     def test_ours(self):
-        fake_pci("0000:05:00.0", C.AE7_PCI, "snd-hda-codec-creative-ae9")
-        self.assertIsNone(C.ae7_waiting())
+        fake_pci("0000:05:00.0", C.ae9.boards.AE7_PCI, "snd-hda-codec-creative-ae9")
+        self.assertIsNone(C.ae9.ae7_waiting())
 
     def test_ae9_screen_unchanged(self):
         w = self.window()

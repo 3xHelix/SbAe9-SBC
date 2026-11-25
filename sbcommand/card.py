@@ -777,41 +777,9 @@ def _our_card_numbers():
     return sorted(out)
 
 
-# An AE-7 our driver doesn't run (0.13.0: experimental, opt-in with
-# ae9-ae7-enable): still on the kernel's own driver (snd_hda_intel), or
-# refused by ours and left on none. Found by its PCI ids.
-PCI_DEVICES = "/sys/bus/pci/devices"
-AE7_PCI = (0x1102, 0x0010, 0x1102, 0x0081)   # vendor, device, subsystem vendor, subsystem device
-AE7_ENABLE = "sudo ae9-ae7-enable"
-AE7_STATUS = "ae9-ae7-enable --status"
-
-
-def ae7_waiting():
-    """An AE-7 the driver doesn't run: "kernel" (on another driver, e.g. the
-    kernel's snd_hda_intel), "unbound" (on none: enabling isn't finished),
-    or None (none, or ours runs it)."""
-    try:
-        entries = sorted(os.listdir(PCI_DEVICES))
-    except OSError:
-        return None
-    for e in entries:
-        d = os.path.join(PCI_DEVICES, e)
-        ids = []
-        for f in ("vendor", "device", "subsystem_vendor", "subsystem_device"):
-            try:
-                with open(os.path.join(d, f)) as fh:
-                    ids.append(int(fh.read().strip(), 16))
-            except (OSError, ValueError):
-                ids.append(None)
-        if tuple(ids) != AE7_PCI:
-            continue
-        try:
-            drv = os.path.basename(os.readlink(os.path.join(d, "driver"))).replace("-", "_")
-        except OSError:
-            return "unbound"
-        if drv != ae9.boards.DRIVER:
-            return "kernel"
-    return None
+# An AE-7 our driver doesn't run (0.13.0: experimental, opt-in): the kit's
+# ae9.ae7_waiting() says "kernel", "parked" or "unbound", and
+# ae9.AE7_WAITING[state] gives the words and the command.
 
 
 def select(card_id):

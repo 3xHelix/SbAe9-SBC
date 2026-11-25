@@ -3,7 +3,7 @@
 Sound Blaster Command for Linux: the UI for the Creative Sound Blaster AE-9
 driver ([SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv)).
 
-## 0.24.0 (2026-11-24)
+## 0.24.0 (2026-11-25)
 
 The Sound Blaster AE-7, experimental: with driver 0.13.0's opt-in AE-7
 support the app manages an AE-7 too, and leaves out what it doesn't have.
@@ -30,7 +30,9 @@ Thanks to [s3boun3t](https://github.com/s3boun3t) for testing on a real AE-7.
     notes and its "6 dB louder" warning.
 - An AE-7 the driver doesn't run yet (experimental support off, or enabling
   not finished): the no-card screen says so and gives the command
-  (`sudo ae9-ae7-enable`, or `ae9-ae7-enable --status`).
+  (`sudo ae9-ae7-enable`, or `ae9-ae7-enable --status`). An AE-7 parked by
+  driver 0.13.0 (support off, card left with no driver because the kernel's
+  own driver can hang the PC behind an ASMedia bridge) is shown as parked.
 - Sample rate, quantum and encoder picks are kept per card. The AE-9's stay
   where they always were, so an existing settings file needs no change.
 - `sbae9-sbc ctl status` gives the card's name and whether it has Direct
@@ -42,7 +44,8 @@ Thanks to [s3boun3t](https://github.com/s3boun3t) for testing on a real AE-7.
   the ALSA id, card names and PCI ids as the fallback for older drivers.
 - The volume's dB scale comes from the card's own range (the AE-7's is
   -90 to 0 dB).
-- Shared kit 0.3.12: the AE-7's profile and rates.
+- Shared kit 0.3.13: the AE-7's profile and rates, and its detection when the driver
+  doesn't run it (kernel, parked, unbound), worded the same in both apps.
 
 ## 0.23.0 (2026-11-21)
 

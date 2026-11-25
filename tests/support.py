@@ -280,7 +280,6 @@ CARD_MODELS = {}
 REAL_READ_CARD_MODEL = C.read_card_model
 C.read_card_model = lambda index: CARD_MODELS.get(index)
 # PCI devices (an AE-7 the driver doesn't run): a temp tree, never the machine's
-C.PCI_DEVICES = os.path.join(_TMP, "pci-devices")
 C.module_version = lambda: PARAMS.get("version")
 DSP_PATH = {"ready": True}      # the kernel log: a playback ran in DSP mode since boot
 C.dsp_path_ready = lambda: DSP_PATH["ready"]
@@ -342,7 +341,10 @@ def reset():
     sound_cards()
     PARAMS.clear()
     CARD_MODELS.clear()
-    shutil.rmtree(C.PCI_DEVICES, ignore_errors=True)
+    # PCI devices and AE-7 park files (an AE-7 the driver doesn't run): under the fake root
+    if C.ae9.boards.ROOT.startswith(_TMP):      # never the machine's own
+        shutil.rmtree(os.path.join(C.ae9.boards.ROOT, "sys", "bus", "pci"), ignore_errors=True)
+        shutil.rmtree(os.path.join(C.ae9.boards.ROOT, "etc"), ignore_errors=True)
     DSP_PATH["ready"] = True
     DRIVER.update({"loaded": True, "listed": True, "reload_tool": False})
     if os.path.exists(RELOAD_NOTICE):

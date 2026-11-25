@@ -9,7 +9,7 @@ from PySide6.QtGui import QColor, QIcon, QPainter
 from PySide6.QtWidgets import (QApplication, QFrame, QHBoxLayout, QLabel, QMainWindow, QMenu, QPushButton, QStackedWidget,
                                QAbstractButton, QToolButton, QVBoxLayout, QWidget)
 
-from sbae9kit import desktop, frame, glass
+from sbae9kit import ae9, desktop, frame, glass
 
 from . import card as C
 from . import applier, config, encoder, icons, pages, pipewire, profiles
@@ -494,10 +494,9 @@ RELOADING_SUB = ("ae9-reload is reloading the driver. Sound Blaster Command has 
 RELOADING_BAR = "Reloading the driver…"
 # An AE-7 the driver doesn't run yet (0.13.0: experimental, opt-in)
 AE7_OFF_TITLE = "Sound Blaster AE-7 found: its experimental support is off."
-AE7_OFF_SUB = ("The AE-7 is still on the kernel's own driver. Run this in a terminal and reboot "
-               "to try the experimental support (see the driver's docs/AE7.md):")
-AE7_UNBOUND_SUB = ("Enabling the AE-7's experimental support isn't finished: the driver "
-                   "left it alone. This command says what's missing:")
+AE7_REBOOT = " Run this in a terminal and reboot to try it (see the driver's docs/AE7.md):"
+AE7_CHECK = " This command says what's missing:"
+AE7_PARKED_BAR = "Sound Blaster AE-7 found, parked (no driver): experimental support is off (sudo ae9-ae7-enable)."
 AE7_OFF_BAR = "Sound Blaster AE-7 found: experimental support is off (sudo ae9-ae7-enable)."
 NO_DRIVER = ("The AE-9 driver (snd-hda-codec-creative-ae9) isn't loaded. "
              "Install or load it, and the card shows up here.")
@@ -509,8 +508,9 @@ def no_card_reason(card):
         return RELOADING_BAR
     if not card.answering:
         return NOT_ANSWERING_BAR
-    if C.ae7_waiting():
-        return AE7_OFF_BAR
+    ae7 = ae9.ae7_waiting()
+    if ae7:
+        return AE7_PARKED_BAR if ae7 == "parked" else AE7_OFF_BAR
     return NO_CARD if C.driver_loaded() else C.for_card(NO_DRIVER)
 
 
@@ -562,11 +562,12 @@ class NoCardPage(QWidget):
             self.sub.setText(RELOADING_SUB)
             self.steps_box.hide()
             return
-        ae7 = C.ae7_waiting() if answering else None
+        ae7 = ae9.ae7_waiting() if answering else None
         if ae7:
             self.title.setText(AE7_OFF_TITLE)
-            self.sub.setText(AE7_OFF_SUB if ae7 == "kernel" else AE7_UNBOUND_SUB)
-            self.steps.setText(C.AE7_ENABLE if ae7 == "kernel" else C.AE7_STATUS)
+            words, command, reboot = ae9.AE7_WAITING[ae7]
+            self.sub.setText(words + (AE7_REBOOT if reboot else AE7_CHECK))
+            self.steps.setText(command)
             self.copy_btn.setText("Copy command")
             self.steps_box.setVisible(True)
             return
