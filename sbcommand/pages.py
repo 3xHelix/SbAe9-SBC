@@ -1075,7 +1075,8 @@ class PlaybackPage(Page):
             self.hp_sub.setToolTip(headphones_tip())
         if not plugged:
             self._hp_hint_off = False
-        self.hp_hint.setVisible(plugged and out == 0 and not self._hp_hint_off)
+        self.hp_hint.setVisible(plugged and out == 0 and not self._hp_hint_off
+                                and bool(self.ctx.settings["hp_plug_notice"]))
         self.hp_auto_row.setVisible(self.card.has(C.HU_AUTO))
         if self.card.has(C.HU_AUTO):
             self.hp_auto.setCheckedSilently(bool(self.card.get(C.HU_AUTO)))
@@ -3560,6 +3561,15 @@ class SettingsPage(Page):
             "controls stay solid. On KDE, what's behind is frosted (the app runs through "
             "XWayland for that). Switching Glass on or off reopens the window.", "hint", wrap=True))
         self._glass_label(self.glass_opacity.value())
+
+        self.lay.addWidget(label("Notices", "sectionTitle"))
+        self.hp_notice = QCheckBox("Say when headphones are plugged in while the card plays on Speakers")
+        self.hp_notice.setToolTip("The notice at the top of Playback > Output, with a Use Headphones "
+                                  "button. Off: it never shows; the plug indicator under "
+                                  "Headphones still does.")
+        self.hp_notice.setChecked(bool(ctx.settings["hp_plug_notice"]))
+        self.hp_notice.toggled.connect(lambda on: ctx.settings.__setitem__("hp_plug_notice", on))
+        self.lay.addWidget(self.hp_notice)
 
         self.lay.addWidget(label("Start-up", "sectionTitle"))
         self.autostart = QCheckBox("Start Sound Blaster Command when you log in")

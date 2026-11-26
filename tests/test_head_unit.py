@@ -82,6 +82,27 @@ class HeadUnitTest(S.AppTestCase):
             pg.refresh()
         self.assertTrue(pg.hp_hint.isVisible())
 
+    def test_hint_off_in_settings(self):
+        self.add_all(phones=True)
+        self.mixer.external(C.OUTPUT, 0)
+        pg = self.playback()
+        self.assertTrue(pg.hp_hint.isVisible())
+        st = self.page(pages.SettingsPage)
+        self.assertTrue(st.hp_notice.isChecked())
+        st.hp_notice.setChecked(False)
+        self.assertFalse(self.ctx.settings["hp_plug_notice"])
+        pg = self.playback()
+        self.assertFalse(pg.hp_hint.isVisible())
+        for plugged in (False, True):               # a new plug-in doesn't bring it back
+            self.mixer.external(C.HU_PHONES, plugged)
+            S.process(20)
+            pg.refresh()
+        self.assertFalse(pg.hp_hint.isVisible())
+        self.assertEqual(pg.hp_sub.text(), "3.5 mm jack: plugged in")
+        st.hp_notice.setChecked(True)
+        pg.refresh()
+        self.assertTrue(pg.hp_hint.isVisible())
+
     def test_no_hint_without_the_plug_control(self):
         self.mixer.external(C.OUTPUT, 0)
         pg = self.playback()
