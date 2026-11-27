@@ -145,16 +145,16 @@ class HiddenTest(AE7Case):
         self.assertEqual(card.items(C.SPEAKER_CFG), ["2.0", "2.1", "4.0", "4.1", "5.1"])
 
     def test_shared_sbx_and_input_controls(self):
-        """0.13.0: Headphone Profile (untested on the AE-7), Headphone
+        """0.13.0: Headphone Profile (tested on a real AE-7), Headphone
         Virtualization and Capture Bit Depth, as on the AE-9."""
         card = self.ctx.card
         self.assertEqual(len(card.items(C.HP_PROFILE)), 37)
-        self.assertTrue(C.untested(C.HP_PROFILE))
+        self.assertFalse(C.untested(C.HP_PROFILE))
         self.assertTrue(card.has(C.HP_VIRT))
         self.assertEqual(card.items(C.CAP_BIT_DEPTH), ["24-bit", "32-bit"])
         pg = self.page(pages.PlaybackPage)
         self.assertFalse(pg.hp_prof_row.isHidden())
-        self.assertIn("haven't been tested on the AE-7", pg.hp_prof_note.text())
+        self.assertNotIn("haven't been tested", pg.hp_prof_note.text())
         self.assertFalse(pg.virt_row.isHidden())
         self.assertTrue(pg.line_virt.isHidden())
 

@@ -56,14 +56,14 @@ doesn't have:
   DSP mode (48 kHz, stereo and 5.1), Headphone Gain (Low / Normal / High
   load), the DAC filter (three filters), headphone and mic plug indicators,
   Virtual 7.1 (it stays on: for headphones without it, turn SBX Surround off
-  or use Direct Mode, as in Creative's software), the mic and What U Hear,
-  CrystalVoice.
+  or use Direct Mode, as in Creative's software), headphone profiles, the
+  mic and What U Hear, CrystalVoice.
 - **Not there:** the head unit, optical in and out (so no Encoder page),
   native DSD, Speaker Setup (bass redirect, levels, distances), 176.4 kHz,
   a 24-bit playback choice (the AE-7 plays 32-bit), the mic monitor.
-- **Not tested yet:** headphone profiles, and in 5.1 the Rear jack and the
-  center channel (the front pair has been heard, and the subwoofer channel
-  on the C/Sub jack felt).
+- **Not tested yet:** in 5.1, the Rear jack and the center channel (the
+  front pair has been heard, and the subwoofer channel on the C/Sub jack
+  felt).
 
 The AE-7's controls and rates follow the driver's experimental support and
 may change in later driver releases. Thanks to

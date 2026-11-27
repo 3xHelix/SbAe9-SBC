@@ -892,8 +892,8 @@ def hp_gain_labels(items):
 
 
 # Controls a card has that nobody has tried on it yet: shown, marked untested.
-# The AE-7 (driver 0.13.0): its headphone profiles come with the shared code.
-UNTESTED = {"ae7": (HP_PROFILE,)}
+# (The AE-7's headphone profiles were, until one was tested on a real card.)
+UNTESTED = {}
 
 
 # Switches a card keeps on: an off write snaps back (the driver's choice). The

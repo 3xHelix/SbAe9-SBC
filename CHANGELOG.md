@@ -3,6 +3,15 @@
 Sound Blaster Command for Linux: the UI for the Creative Sound Blaster AE-9
 driver ([SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv)).
 
+## Unreleased
+
+- AE-7: headphone profiles are no longer marked untested: a custom profile
+  was loaded and heard on a real AE-7 (driver 0.13.0).
+- Settings > Application > Notices: turn off Playback's "headphones plugged
+  in, but it plays on Speakers" notice for good.
+- `tools/fake_ae7.py` opens the app on a fake AE-7, to look at its pages
+  without the card.
+
 ## 0.24.0 (2026-11-25)
 
 The Sound Blaster AE-7, experimental: with driver 0.13.0's opt-in AE-7
